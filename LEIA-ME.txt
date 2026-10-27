@@ -17,6 +17,13 @@ O que faz
   Se a base sumir de vez, recarrega a página (o jogo volta para a base).
 - Se ficar 15 min sem detectar nada, recarrega a página.
 
+- Chat / paineis do admin: a cada ~2 s o bot mede a area real do jogo (uma borda
+  vertical de ponta a ponta na lateral = painel). Se o chat abre, fecha ou muda de
+  tamanho, ele recentraliza a base no espaco que sobrou, ajusta o zoom para a base
+  caber, ignora tudo que esta dentro do chat (nao clica la) e memoriza a nova
+  posicao. Teste com um print: "python layout.py print.png" mostra a area detectada
+  e salva print_layout.png com o retangulo marcado.
+
 - Prioridade: primeiro colhe e replanta os postos de 5 min (ouro, madeira,
   pedra e bife dos postos), só depois as plantações de 30 s (que gastam a
   madeira dos postos). Ele aprende sozinho quem é plantação: o que volta a

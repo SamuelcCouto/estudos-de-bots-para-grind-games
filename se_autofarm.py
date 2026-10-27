@@ -32,6 +32,7 @@ import time
 import cv2
 import numpy as np
 
+from layout import detectar_viewport, mudou as layout_mudou
 from painel import Painel
 from recursos import Estatisticas, ler_recursos
 
@@ -241,33 +242,43 @@ ESCALAS_UI = (0.9, 1.0, 1.1)
 ESCALAS_AMPLAS = tuple(round(0.5 + 0.05 * i, 2) for i in range(23))  # 0.5 .. 1.6
 
 
-def zonas_proibidas(h, w):
-    """Areas de HUD onde nunca clicamos em 'bolhas' (proporcional a 1920x1080)."""
-    sx, sy = w / 1920, h / 1080
-    return [
-        (0, 0, w, int(200 * sy)),                                  # topo (recursos, xp, launcher)
-        (0, 0, int(150 * sx), h),                                  # icones da esquerda
-        (w - int(130 * sx), 0, w, h),                              # icones da direita
-        (int(440 * sx), h - int(250 * sy), int(1560 * sx), h),     # barra de amigos/BUILD/painel de unidade
-        (int(490 * sx), int(745 * sy), int(615 * sx), int(880 * sy)),  # Cast Spell / Open Book
-        (int(600 * sx), int(825 * sy), int(665 * sx), int(885 * sy)),  # contador do livro
-        (int(445 * sx), int(385 * sy), int(590 * sx), int(665 * sy)),  # capacete, coroa e METAS
-        (int(1180 * sx), int(820 * sy), int(1420 * sx), int(940 * sy)),  # inimigos vivos
+def zonas_proibidas(h, w, vp=None):
+    """Areas onde nunca clicamos em 'bolhas'.
+
+    O HUD e proporcional a 1920x1080 dentro do viewport (area do jogo, sem chat/paineis);
+    tudo fora do viewport (chat do admin etc.) tambem e proibido."""
+    x0, y0, x1, y1 = vp or (0, 0, w, h)
+    vw, vh = x1 - x0, y1 - y0
+    sx, sy = vw / 1920, vh / 1080
+    zonas = [
+        (x0, y0, x1, y0 + int(200 * sy)),                          # topo (recursos, xp, launcher)
+        (x0, y0, x0 + int(150 * sx), y1),                          # icones da esquerda
+        (x1 - int(130 * sx), y0, x1, y1),                          # icones da direita
+        (x0 + int(440 * sx), y1 - int(250 * sy), x0 + int(1560 * sx), y1),  # barra de amigos/BUILD/painel de unidade
+        (x0 + int(490 * sx), y0 + int(745 * sy), x0 + int(615 * sx), y0 + int(880 * sy)),  # Cast Spell / Open Book
+        (x0 + int(600 * sx), y0 + int(825 * sy), x0 + int(665 * sx), y0 + int(885 * sy)),  # contador do livro
+        (x0 + int(445 * sx), y0 + int(385 * sy), x0 + int(590 * sx), y0 + int(665 * sy)),  # capacete, coroa e METAS
+        (x0 + int(1180 * sx), y0 + int(820 * sy), x0 + int(1420 * sx), y0 + int(940 * sy)),  # inimigos vivos
     ]
+    if x0 > 0:
+        zonas.append((0, 0, x0, h))        # painel a esquerda
+    if x1 < w:
+        zonas.append((x1, 0, w, h))        # painel a direita (chat)
+    return zonas
 
 
 def em_zona_proibida(x, y, zonas):
     return any(x0 <= x < x1 and y0 <= y < y1 for x0, y0, x1, y1 in zonas)
 
 
-def detectar_bolhas(img):
+def detectar_bolhas(img, vp=None):
     """Retorna (prontas, dormindo): listas de (cx, cy, w, h)."""
     h, w = img.shape[:2]
     mn = img.min(axis=2)
     branco = (mn >= 225).astype(np.uint8)
     fechado = cv2.morphologyEx(branco, cv2.MORPH_CLOSE, np.ones((9, 9), np.uint8))
     n, _, st, _ = cv2.connectedComponentsWithStats(fechado, 8)
-    zonas = zonas_proibidas(h, w)
+    zonas = zonas_proibidas(h, w, vp)
     prontas, dormindo = [], []
     def medidas(x, y, bw, bh):
         m = max(2, bw // 7)
@@ -317,13 +328,13 @@ ICONES = ("icone_bife", "icone_ouro", "icone_madeira", "icone_pedra")
 ESCALA_REF_ICONES = 0.99  # zoom (escala da ancora) em que os templates de icone foram recortados
 
 
-def detectar_icones(img, escala_ancora=None):
+def detectar_icones(img, escala_ancora=None, vp=None):
     """Acha bolhas prontas pelo icone dentro delas (bife/ouro/madeira/pedra).
 
     Pega tambem as bolhas encostadas em outras coisas brancas (luva do zZ, telhados),
     que a analise de manchas brancas perde. Retorna lista de (cx, cy, w, h)."""
     h, w = img.shape[:2]
-    zonas = zonas_proibidas(h, w)
+    zonas = zonas_proibidas(h, w, vp)
     g = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
     mn = img.min(axis=2)
     if escala_ancora:
@@ -391,10 +402,10 @@ def tipo_do_icone(img, b):
 ESCALAS_ZZ = tuple(round(0.8 + 0.05 * i, 2) for i in range(11))  # 0.8 .. 1.3
 
 
-def completar_dormindo(img, dormindo):
+def completar_dormindo(img, dormindo, vp=None):
     """Acha caixinhas 'zZ' por template (pega icones grudados que a analise de blobs perde)."""
     h, w = img.shape[:2]
-    zonas = zonas_proibidas(h, w)
+    zonas = zonas_proibidas(h, w, vp)
     g = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
     final = list(dormindo)
     for _, cx, cy, tw, th in achar(g, "zz", ESCALAS_ZZ, 0.8, todos=True):
@@ -421,17 +432,18 @@ def localizar_ancora(img):
     return x, y, tw / TEMPLATES["ancora"].shape[1]
 
 
-def ponto_de_grama(img, dx, dy):
+def ponto_de_grama(img, dx, dy, vp=None):
     """Ponto de inicio de arrasto em grama lisa (nao pega construcao), com o fim fora do HUD."""
     h, w = img.shape[:2]
-    zonas = zonas_proibidas(h, w)
+    x0, _, x1, _ = vp or (0, 0, w, h)
+    zonas = zonas_proibidas(h, w, vp)
     b, g, r = (img[:, :, i].astype(np.int16) for i in range(3))
     grama = ((g - np.maximum(r, b)) > 25).astype(np.uint8)
     melhor = None
     for y in range(int(h * 0.22), int(h * 0.82), 40):
-        for x in range(int(w * 0.1), int(w * 0.9), 40):
+        for x in range(x0 + int((x1 - x0) * 0.1), x0 + int((x1 - x0) * 0.9), 40):
             ex, ey = x + dx, y + dy
-            if not (40 <= ex < w - 40 and 40 <= ey < h - 40):
+            if not (x0 + 40 <= ex < x1 - 40 and 40 <= ey < h - 40):
                 continue
             if em_zona_proibida(x, y, zonas) or em_zona_proibida(ex, ey, zonas):
                 continue
@@ -444,8 +456,15 @@ def ponto_de_grama(img, dx, dy):
     return (melhor[1], melhor[2]) if melhor else None
 
 
-def tela_escurecida(img, referencia):
-    return referencia is not None and img.mean() < referencia * 0.7
+def brilho(img, vp=None):
+    """Brilho medio da area do jogo (o chat nao pode contar: ele muda a media da janela)."""
+    if vp:
+        img = img[vp[1]:vp[3], vp[0]:vp[2]]
+    return img.mean()
+
+
+def tela_escurecida(img, referencia, vp=None):
+    return referencia is not None and brilho(img, vp) < referencia * 0.7
 
 
 def modo_tela_pequena(img):
@@ -482,6 +501,10 @@ class Bot:
         # o que funcionar sobe para o topo da lista
         self.offsets_posto = [(0, 1.3), (0, 1.9), (-1.2, 1.9), (1.2, 1.9), (-2.0, 2.4), (0, 2.6)]
         self.precisa_zoom = False
+        self.tam_janela = None
+        self.vp = None           # (x0, y0, x1, y1) da area do jogo, sem chat/paineis do admin
+        self._vp_novo = None     # layout candidato (precisa aparecer 2x seguidas para valer)
+        self.ultimo_layout = 0.0
         self.ref_ancora = None   # onde a prefeitura fica com a base centralizada (nesta sessao)
         self.escala = None       # zoom atual medido pela ancora
         self.branca_desde = None
@@ -520,7 +543,47 @@ class Bot:
 
     def clicar(self, x, y):
         self.esperar_pausa()
+        if self.vp and not (self.vp[0] <= x < self.vp[2]):
+            log(f"Clique ignorado em ({int(x)},{int(y)}): fora da area do jogo {self.vp}.", tela=False)
+            return
         clicar(self.hwnd, x, y)
+
+    # ---------- layout (chat e paineis do admin) ----------
+    @property
+    def escala_alvo(self):
+        """Zoom desejado. Com um painel lateral o jogo ocupa menos tela: a base tem que caber."""
+        if not self.vp or not self.tam_janela:
+            return ESCALA_PADRAO
+        w, h = self.tam_janela
+        return ESCALA_PADRAO * min(1.0, (self.vp[2] - self.vp[0]) / w, (self.vp[3] - self.vp[1]) / h)
+
+    def largura_jogo(self, img):
+        return (self.vp[2] - self.vp[0]) if self.vp else img.shape[1]
+
+    def atualizar_layout(self, img):
+        """Mede a area do jogo a cada captura. Retorna True se o layout mudou (chat abriu,
+        fechou, mudou de tamanho...): a base foi para outro lugar, entao tudo e remedido."""
+        h, w = img.shape[:2]
+        self.tam_janela = (w, h)
+        novo = detectar_viewport(img)
+        if self.vp is None:
+            self.vp = novo
+            log(f"Area do jogo: {novo[2] - novo[0]}x{novo[3] - novo[1]} (janela {w}x{h}).", tela=False)
+            return False
+        if not layout_mudou(novo, self.vp):
+            self._vp_novo = None
+            return False
+        # confirma em duas leituras seguidas (um quadro de transicao nao conta)
+        if self._vp_novo is None or layout_mudou(novo, self._vp_novo):
+            self._vp_novo = novo
+            return False
+        antigo, self.vp, self._vp_novo = self.vp, novo, None
+        log(f"Layout mudou (chat/painel do jogo?): area {antigo} -> {novo}. Recentralizando a base.")
+        salvar_debug(img, "layout_mudou")
+        self.ref_ancora = None
+        self.precisa_zoom = True
+        self.colheitas_pos.clear()
+        return True
 
     def esperar_pausa(self):
         while PAINEL and PAINEL.pausado.is_set() and not PAINEL.sair:
@@ -538,7 +601,7 @@ class Bot:
         """Retorna True se clicou em algo (estado mudou)."""
         g = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
 
-        r = achar(g, "fazer_mais_tarde", ESCALAS_AMPLAS, 0.8)
+        r = achar(g, "fazer_mais_tarde", ESCALAS_AMPLAS, 0.8, regiao=self.vp)
         if r:
             log("Tela inicial do launcher -> 'Fazer mais tarde'.")
             self.clicar(r[0][1], r[0][2])
@@ -546,25 +609,25 @@ class Bot:
             time.sleep(8)
             return True
 
-        if achar(g, "coletar_titulo", ESCALAS_UI, 0.75):
+        if achar(g, "coletar_titulo", ESCALAS_UI, 0.75, regiao=self.vp):
             return self.escolher_producao(g)
 
-        r = achar(g, "sim", ESCALAS_AMPLAS, 0.8)
+        r = achar(g, "sim", ESCALAS_AMPLAS, 0.8, regiao=self.vp)
         if r:
             log("Dialogo com SIM -> SIM.")
             self.clicar(r[0][1], r[0][2])
             time.sleep(1.2)
             return True
 
-        if achar(g, "aviso_titulo", ESCALAS_AMPLAS, 0.8):
-            r = achar(g, "aviso_x", ESCALAS_AMPLAS, 0.75) or achar(g, "fechar_x", ESCALAS_AMPLAS, 0.75)
+        if achar(g, "aviso_titulo", ESCALAS_AMPLAS, 0.8, regiao=self.vp):
+            r = achar(g, "aviso_x", ESCALAS_AMPLAS, 0.75, regiao=self.vp) or achar(g, "fechar_x", ESCALAS_AMPLAS, 0.75, regiao=self.vp)
             if r:
                 log("AVISO -> fechar.")
                 self.clicar(r[0][1], r[0][2])
                 time.sleep(1.2)
                 return True
 
-        r = achar(g, "ok", ESCALAS_AMPLAS, 0.8)
+        r = achar(g, "ok", ESCALAS_AMPLAS, 0.8, regiao=self.vp)
         if r:
             log("Dialogo com Ok -> Ok.")
             self.clicar(r[0][1], r[0][2])
@@ -573,9 +636,10 @@ class Bot:
 
         # X vermelho generico (somente se a tela estiver escurecida = dialogo aberto),
         # ex.: subida de nivel -> fecha no X (nunca clica em "Compartilhe!")
-        escura = tela_escurecida(img, self.brilho_normal) if self.brilho_normal else img.mean() < 75
+        escura = tela_escurecida(img, self.brilho_normal, self.vp) if self.brilho_normal \
+            else brilho(img, self.vp) < 75
         if escura:
-            r = achar(g, "fechar_x", ESCALAS_AMPLAS, 0.8) or achar(g, "aviso_x", ESCALAS_AMPLAS, 0.8)
+            r = achar(g, "fechar_x", ESCALAS_AMPLAS, 0.8, regiao=self.vp) or achar(g, "aviso_x", ESCALAS_AMPLAS, 0.8, regiao=self.vp)
             if r:
                 log("Janela com X (ex.: subida de nivel) -> fechar.")
                 salvar_debug(img, "dialogo_desconhecido")
@@ -587,7 +651,7 @@ class Bot:
     def fechar_janela_x(self, img):
         """Fecha qualquer janela do jogo com o X vermelho (ex.: Casa de Leiloes aberta sem querer)."""
         g = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-        r = achar(g, "fechar_x", ESCALAS_AMPLAS, 0.85) or achar(g, "aviso_x", ESCALAS_AMPLAS, 0.85)
+        r = achar(g, "fechar_x", ESCALAS_AMPLAS, 0.85, regiao=self.vp) or achar(g, "aviso_x", ESCALAS_AMPLAS, 0.85, regiao=self.vp)
         if not r:
             return False
         log("Janela aberta por engano -> fechar (X).")
@@ -597,7 +661,7 @@ class Bot:
         return True
 
     def escolher_producao(self, g):
-        botoes = achar(g, "selecionar", ESCALAS_UI, 0.75, todos=True)
+        botoes = achar(g, "selecionar", ESCALAS_UI, 0.75, todos=True, regiao=self.vp)
         if len(botoes) < 4:
             log(f"Menu de coleta aberto mas so achei {len(botoes)} botoes SELECIONAR.")
             if not botoes:
@@ -615,7 +679,7 @@ class Bot:
             img = self.cap()
             if img is None:
                 break
-            r = achar(cv2.cvtColor(img, cv2.COLOR_BGR2GRAY), "sim", ESCALAS_UI, 0.8)
+            r = achar(cv2.cvtColor(img, cv2.COLOR_BGR2GRAY), "sim", ESCALAS_UI, 0.8, regiao=self.vp)
             if r:
                 self.clicar(r[0][1], r[0][2])
                 time.sleep(1.5)
@@ -674,21 +738,21 @@ class Bot:
         x, y, s = a
         self.escala = s
         tx, ty = self.ref_ancora
-        return abs(s - ESCALA_PADRAO) <= TOLERANCIA_ESCALA and \
-            np.hypot(tx - x, ty - y) <= TOLERANCIA_POSICAO * w / 1920
+        return abs(s - self.escala_alvo) <= TOLERANCIA_ESCALA and \
+            np.hypot(tx - x, ty - y) <= TOLERANCIA_POSICAO * self.largura_jogo(img) / 1920
 
     def nuvem_bolhas(self, img):
         """Centros de todas as bolhas (prontas e zZ) - mostram onde a base esta na tela."""
-        prontas, dormindo = detectar_bolhas(img)
-        prontas = juntar_prontas(prontas, detectar_icones(img, self.escala))
-        return prontas + completar_dormindo(img, dormindo)
+        prontas, dormindo = detectar_bolhas(img, self.vp)
+        prontas = juntar_prontas(prontas, detectar_icones(img, self.escala, self.vp))
+        return prontas + completar_dormindo(img, dormindo, self.vp)
 
     def arrastar_mapa(self, img, dx, dy):
         self.colheitas_pos.clear()  # posicoes na tela mudaram: reaprende quem e plantacao
         dist = np.hypot(dx, dy)
         f = min(1.0, 250 / dist)  # arrasta no maximo 250 px por vez
         dx, dy = int(dx * f), int(dy * f)
-        p = ponto_de_grama(img, dx, dy)
+        p = ponto_de_grama(img, dx, dy, self.vp)
         if p is None:
             salvar_debug(img, "sem_grama_para_arrastar")
             return False
@@ -704,7 +768,8 @@ class Bot:
         ys = [b[1] for b in bolhas]
         cx = (np.percentile(xs, 3) + np.percentile(xs, 97)) / 2
         cy = (np.percentile(ys, 3) + np.percentile(ys, 97)) / 2
-        return w * 970 / 1920 - cx, h * 515 / 1080 - cy
+        x0, y0, x1, y1 = self.vp or (0, 0, w, h)
+        return x0 + (x1 - x0) * 970 / 1920 - cx, y0 + (y1 - y0) * 515 / 1080 - cy
 
     def botoes_zoom(self):
         """Posicao dos botoes de zoom do jogo: (x, y_mais, y_menos) ou None."""
@@ -712,6 +777,7 @@ class Bot:
         if img is None:
             return None
         h, w = img.shape[:2]
+        w = self.vp[2] if self.vp else w  # a borda direita do JOGO (nao da janela, se ha chat)
         # os botoes da direita so aparecem com o mouse por perto
         user32.PostMessageW(self.hwnd, WM_MOUSEMOVE, 0, _lp(w - 40, int(h * 0.65)))
         time.sleep(1.0)
@@ -775,15 +841,15 @@ class Bot:
                 continue
             s = a[2]
             self.escala = s
-            if abs(s - ESCALA_PADRAO) <= TOLERANCIA_ESCALA:
+            if abs(s - self.escala_alvo) <= TOLERANCIA_ESCALA:
                 return True
             pino = self.pino_do_zoom(b)
             if pino is None:
                 return False
             # ~56 px de pino por unidade de log(zoom); arrastos curtos (<14 px) o jogo ignora
             # ou trata como clique na trilha, entao o passo minimo e 14 px
-            d = int(round(56 * np.log(s / ESCALA_PADRAO)))
-            d = (1 if s > ESCALA_PADRAO else -1) * max(14, min(60, abs(d)))
+            d = int(round(56 * np.log(s / self.escala_alvo)))
+            d = (1 if s > self.escala_alvo else -1) * max(14, min(60, abs(d)))
             arrastar(self.hwnd, b[0], pino, b[0], pino + d)
             estacionar_mouse(self.hwnd)
             time.sleep(1.8)
@@ -807,7 +873,8 @@ class Bot:
             if a is None:
                 salvar_debug(img, "nem_de_longe")
                 return False
-            dx, dy = w / 2 - a[0], h / 2 - a[1]
+            x0, y0, x1, y1 = self.vp or (0, 0, w, h)
+            dx, dy = (x0 + x1) / 2 - a[0], (y0 + y1) / 2 - a[1]
             if np.hypot(dx, dy) < 30:
                 break
             if not self.arrastar_mapa(img, dx, dy):
@@ -828,7 +895,7 @@ class Bot:
             if img is None:
                 return False
             h, w = img.shape[:2]
-            tol = TOLERANCIA_POSICAO * w / 1920
+            tol = TOLERANCIA_POSICAO * self.largura_jogo(img) / 1920
             a = localizar_ancora(img)
             if a is None and (self.tratar_dialogos(img) or self.fechar_janela_x(img)):
                 continue  # dialogo/janela cobrindo a prefeitura
@@ -856,7 +923,7 @@ class Bot:
             x, y, s = a
             self.escala = s
             log(f"  ancora em ({x},{y}) zoom {s:.2f}")
-            if abs(s - ESCALA_PADRAO) > TOLERANCIA_ESCALA:
+            if abs(s - self.escala_alvo) > TOLERANCIA_ESCALA:
                 zooms += 1
                 if zooms > 3 or not self.zoom_padrao():
                     return False
@@ -875,12 +942,12 @@ class Bot:
                         return False
                     continue
                 self.ref_ancora = (x, y)
-                self.brilho_normal = img.mean()
+                self.brilho_normal = brilho(img, self.vp)
                 log(f"Base centralizada; posicao de referencia memorizada ({x},{y}).")
                 return True
             dx, dy = self.ref_ancora[0] - x, self.ref_ancora[1] - y
             if np.hypot(dx, dy) <= tol:
-                self.brilho_normal = img.mean()
+                self.brilho_normal = brilho(img, self.vp)
                 log("Mapa alinhado.")
                 return True
             if not self.arrastar_mapa(img, dx, dy):
@@ -911,8 +978,11 @@ class Bot:
                 estacionar_mouse(self.hwnd)
                 time.sleep(0.15)
                 img = self.cap()
-                if img is None or tela_escurecida(img, self.brilho_normal):
+                if img is None or tela_escurecida(img, self.brilho_normal, self.vp):
                     log("Algo abriu durante a colheita; pausando a rodada.")
+                    break
+                if self.vp and layout_mudou(detectar_viewport(img), self.vp):
+                    log("O layout do jogo mudou durante a colheita (chat?); pausando a rodada.")
                     break
             self.clicar(cx, cy - bh * 0.05)
             self.colheitas_pos.append((cx, cy, time.time()))
@@ -946,7 +1016,7 @@ class Bot:
                 if img is None:
                     return False
                 h, w = img.shape[:2]
-                if em_zona_proibida(x, y, zonas_proibidas(h, w)):
+                if em_zona_proibida(x, y, zonas_proibidas(h, w, self.vp)):
                     continue
                 self.clicar(x, y)
                 estacionar_mouse(self.hwnd)
@@ -989,8 +1059,16 @@ class Bot:
                 continue
 
             pequena = modo_tela_pequena(img)
+            if pequena:
+                self.vp = None  # site em volta do jogo: o layout so vale com o jogo em tela cheia
+            elif not tela_escurecida(img, self.brilho_normal, self.vp) \
+                    and time.time() - self.ultimo_layout > 1.5:
+                self.ultimo_layout = time.time()
+                if self.atualizar_layout(img):
+                    ultimo_check_mapa = 0.0
+                    continue
             # procura dialogos quando faz sentido (tela escurecida, site, inicio) e a cada 30 s
-            checar = self.brilho_normal is None or pequena or tela_escurecida(img, self.brilho_normal) \
+            checar = self.brilho_normal is None or pequena or tela_escurecida(img, self.brilho_normal, self.vp) \
                 or time.time() - ultimo_check_dialogo > 30
             if checar:
                 ultimo_check_dialogo = time.time()
@@ -1007,11 +1085,11 @@ class Bot:
                 continue
 
             if self.brilho_normal is None:
-                self.brilho_normal = img.mean()
+                self.brilho_normal = brilho(img, self.vp)
 
             # confere de tempos em tempos se o mapa saiu do lugar (misclick, scroll, arrasto...)
             if time.time() - ultimo_check_mapa > SEGUNDOS_CHECAR_MAPA \
-                    and not tela_escurecida(img, self.brilho_normal):
+                    and not tela_escurecida(img, self.brilho_normal, self.vp):
                 ultimo_check_mapa = time.time()
                 if not self.mapa_alinhado(img):
                     log("Mapa fora do lugar -> realinhando.")
@@ -1019,13 +1097,13 @@ class Bot:
                         self.recarregar_pagina(img, "nao consegui realinhar o mapa")
                     continue
 
-            if not tela_escurecida(img, self.brilho_normal):
+            if not tela_escurecida(img, self.brilho_normal, self.vp):
                 self.estat.atualizar(ler_recursos(img))
                 if PAINEL:
                     PAINEL.resumo_no_arquivo()
 
-            prontas, dormindo = detectar_bolhas(img)
-            prontas = juntar_prontas(prontas, detectar_icones(img, self.escala))
+            prontas, dormindo = detectar_bolhas(img, self.vp)
+            prontas = juntar_prontas(prontas, detectar_icones(img, self.escala, self.vp))
             postos = [b for b in prontas if self.eh_posto(img, b)]
             campos = [b for b in prontas if b not in postos]
 
@@ -1040,7 +1118,7 @@ class Bot:
             if time.time() - ultimo_zz_falho > 60:
                 if dormindo or time.time() - ultimo_zz_completo > 8:
                     ultimo_zz_completo = time.time()
-                    dormindo = completar_dormindo(img, dormindo)
+                    dormindo = completar_dormindo(img, dormindo, self.vp)
                 if dormindo:
                     log(f"{len(dormindo)} posto(s) parado(s) (zZ) -> replantando.")
                     if not self.replantar(dormindo):
@@ -1056,7 +1134,7 @@ class Bot:
                 continue
 
             # brilho de referencia acompanha a tela "normal" (sem dialogos)
-            self.brilho_normal = 0.9 * self.brilho_normal + 0.1 * img.mean()
+            self.brilho_normal = 0.9 * self.brilho_normal + 0.1 * brilho(img, self.vp)
 
             if time.time() - self.ultima_atividade > MINUTOS_SEM_ATIVIDADE * 60:
                 self.recarregar_pagina(img)
