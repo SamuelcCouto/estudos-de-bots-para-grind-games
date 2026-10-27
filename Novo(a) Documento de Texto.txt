@@ -1,0 +1,19 @@
+Sim, deve funcionar, desde que a outra máquina atenda a alguns requisitos. Não testei numa segunda máquina, então trate como provável, não garantido.
+
+O que vai junto no zip: o launcher (com o Flash que ele usa) e o bot (autofarm, com os modelos de imagem). Pode deixar de fora as pastas autofarm\logs e autofarm\debug, que só têm histórico.
+
+O que a outra máquina precisa:
+
+Windows. O bot usa recursos do Windows para enxergar e clicar na janela.
+Python com as duas bibliotecas que o bot usa. Depois de instalar o Python (marque “Add to PATH” no instalador), rode:
+pip install numpy opencv-python-headless
+Tela 1920×1080 com escala de 100% (Configurações → Tela). Os modelos foram recortados nessa resolução. Em outra resolução ou com zoom do Windows de 125%/150%, a leitura dos recursos e alguns botões podem falhar. O mapa e as bolhas se adaptam, mas o painel de recursos e os diálogos são o ponto mais frágil.
+Login de novo. A sessão do launcher fica em %APPDATA%\Launcher_Social_Empires, fora dessa pasta, então na primeira vez você entra na conta manualmente.
+
+Depois é só abrir o autofarm\INICIAR_FARM.bat normalmente.
+
+Cuidados:
+
+Não rode a mesma conta nas duas máquinas ao mesmo tempo. Os dois bots iriam colher e replantar em paralelo, e o servidor pode estranhar ou derrubar uma das sessões.
+Ao trocar de máquina, o bot centraliza a base e memoriza a posição de novo. Isso é automático: ele faz isso toda vez que liga.
+Se não funcionar de primeira: veja os prints em autofarm\debug e o log em autofarm\logs. Se me mandar, eu ajusto (por exemplo, recortar os modelos para outra resolução).

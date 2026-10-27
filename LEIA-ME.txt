@@ -1,0 +1,74 @@
+AUTO-FARM - SOCIAL EMPIRES
+==========================
+
+O que faz
+---------
+- Colhe sozinho as plantações (bife) assim que ficam prontas (~30 s).
+- Colhe os postos de madeira/pedra/ouro/comida e, quando ficam "zZ",
+  abre o menu, escolhe a opção de 5 min e confirma "SIM" (todos do mesmo tipo).
+  Reconhece as bolhas pelo ícone (bife, ouro, madeira, pedra), mesmo quando
+  estão encostadas em outra coisa branca (a luva do zZ, telhados).
+- Trata sozinho: tela "Fazer mais tarde", AVISO de boas-vindas, "Seus amigos
+  estão pedindo ajuda" (SIM), "Ok" (bônus), subida de nível e janelas com X.
+- Coloca o jogo em tela cheia (engrenagem -> maximizar).
+- Mantém o mapa no lugar: ao ligar, ajusta o zoom e centraliza a base pelas
+  bolhas, e memoriza onde a prefeitura ficou. A cada 2 min confere; se o mapa
+  saiu do lugar (misclick, você mexeu, arrastou, deu zoom), traz de volta.
+  Se a base sumir de vez, recarrega a página (o jogo volta para a base).
+- Se ficar 15 min sem detectar nada, recarrega a página.
+
+- Prioridade: primeiro colhe e replanta os postos de 5 min (ouro, madeira,
+  pedra e bife dos postos), só depois as plantações de 30 s (que gastam a
+  madeira dos postos). Ele aprende sozinho quem é plantação: o que volta a
+  ficar pronto em menos de 2,5 min no mesmo lugar.
+
+Console
+-------
+- Esquerda: o que o bot está fazendo. Direita: recursos atuais, quanto tinha ao
+  ligar, quanto foi colhido desde então, colhido por minuto (média de 10 min)
+  e o gasto (as plantações consomem madeira).
+- P = pausar / continuar (para mexer no jogo à vontade). Q = sair.
+- Log de execução completo (cada colheita + resumo dos recursos a cada
+  minuto) em autofarm\logs\execucao_<data>.log.
+
+Ele NÃO move o seu mouse: lê a imagem da janela do jogo e manda os cliques
+direto para ela. Por isso o jogo pode ficar atrás de outras janelas.
+Não modifica o launcher nem conversa com o servidor por fora do jogo.
+
+Como usar
+---------
+1. Dê dois cliques em INICIAR_FARM.bat
+   - Ele fecha o launcher (se estiver aberto) e reabre com opções que mantêm
+     o jogo desenhando mesmo coberto por outras janelas.
+   - Depois de ~15 s inicia o bot, que faz o resto sozinho.
+2. Deixe a janela preta (console) aberta. Para parar: Ctrl+C nela ou feche-a.
+
+SO_O_BOT.bat: inicia só o bot, para quando o launcher já foi aberto pelo
+INICIAR_FARM.bat (ex.: você parou o bot e quer ligar de novo).
+
+Cuidados
+--------
+- Evite minimizar o launcher (o bot restaura a janela sozinho, sem roubar o
+  foco, mas é melhor deixá-lo só atrás das outras janelas).
+- Pode mexer no jogo: o bot realinha o mapa em até ~2 min.
+  Se mudar o layout da base, feche e abra o bot de novo para ele
+  recentralizar e memorizar a nova posição.
+- Se abrir o launcher pelo atalho normal (sem o INICIAR_FARM.bat), o jogo para
+  de desenhar quando coberto e o bot fica "cego".
+- Às vezes um clique de colheita seleciona uma unidade ou construção que passa
+  por cima (aparece o painel embaixo). É só seleção, não faz nada.
+- Precisa de Python com: numpy, opencv-python-headless (pip install ...).
+
+Ajustes (topo do se_autofarm.py)
+--------------------------------
+OPCAO_PRODUCAO = 1   -> 1=5 min, 2=1 h, 3=4 h, 4=8 h
+                        (use 4 = 8 h antes de dormir/sair, por exemplo)
+INTERVALO_VARREDURA  -> de quantos em quantos segundos olha a tela
+MINUTOS_SEM_ATIVIDADE -> tempo sem nada para recarregar a página
+SEGUNDOS_CHECAR_MAPA -> de quanto em quanto tempo confere se o mapa saiu do lugar
+
+"python se_autofarm.py --zoom" só ajusta o zoom e centraliza a base, e sai.
+
+Quando algo dá errado, um print é salvo em autofarm\debug (últimos 30).
+
+Aviso: automação pode ir contra as regras do servidor. Use por sua conta.
