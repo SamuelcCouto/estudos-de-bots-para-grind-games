@@ -5,8 +5,8 @@ Empacota uma sessao gravada em zips pequenos para enviar.
   python empacotar.py                  (usa a sessao mais recente em sessoes\\)
   python empacotar.py sessoes\\2026...  (uma sessao especifica)
 
-Reduz os quadros para 1280x720 (JPEG) e divide em partes de ate 20 MB, que cabem no
-envio pelo site do GitHub (Add file > Upload files). Saida: <sessao>\\enviar\\parte1.zip ...
+Reduz os quadros para 1280x720 (JPEG) e divide em partes de ate 20 MB (limite do GitHub: 100 MB).
+Saida: ddtank/envio/<sessao>_parte1.zip ...
 """
 import os
 import sys
@@ -32,7 +32,7 @@ def sessao_mais_recente():
 def main():
     sessao = sys.argv[1] if len(sys.argv) > 1 else sessao_mais_recente()
     frames = os.path.join(sessao, "frames")
-    saida = os.path.join(sessao, "enviar")
+    saida = os.path.join(config.PASTA, "envio")
     os.makedirs(saida, exist_ok=True)
     nome = os.path.basename(os.path.normpath(sessao))
     arquivos = sorted(os.listdir(frames))
@@ -68,7 +68,7 @@ def main():
         os.startfile(saida)   # abre a pasta no Explorer
     except (AttributeError, OSError):
         pass
-    print("Envie esses zips (site do GitHub > branch claude/wonderful-rubin-3oyqi3 > pasta ddtank/sessoes > Add file > Upload files).")
+    print("Para enviar: de dois cliques em ENVIAR_SESSAO.bat (usa git).")
 
 
 if __name__ == "__main__":

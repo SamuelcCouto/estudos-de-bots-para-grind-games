@@ -171,8 +171,9 @@ class Gravador:
         return [n for n in (self.agendar_depois(rotulo, a) for a in atrasos) if n]
 
     def _jogo_em_foco(self):
+        """A janela em primeiro plano e do processo do jogo (inclui janelas filhas)."""
         fg = user32.GetForegroundWindow()
-        return bool(fg) and user32.GetAncestor(fg, 2) == user32.GetAncestor(self.hwnd, 2)
+        return bool(fg) and (fg == self.hwnd or janela.pid_da_janela(fg) == self.pid_jogo)
 
     def _cursor(self):
         pt = W.POINT()
@@ -185,7 +186,10 @@ class Gravador:
         amostrador = threading.Thread(target=self._amostrar, daemon=True)
         amostrador.start()
         w, h = janela.tamanho(self.hwnd)
-        print(f"Gravando ({w}x{h}). F9 = marcador, F10 = terminar. Pode jogar normalmente.")
+        self.pid_jogo = janela.pid_da_janela(self.hwnd)
+        print(f"Gravando a janela: {janela.descrever_janela(self.hwnd)}")
+        print("F9 = marcador, F10 = terminar. Pode jogar normalmente; cada clique/tecla aparece aqui.")
+        em_foco_antes, avisou_vazio = None, False
         mouse = {vk: None for vk in BOTOES}   # vk -> (t, x, y, frame_antes) enquanto apertado
         teclas = {}                            # vk -> (t, frame_antes)
         f9_antes = False
@@ -199,6 +203,14 @@ class Gravador:
                     self._registrar({"t": self.agora(), "tipo": "marcador", "frames": [nome] if nome else []})
                 f9_antes = f9
                 foco = self._jogo_em_foco()
+                if foco != em_foco_antes:
+                    print("  >> jogo EM FOCO (gravando cliques/teclas)" if foco else
+                          "  >> jogo FORA DE FOCO (cliques/teclas nao sao gravados; so o F9)")
+                    em_foco_antes = foco
+                if not avisou_vazio and self.agora() > 20 and not any(e["tipo"] in ("mouse", "tecla") for e in self.eventos):
+                    avisou_vazio = True
+                    print("  !! 20 s sem nenhum clique/tecla. Confira: e esta a janela certa que voce esta jogando? "
+                          "O jogo esta em primeiro plano? So pode haver UMA janela do jogo aberta.")
                 x, y = self._cursor()
                 dentro = 0 <= x < w and 0 <= y < h
                 for vk, nome_botao in BOTOES.items():
@@ -276,9 +288,13 @@ def main():
     ap.add_argument("--formato", choices=("jpg", "png"), default="jpg")
     args = ap.parse_args()
 
-    hwnd = janela.resolver_janela(args.titulo or config.TITULO_JANELA, args.exe or config.EXE_JANELA)
+    titulo, exe = args.titulo or config.TITULO_JANELA, args.exe or config.EXE_JANELA
+    hwnd = janela.resolver_janela(titulo, exe)
     if not hwnd:
         sys.exit("Janela do jogo nao encontrada. Rode  python bot_ddtank.py --listar  e use --titulo/--exe.")
+    if janela.contar_janelas(titulo, exe) > 1:
+        sys.exit("ERRO: ha mais de uma janela do jogo aberta (outra conta?). Feche as outras e rode de novo - "
+                 "senao o gravador pode olhar a janela errada.")
     nota = re.sub(r"[^A-Za-z0-9_-]+", "_", args.nota).strip("_")
     nome = f"{datetime.datetime.now():%Y%m%d_%H%M%S}" + (f"_{nota}" if nota else "")
     pasta = os.path.join(config.PASTA, "sessoes", nome)

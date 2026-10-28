@@ -118,6 +118,27 @@ def resolver_janela(titulo="", exe=""):
     return _melhor(candidatas)
 
 
+def pid_da_janela(hwnd):
+    pid = W.DWORD()
+    user32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
+    return pid.value
+
+
+def descrever_janela(hwnd):
+    buf = ctypes.create_unicode_buffer(256)
+    user32.GetWindowTextW(hwnd, buf, 256)
+    pid = pid_da_janela(hwnd)
+    w, h = tamanho(hwnd)
+    return f"'{buf.value}' ({_exe_do_processo(pid)}, pid {pid}, hwnd {hwnd}, {w}x{h})"
+
+
+def contar_janelas(titulo="", exe=""):
+    """Quantas janelas casam com o filtro (o jogo aberto em 2 contas aparece como 2)."""
+    return sum(1 for j in listar_janelas()
+               if (not titulo or titulo.lower() in j["titulo"].lower())
+               and (not exe or exe.lower() == j["exe"].lower()) and j["w"] >= 400 and j["h"] >= 300)
+
+
 def tamanho(hwnd):
     r = W.RECT()
     user32.GetClientRect(hwnd, ctypes.byref(r))

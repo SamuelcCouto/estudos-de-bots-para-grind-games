@@ -28,7 +28,7 @@ Se "print" der imagem PRETA, o launcher precisa ser aberto com flags que mantem 
 jogo desenhando coberto (como no INICIAR_FARM.bat do Social Empires) - me avise.
 Use  --modo tela  para forcar a captura por copia da tela (a janela tem que estar visivel).
 
-Pastas: capturas\ (prints) e logs\ ficam so no seu PC (nao vao para o GitHub).
+Pastas: capturas\ (criada na 1a captura), logs\ e sessoes\ ficam so no seu PC; envio\ vai para o GitHub.
 Coloque suas imagens-modelo do jogo em templates\ (nas proximas fases).
 
 
@@ -40,9 +40,19 @@ barra de espaco = a forca do tiro) e prints antes/depois de cada acao.
   F9  = marcador (ex.: "comecou a luta", "errei o tiro")      F10 = terminar
 So grava quando a janela do jogo esta em primeiro plano; o que voce faz em outros
 programas nao e registrado. (Se digitar no chat do jogo, isso aparece como teclas.)
-Ao terminar, o empacotar.py gera zips de ate 20 MB em sessoes\<sessao>\enviar\.
-Envie-os pelo site do GitHub: branch claude/wonderful-rubin-3oyqi3 > pasta ddtank\sessoes
-> Add file > Upload files. Dica: grave 3 a 5 rodadas completas da rota 1 e use F9 em cada
-inicio de luta.
+Ao terminar, o empacotar.py gera zips de ate 20 MB em ddtank\envio\.
+ATENCAO: so pode haver UMA janela do jogo aberta (uma conta). Se houver duas, o gravador
+se recusa a rodar para nao gravar a janela errada.
 
-ATALHOS (duplo clique):  LISTAR_JANELAS.bat  |  DIAGNOSTICO.bat  |  GRAVAR_SESSAO.bat
+ENVIAR / ATUALIZAR COM GIT (sem arrastar arquivos)
+--------------------------------------------------
+Uma vez: instale o Git (https://git-scm.com/download/win), abra o cmd e rode:
+   git config --global user.name "Seu Nome"
+   git config --global user.email "seu@email.com"
+   cd C:\
+   git clone -b claude/wonderful-rubin-3oyqi3 https://github.com/samuelccouto/estudos-de-bots-para-grind-games.git
+(na primeira vez abre o navegador para voce entrar no GitHub). Use a pasta C:\estudos-de-bots-para-grind-games\ddtank.
+Depois:  ATUALIZAR.bat = baixa as novidades.  ENVIAR_SESSAO.bat = envia os zips de envio\.
+O GRAVAR_SESSAO.bat ja pergunta no fim se quer enviar.
+
+ATALHOS (duplo clique):  LISTAR_JANELAS.bat | DIAGNOSTICO.bat | GRAVAR_SESSAO.bat | ENVIAR_SESSAO.bat | ATUALIZAR.bat
