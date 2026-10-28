@@ -190,6 +190,8 @@ Metricas: metricas.py (logs/relatorio.txt, lutas.csv, voltas.csv). Combos: combo
 ## PENDENCIAS - fazer SO quando o usuario pedir
 - Escorpiao Rei: REMOVER o aviao (F). Falta pouco upgrade para ele morrer no 1o turno do bot (antes do turno dele);
   quando o usuario avisar, tirar ESCORPIAO_REI de estrategias.ESTRATEGIAS (ou desligar o aviao la).
+- ROTA LESTE: o boneco esta quase forte o suficiente. Quando o usuario conseguir faze-la na mao, ele grava e a gente
+  implementa (mesmo caminho da Rota Sul: artes aprendidas, estrategias por boss). Ate la: refinar o bot atual.
 
 ## Correcoes do usuario (28/10, 6h46)
 - Cartas: o jogo TRAVA na 3a carta; nao existe 4a (nem custo). Cliques a mais sao inofensivos.
@@ -241,5 +243,11 @@ Implementado: estrategias.ESTRATEGIAS["PERICAO"] (chefe_global, angulo_min 0, to
 fixo 2,3,4), memoria aceita angulo minimo por instancia, 34 tiros do usuario em dados/tiros_semente.json, atirador
 (B no POW cheio, acerto pelos numeros, espera 4 s), navegador (opcao C, --chefe, --horarios-chefe, abas, volta para a
 rota onde parou, desiste se o quadro nao marcar), metricas (diagnostico CHEFAO GLOBAL), CHEFAO_GLOBAL.bat.
-Duvidas abertas: o que acontece na rodada 200 (derrota?) e no fim do horario com o chefao vivo; se o Pericao continua
-entravel fora do horario ("modo global encerrado" sugere que vira instancia normal).
+Duvida aberta: se o Pericao continua entravel fora do horario ("modo global encerrado" sugere que vira instancia normal).
+
+### Decisoes do usuario sobre o Chefao Global (28/10, 15h40)
+- Luta que acaba SEM cartas (morte / rodada 200 - ele nunca viu acontecer): assumir que existe. O bot volta para a sala
+  e entra de novo enquanto for horario (navegador.finalizar_instancia: chefe_derrotas, sem avancar a rota). [ja faz]
+- O chefao NUNCA fica vivo no fim do horario (muitos jogadores juntos). Se um dia acontecer: voltar para a rota normal
+  (atualizar_chefe: fim do horario -> no_chefe = False; a luta em andamento termina antes). [ja faz]
+- 21h: o usuario segue com o Chefao de novo (bot). 15h40: deixou a Rota Sul rodando; manda o log na volta.
