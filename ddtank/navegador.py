@@ -82,6 +82,21 @@ class IOJanela:
     def tecla_apertada(self, vk):
         return bool(self.j.user32.GetAsyncKeyState(vk) & 0x8000)
 
+    # teclas da batalha (setas, itens, espaco); o modo de entrada e escolhido separadamente dos cliques
+    modo_teclas = "top"
+
+    def tecla(self, nome, dur=0.05):
+        self.j.tecla(self.hwnd, nome, dur, self.modo_teclas)
+
+    def tecla_baixo(self, nome, repeticao=1):
+        self.j.tecla_baixo(self.hwnd, nome, self.modo_teclas, repeticao)
+
+    def tecla_cima(self, nome):
+        self.j.tecla_cima(self.hwnd, nome, self.modo_teclas)
+
+    def trocar_modo(self):
+        self.modo_teclas = "filha" if self.modo_teclas == "top" else "top"
+
 
 _TPL_COSTAS = []
 
@@ -150,8 +165,11 @@ def proxima_acao_tarefa(f, vezes):
 # ---------------------------------------------------------------------------
 class Navegador:
     def __init__(self, io, detector, rota=None, usar_tarefas=True, uma_vez=False, simular=False,
-                 dormir=time.sleep, agora=time.time, log=print):
+                 dormir=time.sleep, agora=time.time, log=print, atirador=None):
         self.io, self.det = io, detector
+        self.atirador = atirador          # None = a batalha e sua; senao ele joga os turnos
+        self.em_batalha = False
+        self.fora_da_batalha_desde = None
         self.rota = rota or list(ROTA_PADRAO)
         self.usar_tarefas, self.uma_vez, self.simular = usar_tarefas, uma_vez, simular
         self.dormir, self.agora, self.log = dormir, agora, log
@@ -341,8 +359,14 @@ class Navegador:
         elif estado == "BATALHA":
             if self.batalha_desde is None:
                 self.batalha_desde = self.agora()
-                self.log("[BATALHA] em luta - o tiro automatico e a fase 3; jogue o tiro voce mesmo por enquanto.")
-            self.dormir(1.5)
+                self.em_batalha = True
+                self.log("[BATALHA] " + ("o bot joga os turnos." if self.atirador else
+                                         "em luta - o tiro automatico e opcional (--atirar); jogue voce mesmo."))
+            if self.atirador:
+                self.atirador.passo()
+                self.dormir(0.05)
+            else:
+                self.dormir(1.5)
         else:
             self.dormir(1.0)
 
@@ -370,6 +394,21 @@ class Navegador:
             if self.pausado:
                 self.esperar_pausa()
                 continue
+            if self.atirador and self.em_batalha:
+                # na batalha o tempo importa (a sua vez dura ~8 s): sem a dupla leitura de confirmacao
+                f, achadas = self.ver()
+                if achadas and achadas[0] == "BATALHA":
+                    self.fora_da_batalha_desde = None
+                    self.atirador.passo(f)
+                    continue
+                agora = self.agora()
+                self.fora_da_batalha_desde = self.fora_da_batalha_desde or agora
+                if agora - self.fora_da_batalha_desde < 3.0 and not (achadas and achadas[0] in ("CARTAS", "POPUP_CARTA")):
+                    self.dormir(0.15)
+                    continue
+                self.em_batalha = False
+                self.fora_da_batalha_desde = None
+                self.atirador.fim_da_batalha()
             estado = self.estado_estavel()
             if estado is None:
                 self.desconhecido()
@@ -400,6 +439,9 @@ def main():
     ap.add_argument("--uma-vez", action="store_true")
     ap.add_argument("--so-ver", action="store_true", help="so mostra a tela detectada (nao clica)")
     ap.add_argument("--simular", action="store_true", help="mostra o que clicaria, sem clicar")
+    ap.add_argument("--atirar", action="store_true", help="o bot joga os turnos da batalha (tiro, itens)")
+    ap.add_argument("--sombra", action="store_true", help="na batalha, so mostra o tiro que faria (nao aperta teclas)")
+    ap.add_argument("--itens", default="", help="ordem dos itens, ex.: 2,3,4,4,4,5,6,7,8")
     args = ap.parse_args()
 
     titulo, exe = args.titulo or config.TITULO_JANELA, args.exe or config.EXE_JANELA
@@ -442,6 +484,12 @@ def main():
 
     rota = [r.strip().upper() for r in args.rota.split(",") if r.strip()]
     nav = Navegador(io, det, rota, not args.sem_tarefas, args.uma_vez, args.simular, log=log)
+    if args.atirar or args.sombra:
+        import atirador as atirador_mod
+        import memoria as memoria_mod
+        ordem = [int(x) for x in args.itens.split(",") if x.strip()] or None
+        nav.atirador = atirador_mod.Atirador(io, memoria_mod.Memoria(), lambda: nav.instancia, sombra=args.sombra, log=log,
+                                             ordem_itens=ordem)
     nav.idx = max(0, min(len(rota) - 1, args.comecar_em - 1))
     try:
         nav.rodar()

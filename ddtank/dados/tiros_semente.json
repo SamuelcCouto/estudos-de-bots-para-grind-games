@@ -1,0 +1,260 @@
+{
+ "_nota": "Tiros do usuario (todos acertaram). angulo = leitura do ponteiro; forca = % da barra no momento de soltar; azul/boss = pontos do minimapa em px (y para baixo).",
+ "tiros": [
+  {
+   "inst": "FANTASMA",
+   "azul": [
+    32.0,
+    57.0
+   ],
+   "boss": [
+    90.3,
+    56.5
+   ],
+   "angulo": 17.5,
+   "forca": 81,
+   "acertou": true,
+   "origem": "gravacao 20261028_021750"
+  },
+  {
+   "inst": "PROFUNDEZAS",
+   "azul": [
+    11.8,
+    34.3
+   ],
+   "boss": [
+    65.5,
+    46.5
+   ],
+   "angulo": 12.5,
+   "forca": 48,
+   "acertou": true,
+   "origem": "gravacao 20261028_021750"
+  },
+  {
+   "inst": "MINHOCAO",
+   "azul": [
+    38.0,
+    67.0
+   ],
+   "boss": [
+    73.1,
+    64.5
+   ],
+   "angulo": 32.0,
+   "forca": 35,
+   "acertou": true,
+   "origem": "gravacao 20261028_021750"
+  },
+  {
+   "inst": "MINHOCAO",
+   "azul": [
+    38.0,
+    67.2
+   ],
+   "boss": [
+    73.1,
+    64.5
+   ],
+   "angulo": 30.5,
+   "forca": 42,
+   "acertou": true,
+   "origem": "gravacao 20261028_021750"
+  },
+  {
+   "inst": "FANTASMA",
+   "azul": [
+    14.0,
+    56.5
+   ],
+   "boss": [
+    90.1,
+    56.5
+   ],
+   "angulo": 18.5,
+   "forca": 71,
+   "acertou": true,
+   "origem": "gravacao 20261028_021750"
+  },
+  {
+   "inst": "PROFUNDEZAS",
+   "azul": [
+    11.3,
+    35.4
+   ],
+   "boss": [
+    48.5,
+    48.5
+   ],
+   "angulo": 33.5,
+   "forca": 25,
+   "acertou": true,
+   "origem": "gravacao 20261028_021750"
+  },
+  {
+   "inst": "PROFUNDEZAS",
+   "azul": [
+    11.4,
+    35.1
+   ],
+   "boss": [
+    24.8,
+    46.4
+   ],
+   "angulo": 30.0,
+   "forca": 33,
+   "acertou": true,
+   "origem": "gravacao 20261028_021750"
+  },
+  {
+   "inst": "MINHOCAO",
+   "azul": [
+    5.5,
+    66.5
+   ],
+   "boss": [
+    73.1,
+    64.5
+   ],
+   "angulo": 25.5,
+   "forca": 50,
+   "acertou": true,
+   "origem": "gravacao 20261028_021750"
+  },
+  {
+   "inst": "FANTASMA",
+   "azul": [
+    14.0,
+    57.0
+   ],
+   "boss": [
+    90.5,
+    56.5
+   ],
+   "angulo": 18.5,
+   "forca": 81,
+   "acertou": true,
+   "origem": "gravacao 20261028_021750"
+  },
+  {
+   "inst": "PROFUNDEZAS",
+   "azul": [
+    11.7,
+    34.5
+   ],
+   "boss": [
+    60.0,
+    48.7
+   ],
+   "angulo": 54.0,
+   "forca": 15,
+   "acertou": true,
+   "origem": "gravacao 20261028_021750"
+  },
+  {
+   "inst": "PROFUNDEZAS",
+   "azul": [
+    11.7,
+    34.5
+   ],
+   "boss": [
+    46.1,
+    48.9
+   ],
+   "angulo": 50.0,
+   "forca": 17,
+   "acertou": true,
+   "origem": "gravacao 20261028_021750"
+  },
+  {
+   "inst": "MINHOCAO",
+   "azul": [
+    38.3,
+    67.3
+   ],
+   "boss": [
+    73.1,
+    64.5
+   ],
+   "angulo": 32.0,
+   "forca": 36,
+   "acertou": true,
+   "origem": "gravacao 20261028_021750"
+  },
+  {
+   "inst": "MINHOCAO",
+   "azul": [
+    38.0,
+    67.5
+   ],
+   "boss": [
+    73.1,
+    64.5
+   ],
+   "angulo": 30.5,
+   "forca": 36,
+   "acertou": true,
+   "origem": "gravacao 20261028_021750"
+  },
+  {
+   "inst": "FANTASMA",
+   "azul": [
+    32.0,
+    57.0
+   ],
+   "boss": [
+    90.4,
+    56.4
+   ],
+   "angulo": 21.5,
+   "forca": 76,
+   "acertou": true,
+   "origem": "gravacao 20261028_021750"
+  },
+  {
+   "inst": "PROFUNDEZAS",
+   "azul": [
+    11.4,
+    35.0
+   ],
+   "boss": [
+    52.0,
+    49.3
+   ],
+   "angulo": 33.5,
+   "forca": 31,
+   "acertou": true,
+   "origem": "gravacao 20261028_021750"
+  },
+  {
+   "inst": "MINHOCAO",
+   "azul": [
+    6.4,
+    66.2
+   ],
+   "boss": [
+    73.1,
+    64.5
+   ],
+   "angulo": 22.0,
+   "forca": 62,
+   "acertou": true,
+   "origem": "gravacao 20261028_021750"
+  },
+  {
+   "inst": "MINHOCAO",
+   "azul": [
+    5.5,
+    65.5
+   ],
+   "boss": [
+    73.1,
+    64.5
+   ],
+   "angulo": 19.5,
+   "forca": 54,
+   "acertou": true,
+   "origem": "gravacao 20261028_021750"
+  }
+ ]
+}

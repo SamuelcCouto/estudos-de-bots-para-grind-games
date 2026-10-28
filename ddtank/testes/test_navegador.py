@@ -188,3 +188,23 @@ for _ in range(40):
 assert viu_popup, "com o 1o clique ignorado o bot nao chegou ao pop-up da 3a carta"
 assert max_viradas == 3, max_viradas
 print("cartas OK mesmo com o 1o clique ignorado (3 viradas, pop-up atendido)")
+
+# ---------------------------------------------------------------- 8) integracao com o atirador
+class AtiradorFalso:
+    def __init__(self): self.passos = 0; self.fins = 0
+    def passo(self, f=None): self.passos += 1
+    def fim_da_batalha(self): self.fins += 1
+sim = Sim(); relogio = [0.0]; falso = AtiradorFalso()
+nav = N.Navegador(sim, det, atirador=falso, dormir=lambda s: relogio.__setitem__(0, relogio[0] + s), agora=lambda: relogio[0], log=lambda m: None)
+sim.tela = "POPUP_SOZINHO"
+for _ in range(80):
+    nav.teclas = lambda: None
+    e = nav.estado_estavel() if not (nav.atirador and nav.em_batalha) else None
+    if e: nav.agir(e); continue
+    # mesmo ramo do laco principal
+    f, achadas = nav.ver()
+    if achadas and achadas[0] == "BATALHA": nav.atirador.passo(f); continue
+    nav.dormir(1.0)
+    if sim.tela != "BATALHA" and nav.em_batalha: nav.em_batalha = False; nav.atirador.fim_da_batalha(); break
+assert falso.passos > 3 and falso.fins == 1, (falso.passos, falso.fins)
+print("integracao navegador+atirador OK (passos na batalha:", falso.passos, ")")

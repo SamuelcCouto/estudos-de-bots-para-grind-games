@@ -262,3 +262,21 @@ def tecla(hwnd, nome, duracao=0.05, modo="top"):
         time.sleep(min(0.03, max(0.0, fim - time.time())))
         user32.PostMessageW(hwnd, WM_KEYDOWN, vk, _lparam_tecla(vk, repeticao=2) | (1 << 30))
     user32.PostMessageW(hwnd, WM_KEYUP, vk, _lparam_tecla(vk, subindo=True))
+
+
+def tecla_baixo(hwnd, nome, modo="top", repeticao=1):
+    """So APERTA (nao solta). Chame de novo com repeticao>1 para o auto-repeat, e tecla_cima() para soltar."""
+    vk = _vk(nome)
+    if modo == "filha":
+        hwnd = filha_de_entrada(hwnd) or hwnd
+    lp = _lparam_tecla(vk, repeticao=repeticao)
+    if repeticao > 1:
+        lp |= (1 << 30)
+    user32.PostMessageW(hwnd, WM_KEYDOWN, vk, lp)
+
+
+def tecla_cima(hwnd, nome, modo="top"):
+    vk = _vk(nome)
+    if modo == "filha":
+        hwnd = filha_de_entrada(hwnd) or hwnd
+    user32.PostMessageW(hwnd, WM_KEYUP, vk, _lparam_tecla(vk, subindo=True))
