@@ -63,13 +63,15 @@ class Mundo:
         self.tiros.append(real); self.carregando_desde = None; self.atirou_em = self.t
     def trocar_modo(self): self.modo = "filha" if self.modo == "top" else "top"
     # --- foco do teclado (so em Mundos que definem nivel_exigido)
-    nivel_exigido = 0; foco_nivel = 1; devolvidos = 0
+    nivel_exigido = 0; foco_nivel = 1; devolvidos = 0; chat_com_foco = False; cliques_cena = 0
+    def clicar_ref(self, x, y, modo="top"):
+        self.cliques_cena += 1; self.chat_com_foco = False       # clicar na cena devolve o teclado ao jogo
     def preparar_teclas(self): pass
     def encerrar_teclas(self): self.devolvidos += 1
     def escalar_foco(self):
         if self.foco_nivel >= 2: return False
         self.foco_nivel += 1; return True
-    def teclado_ok(self): return self.foco_nivel >= self.nivel_exigido
+    def teclado_ok(self): return self.foco_nivel >= self.nivel_exigido and not self.chat_com_foco
     def dormir(self, s): self.avancar(s)
 
 class MundoComThread(Mundo):
@@ -216,3 +218,10 @@ assert abs(w.angulo - 31) <= 3.5 and len(w.tiros) == 1 and abs(w.tiros[0] - 38) 
 assert w.devolvidos >= 1, "nao devolveu o foco"
 print("foco do teclado: subiu de nivel, atirou e devolveu o foco OK")
 print("\natirador (foco) OK")
+
+# ------------------------------------------------------------ 14) o foco do teclado esta no CHAT (clique no chat): clique na cena resolve
+w = MundoComThread(); w.chat_com_foco = True; at, mem, logs, arq = novo(w); rodar(at, w, ate=16)
+print("\n".join(l for l in logs if "cena" in l or "tiro dado" in l or "Pulando" in l))
+assert w.cliques_cena == 1 and abs(w.angulo - 31) <= 3.5 and len(w.tiros) == 1, (w.cliques_cena, w.angulo, w.tiros)
+print("teclado no chat -> clique na cena devolve o foco ao jogo OK")
+print("\natirador (foco no chat) OK")

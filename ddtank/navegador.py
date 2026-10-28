@@ -33,8 +33,12 @@ LARGURA_REF = 1280
 # Pop-up "Clique no jogo para continuar jogando" (aparece quando o jogo perde o foco). Qualquer clique dentro do jogo
 # o fecha, mas o clique tambem vale para o que esta POR BAIXO - entao nunca clicar no pop-up (no mapa ele cobre a
 # Sala de Casamento!). Usa um ponto neutro: o chat nas telas de cidade/sala, o texto do log na batalha etc.
-FOCO_PONTO_PADRAO = (450, 485)
-FOCO_PONTO_NEUTRO = {"BATALHA": (420, 290), "CARTAS": (590, 190), "POPUP_CARTA": (590, 190)}
+# ATENCAO: NUNCA clicar no CHAT (barra de mensagens embaixo, log da batalha): dar clique ali passa o foco do TECLADO para o
+# campo de digitacao do chat e as setas/numeros/espaco deixam de chegar ao jogo (era o que fazia o atirador "nao responder").
+# Telas de cidade/sala: canto superior esquerdo do jogo (moldura/ceu/area preta). Batalha: um ponto da CENA.
+FOCO_PONTO_PADRAO = (330, 172)
+FOCO_PONTO_NEUTRO = {"BATALHA": (560, 230)}
+FOCO_CLICK_BATALHA = (560, 230)       # clique na cena: devolve o foco do teclado ao jogo (se o chat o tinha)
 POPUP_FOCO_CAIXA = (596, 316, 696, 410)
 MAPA_CENTRAL = (872, 430)
 CENTRAL_JOGAR = (794, 472)
@@ -80,8 +84,17 @@ class IOJanela:
         self.j = janela
         self.hwnd = hwnd
 
+    k = 1.0
+
     def capturar(self):
-        return self.j.capturar(self.hwnd, "print")
+        img = self.j.capturar(self.hwnd, "print")
+        if img is not None:
+            self.k = img.shape[1] / LARGURA_REF
+        return img
+
+    def clicar_ref(self, xr, yr, modo="top"):
+        """Clique em coordenadas da imagem de 1280 de largura (usado pelo atirador)."""
+        self.j.clicar(self.hwnd, int(xr * self.k), int(yr * self.k), modo)
 
     def clicar(self, x, y, modo):
         self.j.clicar(self.hwnd, x, y, modo)

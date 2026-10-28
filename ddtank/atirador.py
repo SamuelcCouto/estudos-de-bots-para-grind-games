@@ -28,6 +28,7 @@ TOLERANCIA_ANGULO = 3.0       # graus
 TAXA_ANGULO_INICIAL = 28.0    # graus/s com a seta apertada (aprende sozinho)
 FORCA_POR_SEGUNDO = 38.0      # % da barra por segundo segurando espaco (medido nas gravacoes; o bot aprende o valor real)
 ANTECIPACAO_INICIAL = 4.0     # % de folga: solta um pouco antes (atraso da captura + do KEYUP)
+FOCO_CLICK_BATALHA = (560, 230)   # clique na cena de batalha (nunca no chat/log)
 MAX_SEGURANDO = 7.0           # s: trava de seguranca (a carga pode andar na METADE da velocidade; ver NOTAS.md)
 MARGEM_TEMPO_MINIMO = 0.35    # s: tolerancia da trava de tempo minimo
 
@@ -223,7 +224,12 @@ class Atirador:
             mudou = b - a
             if abs(mudou) < 0.8:
                 sem_efeito += 1
-                if hasattr(self.io, "escalar_foco") and self.io.escalar_foco():
+                if sem_efeito == 1 and hasattr(self.io, "clicar_ref"):
+                    # o foco do teclado pode estar no chat: um clique na CENA devolve o teclado ao jogo
+                    self.log("   ! as setas nao mudaram o angulo: clicando na cena para devolver o foco do teclado ao jogo (e nao ao chat).")
+                    self.io.clicar_ref(*FOCO_CLICK_BATALHA)
+                    self.dormir(0.2)
+                elif hasattr(self.io, "escalar_foco") and self.io.escalar_foco():
                     self.log(f"   ! as setas nao mudaram o angulo: o jogo provavelmente sem foco do teclado; "
                              f"subindo o nivel de foco para {self.io.foco_nivel} ({'foco virtual' if self.io.foco_nivel == 1 else 'jogo em primeiro plano durante o turno'}).")
                 elif sem_efeito >= 2 and sem_efeito % 2 == 0 and hasattr(self.io, "trocar_modo"):

@@ -319,3 +319,12 @@ for _ in range(60):
 assert sim.tela == "MAPA", (sim.tela, logs[-3:])
 assert any("voltando pela porta" in l for l in logs)
 print("recuperacao de tela de cidade desconhecida OK (voltou pela porta)")
+
+# ---------------------------------------------------------------- 12) NENHUM ponto neutro pode cair no CHAT (daria o foco do teclado ao campo de texto)
+CHAT_CIDADE = (330, 450, 600, 530)        # mensagens + campo de digitacao (mapa, Central, salas)
+CHAT_BATALHA = (320, 255, 545, 340)       # log de mensagens no canto superior esquerdo da batalha
+for nome, p in list(N.FOCO_PONTO_NEUTRO.items()) + [("padrao", N.FOCO_PONTO_PADRAO), ("atirador", N.FOCO_CLICK_BATALHA)]:
+    for caixa_chat in (CHAT_CIDADE, CHAT_BATALHA):
+        x0, y0, x1, y1 = caixa_chat
+        assert not (x0 <= p[0] <= x1 and y0 <= p[1] <= y1), f"ponto neutro '{nome}' {p} cai no chat {caixa_chat}"
+print("nenhum ponto neutro cai no chat OK")
