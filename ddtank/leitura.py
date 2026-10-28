@@ -21,6 +21,7 @@ MINIMAPA_Y_MAX = 69.5                # abaixo: moldura de baixo
 MINIMAPA_X_LIM = (3.5, 101.5)        # fora: molduras dos lados
 MINIMAPA_PONTO_MAX = 7               # px: o nucleo de um ponto (jogador/boss) cabe num quadrado 7x7
 _CRUZ = cv2.getStructuringElement(cv2.MORPH_CROSS, (3, 3))
+PONTO_TAMANHO_CHEIO = 8           # nucleo (px) a partir do qual um ponto conta "inteiro" no rastreador
 LEITURAS_MUDOU = 5                  # leituras seguidas sem o ponto antigo (e com um novo) = o boneco mudou de lugar
 VIDA_BOSS = (725, 812, 185, 191)     # barra de vida do boss (topo): cheia termina em ~811, comeca em ~725
 ITENS_X = (951, 975)
@@ -95,11 +96,24 @@ def forca(f):
     return 0.0 if len(xs) == 0 else (xs.max() + 1) / (x1 - x0) * 100
 
 
+_LINHA_H = cv2.getStructuringElement(cv2.MORPH_RECT, (13, 1))
+_LINHA_V = cv2.getStructuringElement(cv2.MORPH_RECT, (1, 11))
+
+
+def _sem_linhas(mk):
+    """Tira da mascara os tracos retos compridos (>= 13 px na horizontal, >= 11 na vertical) e 1 px em volta deles:
+    a moldura do minimapa (que as vezes fica azul-escura ou vermelha) e a borda das plataformas. Os cantos da moldura
+    cruzando o chao viravam "pontos" (Dragao Gelado). Um ponto (5x5) nunca e um traco desses."""
+    m = mk.astype(np.uint8)
+    linhas = cv2.morphologyEx(m, cv2.MORPH_OPEN, _LINHA_H) | cv2.morphologyEx(m, cv2.MORPH_OPEN, _LINHA_V)
+    return m & (1 - cv2.dilate(linhas, np.ones((3, 3), np.uint8)))
+
+
 def _pontos_redondos(mk):
     """[(x, y, tamanho)] dos pontos compactos da mascara, maiores primeiro. A erosao em cruz apaga o que tem ate 2 px de
     largura (moldura do minimapa, que fica verde/azul/vermelha conforme a instancia; rastro da cachoeira) e manchas
     grandes (agua, efeitos de tela) ficam de fora pelo tamanho. Fora tambem: cabecalho e as bordas."""
-    nucleo = cv2.erode(mk.astype(np.uint8), _CRUZ)
+    nucleo = cv2.erode(_sem_linhas(mk), _CRUZ)
     n, _, st, ce = cv2.connectedComponentsWithStats(nucleo)
     out = []
     for i in range(1, n):
@@ -122,8 +136,15 @@ def candidatos_minimapa(f):
     hsv = cv2.cvtColor(f[y0:y1, x0:x1], cv2.COLOR_BGR2HSV).astype(int)
     h, s, v = hsv[..., 0], hsv[..., 1], hsv[..., 2]
     azul = (h >= 107) & (h <= 124) & (s > 170) & (v > 120)
+    # mascara ESTRITA: no Dragao Gelado (mapa todo azul) o ponto gruda na plataforma azul-escura de baixo e a mancha
+    # fica grande demais; so o miolo bem saturado e claro do ponto separa os dois (achou o boneco em 42/42 leituras)
+    estrita = (h >= 109) & (h <= 118) & (s > 225) & (v > 150)
     verm = ((h <= 6) | (h >= 172)) & (s > 170) & (v > 150)
-    return _pontos_redondos(azul), _pontos_redondos(verm)
+    azuis = _pontos_redondos(azul)
+    for c in _pontos_redondos(estrita):
+        if all(abs(c[0] - a[0]) + abs(c[1] - a[1]) > 2.5 for a in azuis):
+            azuis.append(c)
+    return sorted(azuis, key=lambda c: -c[2]), _pontos_redondos(verm)
 
 
 def pontos_minimapa(f):
@@ -149,19 +170,22 @@ class RastreadorMinimapa:
 
     def observar(self, azuis, vermelhos):
         """azuis/vermelhos: listas de (x, y[, tamanho]) de UM quadro."""
-        self.azuis.append([tuple(c[:2]) for c in azuis[:4]])
+        self.azuis.append([(c[0], c[1], c[2] if len(c) > 2 else PONTO_TAMANHO_CHEIO) for c in azuis[:4]])
         del self.azuis[:-self.janela]
         if vermelhos:
             self.boss = tuple(vermelhos[0][:2])
 
     def _mais_frequente(self, leituras):
-        """(ponto, em quantas das leituras ele aparece) - empate: o visto primeiro."""
-        melhor, n_m = None, 0
+        """(ponto, em quantas das leituras ele aparece) - nota = soma do tamanho de cada aparicao (ate
+        PONTO_TAMANHO_CHEIO): o ponto do boneco (nucleo 4-20 px) vence riscos/sobras de 2 px que aparecem tanto quanto ele.
+        Empate: o visto primeiro."""
+        melhor, nota_m, n_m = None, 0.0, 0
         for leit in leituras:
             for p in leit:
-                n = sum(1 for l2 in leituras if any(self._perto(p, q) for q in l2))
-                if n > n_m:
-                    melhor, n_m = p, n
+                tams = [max((min(q[2], PONTO_TAMANHO_CHEIO) for q in l2 if self._perto(p, q)), default=0) for l2 in leituras]
+                nota = float(sum(tams))
+                if nota > nota_m + 1e-9:
+                    melhor, nota_m, n_m = p, nota, sum(1 for t in tams if t > 0)
         return melhor, n_m
 
     def _perto(self, p, q):
@@ -186,7 +210,7 @@ class RastreadorMinimapa:
         grupo = [q for l2 in self.azuis[-5:] for q in l2 if self._perto(melhor, q)]
         if grupo:
             melhor = (float(np.mean([q[0] for q in grupo])), float(np.mean([q[1] for q in grupo])))
-        return melhor, n_m / len(self.azuis)
+        return (float(melhor[0]), float(melhor[1])), n_m / len(self.azuis)
 
 
 def itens_ativos(f):

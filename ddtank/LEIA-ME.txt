@@ -49,9 +49,11 @@ ENVIAR / ATUALIZAR COM GIT (sem arrastar arquivos)
 Uma vez: instale o Git (https://git-scm.com/download/win), abra o cmd e rode:
    git config --global user.name "Seu Nome"
    git config --global user.email "seu@email.com"
-   cd C:\
-   git clone -b claude/wonderful-rubin-3oyqi3 https://github.com/samuelccouto/estudos-de-bots-para-grind-games.git
-(na primeira vez abre o navegador para voce entrar no GitHub). Use a pasta C:\estudos-de-bots-para-grind-games\ddtank.
+   cd /d D:\
+   git clone --depth 1 -b claude/wonderful-rubin-3oyqi3 https://github.com/samuelccouto/estudos-de-bots-para-grind-games.git
+(na primeira vez abre o navegador para voce entrar no GitHub). Use a pasta D:\estudos-de-bots-para-grind-games\ddtank.
+(--depth 1 = baixa so a versao atual, sem o historico das gravacoes antigas: poucos MB.)
+Ja tem a pasta no C:? Rode o MUDAR_PARA_D.bat de la (veja "DISCO D:" no fim deste arquivo).
 Depois:  ATUALIZAR.bat = baixa as novidades.  ENVIAR_SESSAO.bat = envia os zips de envio\.
 O GRAVAR_SESSAO.bat ja pergunta no fim se quer enviar.
 
@@ -180,3 +182,34 @@ ROTA SUL - ESCORPIAO, RAINHA E O TRIDENTE (28/10, noite)
   no pe. O bot aprendeu a forca do Escorpiao na 1a sessao (~20% a ~33 graus da borda esquerda).
 * TRIDENTE (item 2): os 3 projeteis caem espalhados; no Escorpiao (so o pe tem colisao) as vezes so 2 pegam. Agora o bot
   guarda quanto de vida cada tiro tirou e, ao repetir um tiro, puxa a forca para a que tirou MAIS vida (3 acertos).
+
+QUALIDADE DE VIDA - noites inteiras (28/10)
+===========================================
+* DISCO D: - o bot nao aponta para o C: em lugar nenhum (tudo fica dentro da pasta do bot). O que enchia o C: era a
+  propria pasta: as gravacoes antigas (envio\*.zip ~870 MB + o historico do git ~880 MB) e sessoes\ (~300 MB a cada
+  20 min de gravacao completa). Para mudar:
+    1) feche o bot; 2) na pasta ATUAL (C:\...\ddtank) de dois cliques em MUDAR_PARA_D.bat: ele baixa uma copia nova e
+    leve em D:\estudos-de-bots-para-grind-games e copia o que o bot aprendeu (dados\aprendizado.json, combos,
+    artes, logs); 3) teste um ATIRAR.bat da pasta do D:; 4) funcionando, apague a pasta antiga do C: pelo Explorer.
+  O Python continua instalado no C: (ocupa pouco). Os zips ja analisados eu apago do GitHub depois de ler.
+* GRAVACAO LEVE (agora e o padrao): grava todos os eventos (texto), mas prints so de problemas (tela desconhecida,
+  luta sem cartas, cartas que nao abriram, clique sem efeito, turno pulado) e no maximo 1 print de turno a cada 4 min.
+  Uma noite inteira fica em dezenas de MB. Para investigar algo com prints de tudo: python navegador.py --atirar --gravar-tudo
+* CARTAS SORTEADAS: a cada luta o bot sorteia 3 cartas diferentes e clica nas 3 em seguida (a tela tem cronometro de
+  15 s; com o PC ocupado o jogo demora a mostrar a carta virando e antes o bot esperava cada uma e estourava o tempo).
+  Se alguma nao virar em 3 s, clica de novo SO nas sorteadas (nunca numa 4a: custaria cupons).
+* CRONOMETRO (logs\relatorio.txt, atualizado a cada luta; logs\lutas.csv e logs\voltas.csv acumulam tudo):
+  tempo de cada luta, de cada instancia (menus + luta + cartas) e de cada volta; voltas por hora; turnos por luta;
+  quanto de vida o 1o ataque tira; e o DIAGNOSTICO de cada instancia:
+     OK - mata no 1o turno | PRECISA UPAR - acerta mas nao mata (e quanto falta) | PONTARIA - o 1o tiro erra.
+  No console aparece "[TEMPO] Dragao Gelado: luta 45s - VITORIA em 2 turno(s), 1o ataque tirou 64%".
+  O EMPACOTAR manda o relatorio, os csv e o log do dia junto com a gravacao.
+* COMBOS DE ITENS (dados\combos.json): onde ja mata no 1o turno, o bot nao mexe. Onde nao mata, ele testa 4
+  combinacoes (A = 2,3,4,4..., B = 3,3,4,4..., C = 1,4,4..., D = 2,4,4...), 2 lutas cada, e fica com a que tira MAIS
+  vida no 1o ataque. Tirar itens para "economizar" nao compensa: poupa ~0,3 s, mas se o boss sobreviver custa um turno
+  inteiro do boss (10-15 s). --itens 2,3,4,4 fixa a sua ordem e desliga os testes.
+* Outras correcoes desta gravacao: o turno "extra" depois do boss morto nao gasta mais itens; o PASS que pisca no turno
+  do Dragao nao vira mais "turno pulado"; o minimapa do Dragao Gelado (mapa todo azul, moldura azul) agora acha o
+  boneco em todas as leituras; depois do aviao a posicao nova do boneco e usada no ataque seguinte.
+* Para deixar a noite toda: desligue a suspensao do Windows (Configuracoes > Sistema > Energia > Suspender: Nunca)
+  e deixe o jogo na frente. Rode ATIRAR.bat e responda T.

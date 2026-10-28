@@ -172,3 +172,17 @@ Ficam em dados/modelos_aprendidos e vao no zip do EMPACOTAR (junto com dados/apr
 - A tela do jogo tem as TABELAS DE FORCA do servidor (EstrAng 20/30/50/65 graus: distancia 1-10 da regua -> forca) e a
   regua 0-10 embaixo. Ideia futura: usar como semente da fisica (precisa converter minimapa -> regua por mapa).
 - Artes aprendidas do Escorpiao (cfg/sala) viraram modelos oficiais em templates/.
+
+## Sessao 20261028_054433 (Rota Sul, 5 voltas, 19,5 min) - tempos
+Volta da Rota Sul ~3min40-3min55 (Escorpiao ~44 s de luta, Dragao 45-60 s, Rainha ~30 s; menus ~10-12 s por instancia;
+cartas ~19 s - a tela de cartas tem cronometro de 15 s; tarefas ~8 s). 1o ataque: Rainha mata; Escorpiao deixa 22-41%
+(2 ataques + aviao quando nasce em x<=29); Dragao deixa 18-41% (2 ataques).
+Cartas incompletas (volta 5, Dragao): usuario usando o PC -> o jogo mostrava a carta virando ~3-5 s depois do clique;
+o bot (1 carta por vez, confirmando pela tela) clicou cada uma 2x e o cronometro zerou com 2 viradas.
+Dragao: minimapa todo azul; o ponto do boneco gruda na plataforma azul-escura (mascara normal acha so 15/42 leituras):
+mascara ESTRITA (H 109-118, S>225, V>150) junto -> 42/42; e a moldura azul-escura do minimapa fazia "pontos" nos
+cantos -> leitura._sem_linhas tira tracos retos >= 13 px (h) / 11 px (v). Rastreador pondera pelo tamanho do ponto.
+"Turno pulado" no Dragao = PASS piscando no turno do boss (~8 s depois do tiro); "turno extra" com vida 0 depois de
+matar (Escorpiao). Os dois agora nao apertam nada.
+Disco: 1 hora de gravacao completa ~870 MB -> gravacao leve por padrao (registro.PRINTS_LEVE).
+Metricas: metricas.py (logs/relatorio.txt, lutas.csv, voltas.csv). Combos: combos.py (dados/combos.json).

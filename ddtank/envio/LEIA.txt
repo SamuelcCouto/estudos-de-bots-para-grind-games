@@ -1,0 +1,1 @@
+Zips das gravacoes para enviar (EMPACOTAR_E_ENVIAR.bat). Depois de analisados, eles sao apagados daqui.

@@ -455,3 +455,69 @@ assert sum("APRENDI" in l for l in logs) == 6, "aprendeu de novo o que ja sabia"
 shutil.rmtree(APRENDIDOS_TESTE); N._TPL_CFG.clear(); N._TPL_SALA.clear()
 N.config.PASTA_TEMPLATES = PASTA_TEMPLATES_REAL
 print("Rota Sul OK (aprende as artes sozinho, mantem a ordem, nao mexe na dificuldade)")
+
+# ---------------------------------------------------------------- CARTAS com o PC ocupado (sua run): jogo LENTO
+# A tela de cartas tem cronometro de 15 s. Com o PC ocupado a carta so aparece virada ~3,5 s depois do clique. Antes o
+# bot clicava de novo na mesma carta a cada 2 s e o tempo acabava antes da 3a. Agora: sorteia 3, clica nas 3 em
+# seguida e so repete nas sorteadas (nunca abre uma 4a carta - custaria cupons). E as cartas variam de uma luta para outra.
+class SimCartasLento:
+    def __init__(self, relogio, atraso=3.5):
+        self.rel, self.atraso = relogio, atraso
+        self.tela = "CARTAS"; self.viradas = []; self.pendentes = {}; self.clicadas = []; self.popup = None
+    def _atualiza(self):
+        for c, tf in sorted(self.pendentes.items(), key=lambda kv: kv[1]):
+            if self.rel[0] >= tf and self.tela == "CARTAS":
+                del self.pendentes[c]
+                if len(self.viradas) == 2: self.tela = "POPUP_CARTA"; self.popup = c    # a 3a pede confirmacao
+                else: self.viradas.append(c)
+    def capturar(self):
+        self._atualiza()
+        if self.tela == "POPUP_CARTA": return img("POPUP_CARTA")
+        f = img("CARTAS_COSTAS").copy(); rev = img("CARTAS_REVELADAS")
+        for c in self.viradas:
+            x0, y0, x1, y1 = caixa_carta(c); f[y0:y1, x0:x1] = rev[y0:y1, x0:x1]
+        return f
+    def clicar(self, x, y, modo):
+        if self.tela == "POPUP_CARTA":
+            if dentro((x, y), caixa(N.POPUP_CARTA_SIM, 40)): self.viradas.append(self.popup); self.tela = "CARTAS"
+            return
+        for c in N.CARTAS_TODAS:
+            if dentro((x, y), caixa_carta(c)) and c not in self.viradas and c not in self.pendentes:
+                if c not in self.clicadas: self.clicadas.append(c)
+                self.pendentes[c] = self.rel[0] + self.atraso
+    def tecla_apertada(self, vk): return False
+
+escolhas = []
+for rodada in range(2):
+    relogio = [0.0]; st = SimCartasLento(relogio)
+    nav = N.Navegador(st, det, dormir=lambda s: relogio.__setitem__(0, relogio[0] + s), agora=lambda: relogio[0], log=lambda m: None)
+    nav.rng.seed(rodada)
+    while relogio[0] < 15.0 and len(st.viradas) < 3:
+        e = nav.estado_estavel()
+        if e: nav.agir(e)
+        else: nav.dormir(0.3)
+    print(f"cartas (jogo lento): {len(st.viradas)} viradas em {relogio[0]:.1f}s de 15s; cartas clicadas {st.clicadas}")
+    assert len(st.viradas) == 3 and relogio[0] < 15.0, (st.viradas, relogio[0])
+    assert len(st.clicadas) == 3, f"clicou em {len(st.clicadas)} cartas diferentes (uma 4a custaria cupons)"
+    escolhas.append(sorted(st.clicadas))
+assert escolhas[0] != escolhas[1], "as cartas deveriam ser sorteadas (variar entre lutas)"
+print("cartas sorteadas e abertas a tempo mesmo com o jogo lento OK")
+
+# ---------------------------------------------------------------- cronometro ligado no navegador (2 voltas da Rota Norte)
+import metricas as MET
+ROTA = ["FANTASMA", "PROFUNDEZAS", "MINHOCAO"]
+sim = Sim2(); relogio = [0.0]
+metr = MET.Metricas("Rota Norte", agora=lambda: relogio[0], log=lambda m: None, salvar=False)
+nav = N.Navegador(sim, det, dormir=lambda s: relogio.__setitem__(0, relogio[0] + s), agora=lambda: relogio[0],
+                  log=lambda m: None, metricas=metr)
+for _ in range(900):
+    e = nav.estado_estavel()
+    if e: nav.agir(e)
+    if nav.voltas >= 2: break          # (a volta do navegador fecha quando ele volta a sala depois das tarefas)
+r = metr.por_instancia()
+print("cronometro no navegador:", {k: (v["lutas"], round(v["luta_media"], 1), v["instancia_media"] and round(v["instancia_media"], 1)) for k, v in r.items()},
+      "| voltas:", [round(V["duracao"], 1) for V in metr.voltas])
+assert [r[i]["lutas"] for i in ROTA] == [2, 2, 2] and all(r[i]["vitorias"] == 2 for i in ROTA)
+assert all(r[i]["instancia_media"] and r[i]["instancia_media"] > r[i]["luta_media"] for i in ROTA)
+assert len(metr.voltas) == 2 and all(V["lutas"] == 3 for V in metr.voltas)
+print("cronometro de lutas/instancias/voltas OK")

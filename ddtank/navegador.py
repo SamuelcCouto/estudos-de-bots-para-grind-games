@@ -17,6 +17,7 @@ import argparse
 import datetime
 import glob
 import os
+import random
 import sys
 import time
 from collections import Counter
@@ -57,7 +58,9 @@ MAX_ROLAGENS_TAREFA = 12
 CARTAS_COLUNAS = [380, 468, 556, 644, 732, 820, 907]
 CARTAS_LINHAS = [262, 380, 498]
 # ordem de preferencia: fileira do meio (colunas 3, 4, 5), depois o resto
-CARTAS_PREFERENCIA = [(556, 380), (644, 380), (732, 380)] + [(x, y) for y in (380, 262, 498) for x in CARTAS_COLUNAS]
+CARTAS_TODAS = [(x, y) for y in CARTAS_LINHAS for x in CARTAS_COLUNAS]
+CARTAS_ENTRE_CLIQUES = 0.5        # s entre os cliques nas 3 cartas sorteadas (a tela de cartas tem cronometro de 15 s)
+CARTAS_REPETIR_APOS = 3.0         # s sem virar -> clica de novo SO nas sorteadas (nunca numa 4a carta: custaria cupons)
 CARTAS_VIRADAS_PARA_PAGAR = 3     # 2 gratis + a 3a (VIP, com pop-up de confirmacao)
 SLOTS_SALA = [(516, 242), (394, 366), (516, 366)]   # 3 vagas vazias da sala
 SLOT_RECORTE = (-36, 34, -37, 43)   # recorte (dx0, dx1, dy0, dy1) da silhueta "Em Espera" ao redor do centro da vaga
@@ -391,8 +394,14 @@ def proxima_acao_tarefa(f, vezes, ignorar_botao=False):
 # ---------------------------------------------------------------------------
 class Navegador:
     def __init__(self, io, detector, rota=None, usar_tarefas=True, uma_vez=False, simular=False,
-                 dormir=time.sleep, agora=time.time, log=print, atirador=None, reg=None, dificuldade=None):
+                 dormir=time.sleep, agora=time.time, log=print, atirador=None, reg=None, dificuldade=None,
+                 metricas=None):
         self.io, self.det = io, detector
+        self.metr = metricas              # metricas.Metricas (cronometro de lutas/instancias/voltas) ou None
+        self.luta_ativa = False
+        self.rng = random.Random()
+        self.cartas_escolhidas, self.cartas_clicadas_em, self.cartas_rodadas = None, None, 0
+        self.cartas_max_viradas, self.quadro_cartas = 0, None
         self.dificuldade = dificuldade    # None = a de cada instancia (DIFICULDADE_DA_INSTANCIA) | "NORMAL" | "DIFICIL" | "HEROI"
         self.clicou_cfg = None            # instancia clicada por ultimo na configuracao
         self.confirmada = None            # instancia confirmada ("Sim") por ultimo: a sala deve mostrar ela
@@ -430,6 +439,7 @@ class Navegador:
         self.tarefas_ok = False
         self.cartas_vistas = False
         self.tentativas_carta = Counter()
+        self.cartas_escolhidas, self.cartas_rodadas, self.cartas_max_viradas = None, 0, 0
         self.tentativas_slot = 0
         self.tentativas_cfg = 0
         self.trocas_pronta = 0
@@ -507,6 +517,9 @@ class Navegador:
                 return True
         self.falhas_clique += 1
         self.log(f"   ! clique sem efeito ({self.falhas_clique}x, modo '{MODOS_ENTRADA[self.modo]}')")
+        if self.reg:
+            self.reg.evento("clique_sem_efeito", [self.reg.frame(self.ultimo_quadro, "clique_sem_efeito")], estado=estado,
+                            ponto=list(ponto), vezes=self.falhas_clique)
         if self.falhas_clique >= 2:
             self.modo = (self.modo + 1) % len(MODOS_ENTRADA)
             self.falhas_clique = 0
@@ -527,8 +540,16 @@ class Navegador:
         self.lutou = False
         self.confirmada = None
         self.tentativas_carta = Counter()
+        if self.cartas_max_viradas < CARTAS_VIRADAS_PARA_PAGAR:
+            self.log(f"   ! [CARTAS] so {self.cartas_max_viradas} carta(s) abriram em {self.instancia} (o tempo da tela acabou?)")
+            if self.reg:
+                self.reg.evento("cartas_incompletas", [self.reg.frame(self.quadro_cartas, "cartas_incompletas")],
+                                instancia=self.instancia, viradas=self.cartas_max_viradas)
+        self.cartas_escolhidas, self.cartas_rodadas, self.cartas_max_viradas = None, 0, 0
         antes = self.instancia
         self.idx += 1
+        if self.metr:
+            self.metr.instancia_fim(antes)
         if self.idx >= len(self.rota):
             self.run_completa = True
             self.log(f"*** {antes} concluida: rota completa ({self.voltas + 1}a volta). Falta coletar as tarefas. ***")
@@ -545,12 +566,18 @@ class Navegador:
         self.ultimo_estado_reg = estado
         self.ultimo_conhecido = estado
         self.recuperacoes = 0
+        if self.luta_ativa and estado not in ("BATALHA", "CLIQUE_JOGO"):
+            self.luta_ativa = False
+            if self.metr:
+                self.metr.batalha_fim(venceu=estado in ("CARTAS", "POPUP_CARTA"))
         if estado not in ("CARTAS", "POPUP_CARTA", "BATALHA", "CLIQUE_JOGO"):
             self.finalizar_instancia()
         if estado != "BATALHA":
             self.batalha_desde = None
 
         sala = estado in ("SALA_VAZIA", "SALA") or estado.startswith("PRONTA_")
+        if self.metr and not self.run_completa and (sala or estado.startswith("CONFIG")):
+            self.metr.instancia_inicio(self.instancia, self.voltas)
         if sala and self.run_completa:
             # a rota acabou: coleta as tarefas e so entao comeca outra volta (a sala pode continuar mostrando a
             # ultima instancia - antes o bot "aceitava" essa sala e repetia o Minhocao sem parar)
@@ -563,6 +590,8 @@ class Navegador:
                 return
             self.voltas += 1
             self.log(f"=== Volta {self.voltas} concluida. Recomecando na mesma sala pela {self.rota[0]}. ===")
+            if self.metr:
+                self.metr.volta_fim(self.voltas)
             self.novo_ciclo()
             self.pontos_tarefa.clear()
             if self.reg:
@@ -581,6 +610,8 @@ class Navegador:
             if self.run_completa:
                 self.voltas += 1
                 self.log(f"=== Volta {self.voltas} concluida (tarefas coletadas). ===")
+                if self.metr:
+                    self.metr.volta_fim(self.voltas)
                 self.novo_ciclo()
                 if self.uma_vez:
                     self.parar = True
@@ -660,19 +691,34 @@ class Navegador:
             f, _e = self.ver()
             if f is None:
                 return
+            self.quadro_cartas = f
             costas = cartas_de_costas(f)
-            viradas = len(CARTAS_LINHAS) * len(CARTAS_COLUNAS) - len(costas)
+            viradas = len(CARTAS_TODAS) - len(costas)
+            self.cartas_max_viradas = max(self.cartas_max_viradas, viradas)
             if viradas >= CARTAS_VIRADAS_PARA_PAGAR:
-                self.dormir(1.5)       # ja viramos as 3 (ou a contagem acabou e tudo abriu)
+                self.dormir(1.0)       # ja viramos as 3 (ou a contagem acabou e tudo abriu)
                 return
-            alvo = next((p for p in CARTAS_PREFERENCIA if p in costas and self.tentativas_carta[p] < 2), None)
-            if alvo is None:
-                self.dormir(1.0)
+            if self.cartas_escolhidas is None:
+                # sorteia 3 cartas e clica nas 3 em seguida (a tela tem cronometro de 15 s; com o PC ocupado o jogo
+                # demora a mostrar a carta virando - esperar cada uma virar antes da proxima estourava o tempo)
+                livres = [p for p in CARTAS_TODAS if p in costas] or list(CARTAS_TODAS)
+                self.cartas_escolhidas = self.rng.sample(livres, min(CARTAS_VIRADAS_PARA_PAGAR, len(livres)))
+                self.log(f"[CARTAS] cartas sorteadas: {self.cartas_escolhidas}")
+                for p in self.cartas_escolhidas:
+                    self.clicar(p)
+                    self.dormir(CARTAS_ENTRE_CLIQUES)
+                self.cartas_clicadas_em = self.agora()
                 return
-            self.tentativas_carta[alvo] += 1
-            self.log(f"[CARTAS] {viradas} virada(s); virando a carta em {alvo}")
-            self.clicar(alvo)
-            self.dormir(1.3)
+            pend = [p for p in self.cartas_escolhidas if p in costas]
+            if pend and self.agora() - self.cartas_clicadas_em >= CARTAS_REPETIR_APOS and self.cartas_rodadas < 4:
+                self.cartas_rodadas += 1
+                self.log(f"[CARTAS] {viradas} virada(s); clicando de novo nas sorteadas que nao viraram: {pend}")
+                for p in pend:
+                    self.clicar(p)
+                    self.dormir(0.4)
+                self.cartas_clicadas_em = self.agora()
+                return
+            self.dormir(0.4)
         elif estado == "TAREFA":
             self.coletar_tarefas()
         elif estado == "BATALHA":
@@ -680,6 +726,10 @@ class Navegador:
             if self.batalha_desde is None:
                 self.batalha_desde = self.agora()
                 self.em_batalha = True
+                if not self.luta_ativa:
+                    self.luta_ativa = True
+                    if self.metr:
+                        self.metr.batalha_inicio(self.instancia, self.voltas)
                 self.log("[BATALHA] " + ("o bot joga os turnos." if self.atirador else
                                          "em luta - o tiro automatico e opcional (--atirar); jogue voce mesmo."))
             if self.atirador:
@@ -804,7 +854,7 @@ class Navegador:
                     continue
                 self.em_batalha = False
                 self.fora_da_batalha_desde = None
-                self.atirador.fim_da_batalha()
+                self.atirador.fim_da_batalha(venceu=bool(achadas and achadas[0] in ("CARTAS", "POPUP_CARTA")))
             estado = self.estado_estavel()
             if estado is None:
                 self.desconhecido()
@@ -889,6 +939,8 @@ def main():
     ap.add_argument("--foco", type=int, choices=(0, 1, 2), default=1,
                     help="foco do teclado na batalha: 0 nenhum, 1 virtual (padrao; sobe sozinho), 2 jogo em primeiro plano durante o turno")
     ap.add_argument("--sem-gravar", action="store_true", help="nao grava prints/eventos do bot em sessoes\\")
+    ap.add_argument("--gravar-tudo", action="store_true",
+                    help="grava prints de tudo (para investigar um problema). Padrao: gravacao leve (horas sem encher o disco)")
     args = ap.parse_args()
 
     if not args.so_ver and not instancia_unica():
@@ -937,23 +989,30 @@ def main():
     reg = None
     if not args.sem_gravar:
         import registro
-        reg = registro.Registro("bot")
-        log(f"Gravando o bot em: {reg.pasta}")
+        reg = registro.Registro("bot", leve=not args.gravar_tudo)
+        log(f"Gravando o bot em: {reg.pasta} ({'tudo' if args.gravar_tudo else 'gravacao leve: eventos + prints dos turnos e de problemas'})")
+    import metricas as metricas_mod
+    metr = metricas_mod.Metricas(nome_rota, log=log)
+    log(f"Cronometro: logs\\relatorio.txt (resumo, atualizado a cada luta), logs\\lutas.csv e logs\\voltas.csv")
     nav = Navegador(io, det, rota, not args.sem_tarefas, args.uma_vez, args.simular, log=log, reg=reg,
-                    dificuldade=dificuldade)
+                    dificuldade=dificuldade, metricas=metr)
     log(f"{nome_rota}: {' -> '.join(rota)}" + (f" (dificuldade {dificuldade} em todas)" if dificuldade else ""))
     if args.atirar or args.sombra:
         import atirador as atirador_mod
         import memoria as memoria_mod
         ordem = [int(x) for x in args.itens.split(",") if x.strip()] or None
+        import combos as combos_mod
         nav.atirador = atirador_mod.Atirador(io, memoria_mod.Memoria(), lambda: nav.instancia, sombra=args.sombra, log=log,
-                                             ordem_itens=ordem, reg=reg)
+                                             ordem_itens=ordem, reg=reg, metricas=metr,
+                                             combos=combos_mod.Combos(fixo=ordem))
     nav.idx = max(0, min(len(rota) - 1, args.comecar_em - 1))
     try:
         nav.rodar()
     except KeyboardInterrupt:
         log("Parado pelo usuario.")
     finally:
+        metr.escrever_relatorio()
+        print("\n" + metr.texto_relatorio())
         if reg:
             reg.fechar()
             print(f"Gravacao salva em {reg.pasta}  (rode EMPACOTAR_E_ENVIAR.bat para me mandar)")

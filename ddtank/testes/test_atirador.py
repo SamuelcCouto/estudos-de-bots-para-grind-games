@@ -335,3 +335,25 @@ at, logs = novo_sul(w, "ESCORPIAO_REI"); rodar(at, w, ate=14)
 assert not [t for t in w.teclas if t[0] == "f"] and w.itens_apertados, (w.teclas, w.itens_apertados)
 print("Escorpiao fraco: ataca direto OK")
 print("\natirador (Rota Sul) OK")
+
+# ------------------------------------------------------------ 20) combo de itens aprende com o dano do 1o ataque
+import combos as CB
+arq_c = os.path.join(tempfile.mkdtemp(), "combos.json")
+w = MundoComThread()
+tmp = tempfile.NamedTemporaryFile("w", suffix=".json", delete=False); tmp.close(); os.unlink(tmp.name)
+mem = M.Memoria(arq_aprendizado=tmp.name); logs = []
+cb = CB.Combos(arq=arq_c)
+at = A.Atirador(w, mem, lambda: "MINHOCAO", leitor=Leitor(), dormir=w.dormir, agora=lambda: w.t, log=logs.append, combos=cb)
+rodar(at, w, ate=16)
+print("\n".join(l for l in logs if "combo" in l or "vida do boss" in l))
+assert cb.dados.get("MINHOCAO", {}).get("A") == [42.0], cb.dados     # Mundo: 100% -> 58%
+print("combo registrado com o dano do 1o ataque OK")
+
+# ------------------------------------------------------------ 21) boss ja morto e o PASS ainda na tela: nao gasta nada
+w.novo_turno(w.t + 1.0, w.t + 9.0); w.vida = 0.0
+n_tiros, n_itens = len(w.tiros), len(w.itens_apertados)
+w.capturar_base = w.capturar
+rodar(at, w, ate=w.t + 12)
+assert len(w.tiros) == n_tiros and len(w.itens_apertados) == n_itens, "atirou/gastou itens com o boss morto"
+print("sem turno fantasma depois do boss morto OK")
+print("\natirador (combos) OK")

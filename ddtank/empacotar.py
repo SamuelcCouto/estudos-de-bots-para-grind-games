@@ -8,6 +8,7 @@ Empacota uma sessao gravada em zips pequenos para enviar.
 Reduz os quadros para 1280x720 (JPEG) e divide em partes de ate 20 MB (limite do GitHub: 100 MB).
 Saida: ddtank/envio/<sessao>_parte1.zip ...
 """
+import glob
 import os
 import sys
 import zipfile
@@ -57,6 +58,15 @@ def main():
         tiros = os.path.join(config.PASTA, "dados", "aprendizado.json")
         if parte == 1 and os.path.exists(tiros):
             zf.write(tiros, f"{nome}/aprendizado.json")
+        # cronometro/placar (logs\relatorio.txt, lutas.csv, voltas.csv), combos aprendidos e o log do console do dia
+        if parte == 1:
+            extras = [os.path.join(config.PASTA_LOGS, a) for a in ("relatorio.txt", "lutas.csv", "voltas.csv")]
+            extras.append(os.path.join(config.PASTA, "dados", "combos.json"))
+            dia = os.path.basename(os.path.normpath(sessao))[:8]
+            extras += sorted(glob.glob(os.path.join(config.PASTA_LOGS, f"navegador_{dia}*.log")))
+            for arq in extras:
+                if os.path.exists(arq):
+                    zf.write(arq, f"{nome}/logs/{os.path.basename(arq)}")
 
     abrir()
     for f in arquivos:

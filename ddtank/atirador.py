@@ -27,6 +27,7 @@ DURACAO_MAX_DA_VEZ = 11.0     # s: se o PASS nunca some, considera que comecou o
 INTERVALO_LEITURA = 1.0       # s entre leituras gravadas no registro (diagnostico)
 TOQUES_VIRAR = (0.08, 0.12, 0.18)  # s: toques na seta esquerda/direita para virar (toque curto quase nao anda)
 AVIAO_MOVEU = 4.0              # px de minimapa: depois do voo o boneco tem que ter saido do lugar
+INTERVALO_LEITURA_LEVE = 3.0  # s (gravacao leve: so os numeros, sem print)
 INTERVALO_MINIMAPA = 0.4      # s entre leituras do minimapa para o rastreador (posicao do jogador = a que mais se repete)
 TOLERANCIA_ANGULO = 3.0       # graus
 TAXA_ANGULO_INICIAL = 28.0    # graus/s com a seta apertada (aprende sozinho)
@@ -52,7 +53,7 @@ class LeitorReal:
 
 class Atirador:
     def __init__(self, io, memoria, instancia, leitor=None, sombra=False, dormir=None, agora=None, log=print,
-                 ordem_itens=None, reg=None):
+                 ordem_itens=None, reg=None, metricas=None, combos=None):
         """io: capturar(), tecla_baixo(nome, repeticao), tecla_cima(nome), tecla(nome, dur), trocar_modo().
         instancia: funcao que devolve 'FANTASMA' | 'PROFUNDEZAS' | 'MINHOCAO'."""
         import time
@@ -76,6 +77,10 @@ class Atirador:
         self.pendente = None
         self.turnos = 0
         self.falhas_tecla = 0
+        self.metricas = metricas                  # metricas.Metricas (cronometro/placar) ou None
+        self.combos = combos                      # combos.Combos (escolhe a ordem de itens por instancia) ou None
+        self.combo_luta = None                    # (nome, ordem) escolhido no 1o ataque desta luta
+        self.ataques_na_luta = 0
         self.rastreador = L.RastreadorMinimapa()
         self.avioes_na_luta = 0
         self.aviao_pendente = None                # {"de": (x, y)} do ultimo voo: confere no turno seguinte se andou
@@ -131,7 +136,7 @@ class Atirador:
             self.inst_rastreada = inst
             self.avioes_na_luta, self.aviao_pendente = 0, None
         self.observar_minimapa(f)
-        if self.reg and agora - self.ultima_leitura >= INTERVALO_LEITURA:
+        if self.reg and agora - self.ultima_leitura >= (INTERVALO_LEITURA_LEVE if getattr(self.reg, "leve", False) else INTERVALO_LEITURA):
             self.ultima_leitura = agora
             self.reg.evento("leitura", [self.reg.frame(f, "leitura")], vez=bool(vez), agiu=self.agiu,
                             angulo=round(self.lei.angulo(f), 1), forca=round(self.lei.forca(f)), vida=round(self.lei.vida(f)),
@@ -161,13 +166,16 @@ class Atirador:
     def agiu_recentemente(self):
         return self.pendente is not None and self.agora() - self.pendente["t"] < 2.0
 
-    def fim_da_batalha(self):
-        """O navegador avisa que saimos da batalha: se havia um tiro pendente, o boss morreu."""
-        if self.pendente:
+    def fim_da_batalha(self, venceu=True):
+        """O navegador avisa que saimos da batalha. venceu=True (apareceram as cartas): um tiro pendente matou o boss.
+        venceu=False (o boneco morreu / saiu): o resultado do tiro pendente e desconhecido -> descarta."""
+        if self.pendente and venceu:
             p = self.pendente
             self.log(f"   [tiro] boss derrotado -> ACERTOU ({p['angulo']:.0f} graus, {p['forca']:.0f}%)")
             self.mem.registrar(p["inst"], p["azul"], p["boss"], p["angulo"], p["forca"], True, origem="bot", dano=p["hp0"])
-            self.pendente = None
+            self._resultado(p, p["hp0"], True)
+        self.pendente = None
+        self.combo_luta, self.ataques_na_luta = None, 0
         self.vez_desde, self.agiu = None, False
         self.rastreador.reiniciar()               # proxima batalha: spawn novo
         self.avioes_na_luta, self.aviao_pendente = 0, None
@@ -197,6 +205,11 @@ class Atirador:
                 azul, boss, conf = self.posicoes(g)
         self.conferir_aviao(azul)
         hp0 = self.lei.vida(f)
+        if hp0 <= 0 and self.ataques_na_luta > 0:
+            # o boss ja morreu (a barra de vida sumiu) e o PASS ainda esta na tela ate a vitoria: nao gasta nada
+            self.agiu = True
+            self.turnos -= 1
+            return
         destino = self.plano_aviao(inst, azul, hp0)
         if destino:
             return self.turno_aviao(f, inst, azul, boss, destino, hp0)
@@ -221,14 +234,29 @@ class Atirador:
         if self.reg:
             fr.append(self.reg.frame(self.ver(), "apos_angulo"))
         if not ok_ang:
-            self.log("   ! nao consegui ajustar o angulo (as setas nao estao chegando ao jogo? ou a vez acabou). Pulando o tiro. "
-                     "Dica: clique no jogo para ele ficar em primeiro plano, ou rode com --foco 2.")
+            if not self.vez_ativa():
+                # o PASS piscou (animacao do boss) ou a vez acabou antes de mirar: nao e problema de teclado
+                self.log("   (a vez acabou antes de mirar - o PASS so piscou; nada apertado)")
+                self.turnos -= 1
+            else:
+                self.log("   ! nao consegui ajustar o angulo (as setas nao estao chegando ao jogo?). Pulando o tiro. "
+                         "Dica: clique no jogo para ele ficar em primeiro plano, ou rode com --foco 2.")
+                if self.metricas:
+                    self.metricas.turno("pulado")
             self.agiu = True
             self.devolver_foco()
             if self.reg:
                 self.reg.evento("turno_pulado", fr, inst=inst, motivo="angulo", previsto=pred, tempo_s=round(t_ang, 2))
             return
-        apertados = self.aplicar_itens()
+        primeiro = self.ataques_na_luta == 0 and hp0 >= 95
+        if self.combo_luta is None:
+            if self.combos:
+                nome_c, ordem_c, motivo_c = self.combos.escolher(inst)
+                self.log(f"   combo de itens {nome_c} {ordem_c[:5]}...: {motivo_c}")
+                self.combo_luta = (nome_c, ordem_c)
+            else:
+                self.combo_luta = (None, self.ordem)
+        apertados = self.aplicar_itens(self.combo_luta[1])
         t_itens = self.agora() - inicio
         if self.reg:
             fr.append(self.reg.frame(self.ver(), "apos_itens"))
@@ -252,7 +280,10 @@ class Atirador:
         t_tiro = self.agora() - inicio
         self.agiu = True
         self.pendente = {"t": self.agora(), "inst": inst, "azul": azul, "boss": boss, "angulo": angulo_real,
-                         "forca": forca_real, "hp0": hp0}
+                         "forca": forca_real, "hp0": hp0, "combo": self.combo_luta[0], "primeiro": primeiro}
+        self.ataques_na_luta += 1
+        if self.metricas:
+            self.metricas.turno("ataque", itens=apertados, combo=self.combo_luta[0])
         self.log(f"   tiro dado: {angulo_real:.0f} graus, forca {forca_real:.0f}% (queria {alvo_forca:.0f}%); "
                  f"[{metodo_usado}, soltou por '{soltou}'] tempo: angulo {t_ang:.1f}s, itens {t_itens - t_ang:.1f}s, carga {t_tiro - t_itens:.1f}s (total {t_tiro:.1f}s)")
         if self.reg:
@@ -352,6 +383,9 @@ class Atirador:
         self.agiu = True
         self.avioes_na_luta += 1
         self.aviao_pendente = {"de": azul}
+        self.rastreador.reiniciar()               # o boneco vai mudar de lugar: posicao nova a partir de agora
+        if self.metricas:
+            self.metricas.turno("aviao")
         self.log(f"   [AVIAO] tiro dado: {angulo_real:.0f} graus, forca {forca_real:.0f}% (queria {forca:.0f}%)")
         if self.reg:
             fr.append(self.reg.frame(self.ver(), "tiro_dado"))
@@ -418,10 +452,10 @@ class Atirador:
         return True
 
     # ------------------------------------------------------------------ itens
-    def aplicar_itens(self):
+    def aplicar_itens(self, ordem=None):
         usados = {}
         apertados = []
-        for item in self.ordem:
+        for item in (ordem or self.ordem):
             if usados.get(item, 0) >= LIMITE_POR_TURNO.get(item, 99):
                 continue
             f = self.ver()
@@ -536,3 +570,11 @@ class Atirador:
         self.log(f"   [tiro] vida do boss {p['hp0']:.0f}% -> {hp1:.0f}%: {'ACERTOU' if acertou else 'ERROU'}")
         self.mem.registrar(p["inst"], p["azul"], p["boss"], p["angulo"], p["forca"], acertou, origem="bot",
                            dano=max(0.0, p["hp0"] - hp1))
+        self._resultado(p, max(0.0, p["hp0"] - hp1), acertou)
+
+    def _resultado(self, p, dano, acertou):
+        """Placar (metricas) e aprendizado do combo: so o 1o ataque com o boss cheio que ACERTOU diz algo do combo."""
+        if self.metricas:
+            self.metricas.resultado_tiro(dano, acertou)
+        if self.combos and p.get("primeiro") and acertou and p.get("combo"):
+            self.combos.registrar(p["inst"], p["combo"], 100.0 if dano >= p["hp0"] - 1 else dano)
