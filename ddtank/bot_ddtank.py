@@ -111,6 +111,37 @@ def cmd_tecla(args):
         print("Captura depois:", salvar(img, "tecla"))
 
 
+def cmd_teste_forca(args):
+    """Diagnostico: na SUA vez, segura o espaco 1,0 s de duas formas e le a barra de forca (esperado ~38%)."""
+    import navegador as N
+    import leitura as L
+    io = N.IOJanela(achar(args))
+
+    def esperar_vez():
+        t0 = time.time()
+        while time.time() - t0 < 120:
+            img = io.capturar()
+            if img is not None and L.minha_vez(N.em_1280(img)):
+                time.sleep(0.6)
+                return True
+            time.sleep(0.2)
+        return False
+
+    print("Entre numa batalha e espere a SUA vez (aparece o botao PASS). O teste dispara 2 tiros de forca baixa.")
+    for nome, repeticao in (("COM repeticao automatica de tecla (a cada 30 ms)", True), ("SEM repeticao (um unico KEYDOWN)", False)):
+        print(f"\nAguardando a sua vez... ({nome})")
+        if not esperar_vez():
+            sys.exit("A sua vez nao chegou em 2 minutos.")
+        if repeticao:
+            io.segurar("espaco"); time.sleep(1.0); io.soltar("espaco")
+        else:
+            io.tecla_baixo("espaco", 1); time.sleep(1.0); io.tecla_cima("espaco")
+        time.sleep(0.4)
+        v = L.forca(N.em_1280(io.capturar()))
+        print(f"  segurou 1,0 s {nome}: barra em {v:.0f}%   (esperado ~38%)")
+    print("\nMe mande esses dois numeros.")
+
+
 def main():
     ap = argparse.ArgumentParser(description="DDTank - fase 1 (captura e controle da janela)")
     ap.add_argument("--titulo", default="")
@@ -123,11 +154,14 @@ def main():
     g.add_argument("--gravar", type=float, metavar="SEGUNDOS")
     g.add_argument("--clicar", type=int, nargs=2, metavar=("X", "Y"))
     g.add_argument("--tecla", metavar="NOME")
+    g.add_argument("--teste-forca", dest="teste_forca", action="store_true", help="diagnostico da barra de forca (numa batalha)")
     ap.add_argument("--n", type=int, default=20, help="quantas capturas no --gravar")
     ap.add_argument("--segundos", type=float, default=1.0, help="quanto segurar a --tecla")
     args = ap.parse_args()
     if args.listar:
         cmd_listar(args)
+    elif args.teste_forca:
+        cmd_teste_forca(args)
     elif args.diagnostico:
         cmd_diagnostico(args)
     elif args.print_:

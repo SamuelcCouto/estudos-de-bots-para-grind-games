@@ -101,6 +101,28 @@ class IOJanela:
     def tecla_cima(self, nome):
         self.j.tecla_cima(self.hwnd, nome, self.modo_teclas)
 
+    def segurar(self, nome):
+        """Aperta e MANTEM a tecla: uma thread manda a repeticao de tecla a cada ~30 ms, como o teclado de verdade
+        (o jogo pode considerar a tecla solta se as repeticoes pararem por um instante)."""
+        import threading
+        self._parar_repeticao = threading.Event()
+        self.j.tecla_baixo(self.hwnd, nome, self.modo_teclas, 1)
+
+        def repetir():
+            rep = 2
+            while not self._parar_repeticao.wait(0.03):
+                self.j.tecla_baixo(self.hwnd, nome, self.modo_teclas, rep)
+                rep += 1
+
+        self._thread_repeticao = threading.Thread(target=repetir, daemon=True)
+        self._thread_repeticao.start()
+
+    def soltar(self, nome):
+        if getattr(self, "_parar_repeticao", None) is not None:
+            self._parar_repeticao.set()
+            self._thread_repeticao.join(timeout=0.3)
+        self.j.tecla_cima(self.hwnd, nome, self.modo_teclas)
+
     def trocar_modo(self):
         self.modo_teclas = "filha" if self.modo_teclas == "top" else "top"
 

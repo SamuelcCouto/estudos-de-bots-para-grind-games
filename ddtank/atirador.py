@@ -59,6 +59,9 @@ class Atirador:
         self.agora = agora or time.time
         self.ordem = ordem_itens or list(ORDEM_ITENS)
         self.taxa_angulo = TAXA_ANGULO_INICIAL
+        self.taxa_forca = FORCA_POR_SEGUNDO       # % por segundo segurando (aprende no metodo "tempo")
+        self.metodo_forca = "barra"               # "barra" = solta olhando a barra; "tempo" = solta pelo relogio
+        self.subforcas = 0
         self.antecipacao = ANTECIPACAO_INICIAL
         self.vez_desde = None
         self.agiu = False
@@ -167,17 +170,26 @@ class Atirador:
             if alt:
                 self.log(f"   angulo ficou em {angulo_real:.0f} (queria {pred['angulo']:.0f}): forca recalculada {pred['forca']:.0f}% -> {alt:.0f}%")
                 alvo_forca = alt
-        forca_real, soltou = self.carregar(alvo_forca)
+        forca_real, soltou, trace, segurou = self.carregar(alvo_forca)
+        metodo_usado = self.metodo_forca
+        if soltou != "vez_acabou" and alvo_forca - forca_real > 10 and forca_real < 0.75 * alvo_forca:
+            self.subforcas += 1
+            self.metodo_forca = "tempo" if metodo_usado == "barra" else "barra"
+            self.log(f"   ! a forca ficou muito abaixo do alvo ({forca_real:.0f}% de {alvo_forca:.0f}%, soltou por '{soltou}', "
+                     f"segurou {segurou:.2f}s): trocando o metodo de carga {metodo_usado} -> {self.metodo_forca}")
+        else:
+            self.subforcas = 0
         t_tiro = self.agora() - inicio
         self.agiu = True
         self.pendente = {"t": self.agora(), "inst": inst, "azul": azul, "boss": boss, "angulo": angulo_real,
                          "forca": forca_real, "hp0": hp0}
         self.log(f"   tiro dado: {angulo_real:.0f} graus, forca {forca_real:.0f}% (queria {alvo_forca:.0f}%); "
-                 f"tempo: angulo {t_ang:.1f}s, itens {t_itens - t_ang:.1f}s, carga {t_tiro - t_itens:.1f}s (total {t_tiro:.1f}s)")
+                 f"[{metodo_usado}, soltou por '{soltou}'] tempo: angulo {t_ang:.1f}s, itens {t_itens - t_ang:.1f}s, carga {t_tiro - t_itens:.1f}s (total {t_tiro:.1f}s)")
         if self.reg:
             fr.append(self.reg.frame(self.ver(), "tiro_dado"))
             self.reg.evento("turno", fr, inst=inst, azul=azul, boss=boss, previsto=pred, angulo_real=round(angulo_real, 1),
-                            forca_real=round(forca_real), itens=apertados, itens_coloridos_inicio=itens0, soltou=soltou,
+                            forca_real=round(forca_real), alvo_forca=round(alvo_forca), itens=apertados, itens_coloridos_inicio=itens0,
+                            soltou=soltou, metodo_forca=metodo_usado, segurou_s=round(segurou, 2), trace_barra=trace[-40:],
                             tempos={"angulo": round(t_ang, 2), "itens": round(t_itens - t_ang, 2), "carga": round(t_tiro - t_itens, 2)})
 
     # ------------------------------------------------------------------ angulo
@@ -236,38 +248,71 @@ class Atirador:
         return apertados
 
     # ------------------------------------------------------------------ forca
+    def _segurar(self):
+        if hasattr(self.io, "segurar"):
+            self.io.segurar(TECLA_ESPACO)         # repeticao de tecla a cada ~30 ms, em thread propria
+            return False
+        self.io.tecla_baixo(TECLA_ESPACO, 1)
+        return True                               # sem thread: o laco repete a tecla a cada leitura
+
+    def _soltar(self):
+        if hasattr(self.io, "soltar"):
+            self.io.soltar(TECLA_ESPACO)
+        else:
+            self.io.tecla_cima(TECLA_ESPACO)
+
     def carregar(self, alvo):
-        """Segura ESPACO olhando a barra; solta ao chegar em (alvo - antecipacao) ou se a vez acabar.
-        Trava de seguranca: a barra sobe ~38%/s, entao NUNCA solta antes do tempo minimo para o alvo - assim uma
-        barra ainda mostrando o tiro anterior nao faz o bot soltar de cara (forca 10 quando era preciso 40).
-        Devolve (forca final lida, motivo da soltura)."""
+        """Segura ESPACO e solta na forca alvo. Dois metodos:
+          "barra": solta quando a barra chega em (alvo - antecipacao) - com trava de tempo minimo (a barra pode
+                   estar mostrando o tiro anterior);
+          "tempo": solta pelo relogio (alvo / taxa), sem confiar na leitura da barra.
+        Nos dois, solta se a vez acabar (2 leituras seguidas sem o PASS, para um piscar nao soltar cedo).
+        Devolve (forca final lida, motivo, trace [(s, %)], tempo segurado)."""
         quer = max(0.0, alvo - self.antecipacao)
-        minimo = max(0.0, quer / FORCA_POR_SEGUNDO - MARGEM_TEMPO_MINIMO)
-        limite = min(MAX_SEGURANDO, alvo / FORCA_POR_SEGUNDO + 1.0)
+        por_tempo = self.metodo_forca == "tempo"
+        minimo = max(0.0, quer / self.taxa_forca - MARGEM_TEMPO_MINIMO)
+        tempo_alvo = quer / self.taxa_forca
+        limite = min(MAX_SEGURANDO, alvo / self.taxa_forca + 1.0)
+        repetir_no_laco = self._segurar()
         rep = 1
-        self.io.tecla_baixo(TECLA_ESPACO, rep)
         t0 = self.agora()
-        v, motivo = 0.0, "tempo"
+        v, motivo, trace, faltas = 0.0, "tempo_limite", [], 0
         while self.agora() - t0 < limite:
             f = self.ver()
             dur = self.agora() - t0
             if f is not None:
                 if not self.lei.minha_vez(f):
-                    motivo = "vez_acabou"
-                    break
+                    faltas += 1
+                    if faltas >= 2:
+                        motivo = "vez_acabou"
+                        break
+                else:
+                    faltas = 0
                 v = self.lei.forca(f)
-                if v >= quer and dur >= minimo:
+                trace.append((round(dur, 2), round(v)))
+                if por_tempo:
+                    if dur >= tempo_alvo:
+                        motivo = "tempo_alvo"
+                        break
+                elif v >= quer and dur >= minimo:
                     motivo = "alvo"
                     break
-            rep += 1
-            self.io.tecla_baixo(TECLA_ESPACO, rep)
-        self.io.tecla_cima(TECLA_ESPACO)
+            elif por_tempo and dur >= tempo_alvo:
+                motivo = "tempo_alvo"
+                break
+            if repetir_no_laco:
+                rep += 1
+                self.io.tecla_baixo(TECLA_ESPACO, rep)
+        segurou = self.agora() - t0
+        self._soltar()
         self.dormir(0.25)
         final = self.lei.forca(self.ver())
-        if final > 0 and motivo == "alvo":
-            sobra = final - alvo
-            self.antecipacao = float(np.clip(self.antecipacao + 0.5 * sobra, 0.0, 12.0))   # corrige o atraso
-        return (final if final > 0 else v), motivo
+        if final > 0:
+            if motivo == "alvo":
+                self.antecipacao = float(np.clip(self.antecipacao + 0.5 * (final - alvo), 0.0, 12.0))   # corrige o atraso
+            elif motivo == "tempo_alvo" and segurou > 0.3:
+                self.taxa_forca = float(np.clip(0.7 * self.taxa_forca + 0.3 * (final / segurou), 15.0, 80.0))
+        return (final if final > 0 else v), motivo, trace, segurou
 
     # ------------------------------------------------------------------ resultado
     def concluir_tiro(self, f):

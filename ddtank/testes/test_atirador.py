@@ -15,7 +15,9 @@ CUSTOS = {1: 110, 2: 110, 3: 110, 4: 85, 5: 80, 6: 70, 7: 55, 8: 50}
 class Mundo:
     """Simula a batalha: relogio, ponteiro do angulo, barra de forca, stamina/itens, PASS e vida do boss."""
     def __init__(self, angulo=15.0, stamina=240, setas_funcionam_em=("top", "filha"), vez_inicio=1.0, vez_fim=9.0,
-                 boss_hit=True):
+                 boss_hit=True, custo_captura=0.06, exige_repeticao=False, barra_quebrada=False):
+        self.custo_captura = custo_captura; self.exige_repeticao = exige_repeticao; self.barra_quebrada = barra_quebrada
+        self.ultimo_baixo = 0.0; self.keepalive = False
         self.t = 0.0; self.angulo = angulo; self.stamina = stamina; self.modo = "top"
         self.setas_ok = setas_funcionam_em; self.vez = (vez_inicio, vez_fim)
         self.carregando_desde = None; self.barra = 0.0; self.teclas = []; self.itens_apertados = []
@@ -26,12 +28,19 @@ class Mundo:
         self.t += s
         if self.carregando_desde is not None:
             self.barra = min(100.0, (self.t - self.carregando_desde) * 38.0)
+            # jogo "exigente": se as repeticoes da tecla param por mais de 80 ms, considera a tecla solta e DISPARA
+            if self.exige_repeticao and not self.keepalive and self.t - self.ultimo_baixo > 0.08:
+                self.tiros.append(min(100.0, (self.ultimo_baixo - self.carregando_desde) * 38.0))
+                self.carregando_desde = None; self.atirou_em = self.t
+    def novo_turno(self, ini, fim):
+        self.vez = (ini, fim); self.atirou_em = None; self.barra = 0.0; self.vida = 100.0; self.stamina = 240
     def capturar(self):
-        self.avancar(0.06)                                   # custo da captura
+        self.avancar(self.custo_captura)                     # custo da captura
         vez = self.vez[0] <= self.t <= self.vez[1] and self.atirou_em is None or (self.atirou_em and self.t < self.vez[1])
         if self.atirou_em and self.t > self.atirou_em + 3 and self.boss_hit and self.vida == 100.0:
             self.vida = 58.0                                 # a bala cai ~3 s depois e tira vida
-        return {"vez": vez, "ang": self.angulo, "barra": self.barra, "azul": self.azul, "boss": self.boss,
+        barra = 100.0 if (self.barra_quebrada and self.carregando_desde is not None and self.t - self.carregando_desde > 0.15) else self.barra
+        return {"vez": vez, "ang": self.angulo, "barra": barra, "azul": self.azul, "boss": self.boss,
                 "itens": [self.stamina >= CUSTOS[i] for i in range(1, 9)], "vida": self.vida}
     def tecla(self, nome, dur=0.05):
         self.teclas.append((nome, round(dur, 2)))
@@ -43,13 +52,24 @@ class Mundo:
                 self.stamina -= CUSTOS[item]; self.itens_apertados.append(item)
         self.avancar(dur)
     def tecla_baixo(self, nome, rep=1):
-        if self.carregando_desde is None: self.carregando_desde = self.t
+        self.ultimo_baixo = self.t
+        if self.carregando_desde is None and self.atirou_em is None: self.carregando_desde = self.t
     def tecla_cima(self, nome):
+        if self.carregando_desde is None:                    # o jogo ja disparou sozinho
+            self.avancar(0.1); return
         real = min(100.0, (self.t - self.carregando_desde) * 38.0)   # forca REAL = tempo segurado (a barra exibida pode estar velha)
         self.avancar(0.1)                                    # atraso do KEYUP
         self.tiros.append(real); self.carregando_desde = None; self.atirou_em = self.t
     def trocar_modo(self): self.modo = "filha" if self.modo == "top" else "top"
     def dormir(self, s): self.avancar(s)
+
+class MundoComThread(Mundo):
+    """Como o IOJanela real: segurar() mantem a tecla com repeticao automatica em thread propria."""
+    def segurar(self, nome):
+        self.keepalive = True; self.ultimo_baixo = self.t
+        if self.carregando_desde is None and self.atirou_em is None: self.carregando_desde = self.t
+    def soltar(self, nome):
+        Mundo.tecla_cima(self, nome); self.keepalive = False
 
 class Leitor:
     def preparar(self, img): return img
@@ -145,3 +165,24 @@ rodar(at, w)
 assert any("recalculada" in l for l in logs), logs
 print("forca recalculada quando o angulo nao chega no previsto OK")
 print("\natirador (regressoes) OK")
+
+# ------------------------------------------------------------ 10) HIPOTESE: o jogo dispara sozinho se as repeticoes de tecla demoram (>80 ms)
+w = Mundo(exige_repeticao=True, custo_captura=0.12); at, mem, logs, arq = novo(w); rodar(at, w, ate=16)
+print("sem thread de repeticao (captura lenta): forca REAL", [round(x) for x in w.tiros], "(queria ~38)")
+assert w.tiros and w.tiros[0] < 25, "o simulador deveria reproduzir o disparo precoce"
+
+w = MundoComThread(exige_repeticao=True, custo_captura=0.12); at, mem, logs, arq = novo(w); rodar(at, w, ate=16)
+print("com thread de repeticao (30 ms):         forca REAL", [round(x) for x in w.tiros])
+assert len(w.tiros) == 1 and abs(w.tiros[0] - 38) <= 7, w.tiros
+print("repeticao de tecla em thread propria: OK")
+
+# ------------------------------------------------------------ 11) leitura da barra quebrada: troca para o metodo por tempo
+w = MundoComThread(barra_quebrada=True); at, mem, logs, arq = novo(w)
+rodar(at, w, ate=12)
+w.novo_turno(13, 22); rodar(at, w, ate=26)
+print("barra quebrada: forca REAL por turno", [round(x) for x in w.tiros], "| metodo agora:", at.metodo_forca)
+print("\n".join(l for l in logs if "trocando o metodo" in l))
+assert at.metodo_forca == "tempo" and len(w.tiros) == 2
+assert w.tiros[0] < 30 and abs(w.tiros[1] - 38) <= 7, w.tiros
+print("troca de metodo de carga apos subforca OK")
+print("\natirador (hipotese da repeticao) OK")
