@@ -345,11 +345,14 @@ mem = M.Memoria(arq_aprendizado=tmp.name); logs = []
 cb = CB.Combos(arq=arq_c)
 at = A.Atirador(w, mem, lambda: "MINHOCAO", leitor=Leitor(), dormir=w.dormir, agora=lambda: w.t, log=logs.append, combos=cb)
 rodar(at, w, ate=16)
-print("\n".join(l for l in logs if "combo" in l or "vida do boss" in l))
-assert cb.dados.get("MINHOCAO", {}).get("A") == [42.0], cb.dados     # Mundo: 100% -> 58%
-print("combo registrado com o dano do 1o ataque OK")
+at.fim_da_batalha(venceu=True, duracao=30.0)
+print("\n".join(l for l in logs if "combo" in l.lower() or "vida do boss" in l))
+reg = cb.dados.get("MINHOCAO", {}).get("2,3,4")
+assert reg and reg[0]["dano1"] == 42.0 and reg[0]["t"] == 30.0 and reg[0]["mata1"], cb.dados     # Mundo: 100% -> 58%
+print("combo registrado (tempo da luta + dano do 1o ataque) OK")
 
 # ------------------------------------------------------------ 21) boss ja morto e o PASS ainda na tela: nao gasta nada
+at.ataques_na_luta = 1
 w.novo_turno(w.t + 1.0, w.t + 9.0); w.vida = 0.0
 n_tiros, n_itens = len(w.tiros), len(w.itens_apertados)
 w.capturar_base = w.capturar

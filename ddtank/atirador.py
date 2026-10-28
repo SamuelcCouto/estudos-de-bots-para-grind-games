@@ -81,6 +81,8 @@ class Atirador:
         self.combos = combos                      # combos.Combos (escolhe a ordem de itens por instancia) ou None
         self.combo_luta = None                    # (nome, ordem) escolhido no 1o ataque desta luta
         self.ataques_na_luta = 0
+        self.dano1 = None                         # % de vida que o 1o ataque desta luta tirou
+        self.inst_luta = None
         self.rastreador = L.RastreadorMinimapa()
         self.avioes_na_luta = 0
         self.aviao_pendente = None                # {"de": (x, y)} do ultimo voo: confere no turno seguinte se andou
@@ -166,16 +168,22 @@ class Atirador:
     def agiu_recentemente(self):
         return self.pendente is not None and self.agora() - self.pendente["t"] < 2.0
 
-    def fim_da_batalha(self, venceu=True):
+    def fim_da_batalha(self, venceu=True, duracao=None):
         """O navegador avisa que saimos da batalha. venceu=True (apareceram as cartas): um tiro pendente matou o boss.
-        venceu=False (o boneco morreu / saiu): o resultado do tiro pendente e desconhecido -> descarta."""
+        venceu=False (o boneco morreu / saiu): o resultado do tiro pendente e desconhecido -> descarta.
+        duracao (s): tempo da luta, para o combo de itens aprender qual deixa a luta mais curta."""
         if self.pendente and venceu:
             p = self.pendente
             self.log(f"   [tiro] boss derrotado -> ACERTOU ({p['angulo']:.0f} graus, {p['forca']:.0f}%)")
             self.mem.registrar(p["inst"], p["azul"], p["boss"], p["angulo"], p["forca"], True, origem="bot", dano=p["hp0"])
             self._resultado(p, p["hp0"], True)
+        if self.combos and self.combo_luta and self.combo_luta[0] and venceu and duracao and self.inst_luta:
+            mata1 = self.ataques_na_luta == 1
+            self.combos.registrar_luta(self.inst_luta, self.combo_luta[0], duracao, mata1, self.dano1)
+            self.log(f"   [COMBO] {self.combo_luta[0]}: luta de {duracao:.0f}s, "
+                     f"{'matou no 1o ataque' if mata1 else f'{self.ataques_na_luta} ataques'}")
         self.pendente = None
-        self.combo_luta, self.ataques_na_luta = None, 0
+        self.combo_luta, self.ataques_na_luta, self.dano1, self.inst_luta = None, 0, None, None
         self.vez_desde, self.agiu = None, False
         self.rastreador.reiniciar()               # proxima batalha: spawn novo
         self.avioes_na_luta, self.aviao_pendente = 0, None
@@ -250,6 +258,7 @@ class Atirador:
             return
         primeiro = self.ataques_na_luta == 0 and hp0 >= 95
         if self.combo_luta is None:
+            self.inst_luta = inst
             if self.combos:
                 nome_c, ordem_c, motivo_c = self.combos.escolher(inst)
                 self.log(f"   combo de itens {nome_c} {ordem_c[:5]}...: {motivo_c}")
@@ -576,5 +585,5 @@ class Atirador:
         """Placar (metricas) e aprendizado do combo: so o 1o ataque com o boss cheio que ACERTOU diz algo do combo."""
         if self.metricas:
             self.metricas.resultado_tiro(dano, acertou)
-        if self.combos and p.get("primeiro") and acertou and p.get("combo"):
-            self.combos.registrar(p["inst"], p["combo"], 100.0 if dano >= p["hp0"] - 1 else dano)
+        if p.get("primeiro") and self.dano1 is None:
+            self.dano1 = 100.0 if dano >= p["hp0"] - 1 else dano

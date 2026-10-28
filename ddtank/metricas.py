@@ -19,6 +19,9 @@ import config
 NOMES = {"FANTASMA": "Fantasma", "PROFUNDEZAS": "Profundezas", "MINHOCAO": "Minhocao", "ESCORPIAO_REI": "Escorpiao Rei",
          "DRAGAO_GELADO": "Dragao Gelado", "RAINHA_LIRIS": "Rainha Liris", "ULTIMA_LUTA": "A Ultima Luta",
          "GATO_PRETO": "Gato Preto"}
+TESTE_DE_FOGO = "2,3,4"      # combo de dano maximo (ver combos.py): a prova de que precisa upar
+FOGO_PARA_CONCLUIR = 5
+LUTAS_PARA_CONFIAR = 20      # menos lutas que isso: um "matou no 1o turno" pode ter sido CRITICO
 MATA_NO_1O_OK = 0.8          # fracao de lutas mortas no 1o turno para considerar a instancia "resolvida"
 ACERTA_O_1O = 0.7            # se o 1o ataque acerta menos que isso, o problema e pontaria (nao falta de dano)
 
@@ -40,7 +43,8 @@ def fmt(s):
 
 
 class Metricas:
-    def __init__(self, rota_nome="", pasta=None, agora=time.time, log=print, salvar=True):
+    def __init__(self, rota_nome="", pasta=None, agora=time.time, log=print, salvar=True, combos=None):
+        self.combos = combos          # combos.Combos: a tabela de combos (todas as execucoes) vai no relatorio
         self.pasta = pasta or config.PASTA_LOGS
         self.agora, self.log, self.salvar = agora, log, salvar
         self.rota_nome = rota_nome
@@ -147,7 +151,11 @@ class Metricas:
             com_1o = [L for L in ls if L["dano_1o"] is not None]
             acertou = [L for L in com_1o if L["acertou_1o"]]
             tins = [L["tempo_instancia"] for L in ls if L.get("tempo_instancia")]
+            fogo = [L for L in vit if L["combo"] == TESTE_DE_FOGO and L["acertou_1o"]]
             out[inst] = {
+                "n_fogo": len(fogo),
+                "fogo_mata_1o": sum(L["ataques"] == 1 for L in fogo) / len(fogo) if fogo else None,
+                "dano_fogo": sum(L["dano_1o"] for L in fogo) / len(fogo) if fogo else None,
                 "lutas": len(ls), "vitorias": len(vit), "derrotas": len(ls) - len(vit),
                 "luta_media": sum(L["duracao"] for L in ls) / len(ls),
                 "instancia_media": sum(tins) / len(tins) if tins else None,
@@ -162,16 +170,23 @@ class Metricas:
     @staticmethod
     def diagnostico(inst, r):
         n = r["lutas"]
+        poucas = f" (so {n} lutas: pode ter sido critico - confirmo com {LUTAS_PARA_CONFIAR}+)" if n < LUTAS_PARA_CONFIAR else ""
         if r["mata_no_1o"] >= MATA_NO_1O_OK:
-            return f"OK - mata no 1o turno ({r['mata_no_1o']:.0%} das {n} lutas)."
+            return f"OK - mata no 1o turno ({r['mata_no_1o']:.0%} das {n} lutas){poucas}."
         if r["acerta_o_1o"] is not None and r["acerta_o_1o"] < ACERTA_O_1O:
             return (f"PONTARIA - o 1o tiro erra em {1 - r['acerta_o_1o']:.0%} das lutas; o bot ainda esta aprendendo a "
                     f"forca deste mapa (ou o boss se mexe/tem hitbox pequena).")
+        if r["n_fogo"] >= FOGO_PARA_CONCLUIR and r["fogo_mata_1o"] < 0.2:
+            mult = 100.0 / max(r["dano_fogo"], 1.0)
+            return (f"PRECISA UPAR - TESTE DE FOGO (itens 2,3,4,4 + buffs) acertando: o 1o ataque tira ~{r['dano_fogo']:.0f}% "
+                    f"e o boss sobrevive ({r['n_fogo']} lutas; matou no 1o em {r['fogo_mata_1o']:.0%}). Precisa de ~{mult:.1f}x "
+                    f"o dano. Hoje leva {r['turnos_medios'] or 0:.1f} turnos.")
+        if r["n_fogo"] and r["fogo_mata_1o"] is not None and r["fogo_mata_1o"] < MATA_NO_1O_OK:
+            return (f"QUASE - com o teste de fogo mata no 1o turno em {r['fogo_mata_1o']:.0%} das {r['n_fogo']} lutas "
+                    f"(1o ataque ~{r['dano_fogo']:.0f}%): critico ajuda; um pouco de upgrade resolve.")
         if r["dano_1o_medio"] is not None:
-            falta = max(0.0, 100.0 - r["dano_1o_medio"])
-            mult = 100.0 / max(r["dano_1o_medio"], 1.0)
-            return (f"PRECISA UPAR - o 1o ataque acerta mas tira so ~{r['dano_1o_medio']:.0f}% da vida (faltam ~{falta:.0f}%): "
-                    f"precisa de ~{mult:.1f}x o dano atual para matar no 1o turno. Hoje leva {r['turnos_medios'] or 0:.1f} turnos.")
+            return (f"ainda testando combos - 1o ataque ~{r['dano_1o_medio']:.0f}% em media; o veredito sai do teste de fogo "
+                    f"({r['n_fogo']}/{FOGO_PARA_CONCLUIR} lutas).")
         return "sem dados suficientes ainda."
 
     def texto_relatorio(self):
@@ -203,14 +218,9 @@ class Metricas:
                 extra = (f" ({r['avioes']} voo(s) de aviao)" if r["avioes"] else "") + \
                         (f" ({r['pulados']} turno(s) pulado(s))" if r["pulados"] else "")
                 linhas.append(f"  {nome(inst)}: {self.diagnostico(inst, r)}{extra}")
-        combos = {}
-        for L in self.lutas:
-            if L["combo"] and L["dano_1o"] is not None and L["acertou_1o"]:
-                combos.setdefault((L["inst"], L["combo"]), []).append(L["dano_1o"])
-        if combos:
-            linhas += ["", "COMBOS DE ITENS (dano do 1o ataque que acertou, media)"]
-            for (inst, c), ds in sorted(combos.items()):
-                linhas.append(f"  {nome(inst):16s} combo {c}: {sum(ds) / len(ds):.0f}% em {len(ds)} luta(s)")
+        tab = self.combos.texto() if self.combos else []
+        if tab:
+            linhas += ["", "COMBOS DE ITENS (todas as execucoes; o bot usa o de luta mais curta; 2,3,4 = teste de fogo)"] + tab
         return "\n".join(linhas) + "\n"
 
     def escrever_relatorio(self):

@@ -8,7 +8,7 @@ entao o empacotar.py / ENVIAR_SESSAO.bat funcionam igual.
 
 So as ultimas MAX_SESSOES sessoes do bot ficam no disco.
 
-Gravacao LEVE (padrao do bot, para rodar horas): todos os EVENTOS (texto) sao gravados, mas prints so dos momentos
+Gravacao LEVE (opcional: --gravacao-leve): todos os EVENTOS (texto) sao gravados, mas prints so dos momentos
 que servem para investigar problema (inicio/fim do turno de tiro, no maximo 1 a cada INTERVALO_TURNO_LEVE s; telas
 desconhecidas, luta sem cartas, cartas que nao abriram...). Uma noite inteira fica em dezenas de MB, nao em GB.
 """
@@ -25,7 +25,7 @@ import cv2
 import config
 
 LARGURA = 1280
-MAX_SESSOES = 4
+MAX_SESSOES = 3
 QUALIDADE = 85
 QUALIDADE_LEVE = 75
 INTERVALO_TURNO_LEVE = 240.0       # s entre prints de turno no modo leve

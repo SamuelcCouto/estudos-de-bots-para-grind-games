@@ -60,7 +60,8 @@ CARTAS_LINHAS = [262, 380, 498]
 # ordem de preferencia: fileira do meio (colunas 3, 4, 5), depois o resto
 CARTAS_TODAS = [(x, y) for y in CARTAS_LINHAS for x in CARTAS_COLUNAS]
 CARTAS_ENTRE_CLIQUES = 0.5        # s entre os cliques nas 3 cartas sorteadas (a tela de cartas tem cronometro de 15 s)
-CARTAS_REPETIR_APOS = 3.0         # s sem virar -> clica de novo SO nas sorteadas (nunca numa 4a carta: custaria cupons)
+CARTAS_REPETIR_APOS = 3.0         # s sem virar -> clica de novo nas sorteadas; depois de 2 tentativas, sorteia outras
+                                  # (o jogo trava na 3a carta: clicar a mais nao abre uma 4a nem gasta nada)
 CARTAS_VIRADAS_PARA_PAGAR = 3     # 2 gratis + a 3a (VIP, com pop-up de confirmacao)
 SLOTS_SALA = [(516, 242), (394, 366), (516, 366)]   # 3 vagas vazias da sala
 SLOT_RECORTE = (-36, 34, -37, 43)   # recorte (dx0, dx1, dy0, dy1) da silhueta "Em Espera" ao redor do centro da vaga
@@ -700,7 +701,8 @@ class Navegador:
                 return
             if self.cartas_escolhidas is None:
                 # sorteia 3 cartas e clica nas 3 em seguida (a tela tem cronometro de 15 s; com o PC ocupado o jogo
-                # demora a mostrar a carta virando - esperar cada uma virar antes da proxima estourava o tempo)
+                # demora a mostrar a carta virando - esperar cada uma virar antes da proxima estourava o tempo).
+                # O jogo trava na 3a: cliques a mais nao abrem outra.
                 livres = [p for p in CARTAS_TODAS if p in costas] or list(CARTAS_TODAS)
                 self.cartas_escolhidas = self.rng.sample(livres, min(CARTAS_VIRADAS_PARA_PAGAR, len(livres)))
                 self.log(f"[CARTAS] cartas sorteadas: {self.cartas_escolhidas}")
@@ -710,9 +712,15 @@ class Navegador:
                 self.cartas_clicadas_em = self.agora()
                 return
             pend = [p for p in self.cartas_escolhidas if p in costas]
-            if pend and self.agora() - self.cartas_clicadas_em >= CARTAS_REPETIR_APOS and self.cartas_rodadas < 4:
+            if pend and self.agora() - self.cartas_clicadas_em >= CARTAS_REPETIR_APOS and self.cartas_rodadas < 5:
                 self.cartas_rodadas += 1
-                self.log(f"[CARTAS] {viradas} virada(s); clicando de novo nas sorteadas que nao viraram: {pend}")
+                if self.cartas_rodadas > 2:
+                    # as sorteadas nao viram (clique nao pega nessa posicao?): troca por outras de costas
+                    outras = [p for p in costas if p not in self.cartas_escolhidas]
+                    novas = self.rng.sample(outras, min(len(pend), len(outras)))
+                    self.cartas_escolhidas = [p for p in self.cartas_escolhidas if p not in pend] + novas
+                    pend = novas
+                self.log(f"[CARTAS] {viradas} virada(s); clicando de novo: {pend}")
                 for p in pend:
                     self.clicar(p)
                     self.dormir(0.4)
@@ -854,7 +862,8 @@ class Navegador:
                     continue
                 self.em_batalha = False
                 self.fora_da_batalha_desde = None
-                self.atirador.fim_da_batalha(venceu=bool(achadas and achadas[0] in ("CARTAS", "POPUP_CARTA")))
+                self.atirador.fim_da_batalha(venceu=bool(achadas and achadas[0] in ("CARTAS", "POPUP_CARTA")),
+                                             duracao=(agora - self.batalha_desde) if self.batalha_desde else None)
             estado = self.estado_estavel()
             if estado is None:
                 self.desconhecido()
@@ -939,8 +948,8 @@ def main():
     ap.add_argument("--foco", type=int, choices=(0, 1, 2), default=1,
                     help="foco do teclado na batalha: 0 nenhum, 1 virtual (padrao; sobe sozinho), 2 jogo em primeiro plano durante o turno")
     ap.add_argument("--sem-gravar", action="store_true", help="nao grava prints/eventos do bot em sessoes\\")
-    ap.add_argument("--gravar-tudo", action="store_true",
-                    help="grava prints de tudo (para investigar um problema). Padrao: gravacao leve (horas sem encher o disco)")
+    ap.add_argument("--gravacao-leve", action="store_true",
+                    help="grava so o texto + prints de turnos/problemas (para disco pequeno). Padrao: grava tudo")
     args = ap.parse_args()
 
     if not args.so_ver and not instancia_unica():
@@ -989,10 +998,13 @@ def main():
     reg = None
     if not args.sem_gravar:
         import registro
-        reg = registro.Registro("bot", leve=not args.gravar_tudo)
-        log(f"Gravando o bot em: {reg.pasta} ({'tudo' if args.gravar_tudo else 'gravacao leve: eventos + prints dos turnos e de problemas'})")
+        reg = registro.Registro("bot", leve=args.gravacao_leve)
+        log(f"Gravando o bot em: {reg.pasta} ({'leve: eventos + prints dos turnos e de problemas' if args.gravacao_leve else 'tudo'})")
+    import combos as combos_mod
     import metricas as metricas_mod
-    metr = metricas_mod.Metricas(nome_rota, log=log)
+    ordem = [int(x) for x in args.itens.split(",") if x.strip()] or None
+    combos = combos_mod.Combos(fixo=ordem)
+    metr = metricas_mod.Metricas(nome_rota, log=log, combos=combos)
     log(f"Cronometro: logs\\relatorio.txt (resumo, atualizado a cada luta), logs\\lutas.csv e logs\\voltas.csv")
     nav = Navegador(io, det, rota, not args.sem_tarefas, args.uma_vez, args.simular, log=log, reg=reg,
                     dificuldade=dificuldade, metricas=metr)
@@ -1000,11 +1012,8 @@ def main():
     if args.atirar or args.sombra:
         import atirador as atirador_mod
         import memoria as memoria_mod
-        ordem = [int(x) for x in args.itens.split(",") if x.strip()] or None
-        import combos as combos_mod
         nav.atirador = atirador_mod.Atirador(io, memoria_mod.Memoria(), lambda: nav.instancia, sombra=args.sombra, log=log,
-                                             ordem_itens=ordem, reg=reg, metricas=metr,
-                                             combos=combos_mod.Combos(fixo=ordem))
+                                             ordem_itens=ordem, reg=reg, metricas=metr, combos=combos)
     nav.idx = max(0, min(len(rota) - 1, args.comecar_em - 1))
     try:
         nav.rodar()

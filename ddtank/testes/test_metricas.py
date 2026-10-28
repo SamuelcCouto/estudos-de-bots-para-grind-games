@@ -20,14 +20,14 @@ relogio = [0.0]
 logs = []
 m = M.Metricas("Rota Sul", pasta=pasta, agora=lambda: relogio[0], log=logs.append)
 
-def luta(inst, danos, venceu=True, aviao=False, dur=30.0, cartas=20.0, menus=15.0):
+def luta(inst, danos, venceu=True, aviao=False, dur=30.0, cartas=20.0, menus=15.0, combo="2,3,4"):
     m.instancia_inicio(inst, 0)
     relogio[0] += menus
     m.batalha_inicio(inst, 0)
     if aviao:
         m.turno("aviao")
     for d in danos:
-        m.turno("ataque", itens=[2, 3, 4], combo="A")
+        m.turno("ataque", itens=[2, 3, 4], combo=combo)
         m.resultado_tiro(d, d > 3)
     relogio[0] += dur
     m.batalha_fim(venceu)
@@ -35,9 +35,9 @@ def luta(inst, danos, venceu=True, aviao=False, dur=30.0, cartas=20.0, menus=15.
     if venceu:
         m.instancia_fim(inst)
 
-for _ in range(3):
+for _ in range(5):
     luta("RAINHA_LIRIS", [100.0], dur=30)                   # mata no 1o turno
-    luta("ESCORPIAO_REI", [62.0, 38.0], dur=44, aviao=True)  # acerta mas nao mata: precisa upar
+    luta("ESCORPIAO_REI", [62.0, 38.0], dur=44, aviao=True)  # teste de fogo acerta e nao mata: precisa upar
     luta("DRAGAO_GELADO", [0.0, 70.0, 30.0], dur=60)         # o 1o tiro erra: pontaria
     m.volta_fim(len(m.voltas) + 1)
 luta("ESCORPIAO_REI", [40.0], venceu=False, dur=25)          # derrota (empurrado para fora)
@@ -45,46 +45,50 @@ luta("ESCORPIAO_REI", [40.0], venceu=False, dur=25)          # derrota (empurrad
 txt = m.texto_relatorio()
 print(txt)
 r = m.por_instancia()
-assert r["RAINHA_LIRIS"]["mata_no_1o"] == 1.0 and "OK - mata no 1o turno" in M.Metricas.diagnostico("RAINHA_LIRIS", r["RAINHA_LIRIS"])
-assert "PRECISA UPAR" in M.Metricas.diagnostico("ESCORPIAO_REI", r["ESCORPIAO_REI"])
-assert r["ESCORPIAO_REI"]["derrotas"] == 1 and r["ESCORPIAO_REI"]["avioes"] == 3
-assert "PONTARIA" in M.Metricas.diagnostico("DRAGAO_GELADO", r["DRAGAO_GELADO"])
+d = {i: M.Metricas.diagnostico(i, r[i]) for i in r}
+assert r["RAINHA_LIRIS"]["mata_no_1o"] == 1.0 and d["RAINHA_LIRIS"].startswith("OK - mata no 1o turno")
+assert "pode ter sido critico" in d["RAINHA_LIRIS"], "com poucas lutas, avisa que pode ter sido critico"
+assert d["ESCORPIAO_REI"].startswith("PRECISA UPAR - TESTE DE FOGO"), d["ESCORPIAO_REI"]
+assert r["ESCORPIAO_REI"]["derrotas"] == 1 and r["ESCORPIAO_REI"]["avioes"] == 5
+assert d["DRAGAO_GELADO"].startswith("PONTARIA"), d["DRAGAO_GELADO"]
 assert abs(r["RAINHA_LIRIS"]["luta_media"] - 30) < 0.01 and abs(r["RAINHA_LIRIS"]["instancia_media"] - 65) < 0.01
-assert len(m.voltas) == 3 and "voltas/hora" in txt
+assert len(m.voltas) == 5 and "voltas/hora" in txt
 linhas = list(csv.reader(open(os.path.join(pasta, "lutas.csv"), encoding="utf-8"), delimiter=";"))
-assert len(linhas) == 1 + 10 and linhas[0][0] == "data", len(linhas)
-assert len(list(csv.reader(open(os.path.join(pasta, "voltas.csv"), encoding="utf-8")))) == 1 + 3
+assert len(linhas) == 1 + 16 and linhas[0][0] == "data", len(linhas)
+assert len(list(csv.reader(open(os.path.join(pasta, "voltas.csv"), encoding="utf-8")))) == 1 + 5
 assert os.path.exists(os.path.join(pasta, "relatorio.txt"))
 assert any("[TEMPO] Rainha Liris: luta 30s - VITORIA em 1 turno" in l for l in logs), logs[:3]
 shutil.rmtree(pasta)
 print("cronometro e diagnostico OK\n")
 
-# ------------------------------------------------------------ combos de itens
+# ------------------------------------------------------------ combos de itens: a luta mais curta, sem se enganar com critico
+rng = np.random.default_rng(7)
+# mundo: (chance de matar no 1o ataque, tempo se mata, tempo se nao mata) de cada combo, por instancia
+MUNDO = {
+    "FANTASMA": {"2,3,4": (1.0, 26, 45), "2,4": (1.0, 21, 40), "4": (0.1, 18, 40),   # "4" so mata quando crita
+                 "3,4": (0.9, 25, 45), "1,4": (0.95, 29, 48), "3,3,4": (1.0, 30, 50)},
+    "ESCORPIAO_REI": {c: (0.03, 30, 44) for c in C.COMBOS},                             # nem o fogo mata
+}
 arq = os.path.join(tempfile.mkdtemp(), "combos.json")
 c = C.Combos(arq=arq)
-# instancia que ja morre no 1o turno com o combo padrao: nao mexe
-for _ in range(3):
-    c.registrar("RAINHA_LIRIS", "A", 100.0)
-assert c.escolher("RAINHA_LIRIS")[0] == "A"
-# instancia que nao morre: testa cada combo 2x e fica com o que mais tira vida
-dano = {"A": 62.0, "B": 78.0, "C": 55.0, "D": 58.0}
-testados = []
-for _ in range(8):
-    nome, ordem, motivo = c.escolher("ESCORPIAO_REI")
-    testados.append(nome)
-    c.registrar("ESCORPIAO_REI", nome, dano[nome])
-print("combos testados no Escorpiao:", testados)
-assert sorted(set(testados)) == ["A", "B", "C", "D"]
-nome, ordem, motivo = c.escolher("ESCORPIAO_REI")
-print("escolhido:", nome, motivo)
-assert nome == "B"
-# se um combo passa a matar no 1o turno, fica com ele
-for _ in range(3):
-    c.registrar("ESCORPIAO_REI", "C", 100.0)
-assert c.escolher("ESCORPIAO_REI")[0] == "C"
+usados = {"FANTASMA": [], "ESCORPIAO_REI": []}
+for _ in range(80):
+    for inst, tab in MUNDO.items():
+        nome, ordem, motivo = c.escolher(inst)
+        usados[inst].append(nome)
+        p, t_mata, t_nao = tab[nome]
+        mata = rng.random() < p
+        c.registrar_luta(inst, nome, (t_mata if mata else t_nao) + rng.normal(0, 2), mata, 100.0 if mata else 60.0)
+fim = usados["FANTASMA"][-20:]
+print("Fantasma - combos nas 20 ultimas lutas:", {k: fim.count(k) for k in set(fim)}, "| motivo:", c.escolher("FANTASMA")[2])
+assert fim.count("2,4") >= 15, "deveria ficar com 2,4 (mata no 1o turno com uma animacao so)"
+assert usados["FANTASMA"].count("4") <= 8, "o combo que so mata com critico nao pode ser escolhido de vez"
+print("Escorpiao:", c.escolher("ESCORPIAO_REI")[2])
+assert c.precisa_upar("ESCORPIAO_REI") and set(usados["ESCORPIAO_REI"][5:]) == {"2,3,4"}, set(usados["ESCORPIAO_REI"][5:])
+print("\n".join(c.texto()))
 # persistencia + ordem definida pelo usuario
-assert C.Combos(arq=arq).escolher("ESCORPIAO_REI")[0] == "C"
-assert C.Combos(arq=arq, fixo=[3, 4, 4]).escolher("ESCORPIAO_REI")[1] == [3, 4, 4]
+assert C.Combos(arq=arq).escolher("FANTASMA")[0] == c.escolher("FANTASMA")[0]
+assert C.Combos(arq=arq, fixo=[3, 4, 4]).escolher("FANTASMA")[1] == [3, 4, 4]
 print("escolha de combos OK\n")
 
 # ------------------------------------------------------------ gravacao leve

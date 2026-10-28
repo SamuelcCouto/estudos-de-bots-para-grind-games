@@ -459,7 +459,7 @@ print("Rota Sul OK (aprende as artes sozinho, mantem a ordem, nao mexe na dificu
 # ---------------------------------------------------------------- CARTAS com o PC ocupado (sua run): jogo LENTO
 # A tela de cartas tem cronometro de 15 s. Com o PC ocupado a carta so aparece virada ~3,5 s depois do clique. Antes o
 # bot clicava de novo na mesma carta a cada 2 s e o tempo acabava antes da 3a. Agora: sorteia 3, clica nas 3 em
-# seguida e so repete nas sorteadas (nunca abre uma 4a carta - custaria cupons). E as cartas variam de uma luta para outra.
+# seguida e repete nas que nao viraram. E as cartas variam de uma luta para outra. (O jogo trava na 3a carta.)
 class SimCartasLento:
     def __init__(self, relogio, atraso=3.5):
         self.rel, self.atraso = relogio, atraso
@@ -498,7 +498,7 @@ for rodada in range(2):
         else: nav.dormir(0.3)
     print(f"cartas (jogo lento): {len(st.viradas)} viradas em {relogio[0]:.1f}s de 15s; cartas clicadas {st.clicadas}")
     assert len(st.viradas) == 3 and relogio[0] < 15.0, (st.viradas, relogio[0])
-    assert len(st.clicadas) == 3, f"clicou em {len(st.clicadas)} cartas diferentes (uma 4a custaria cupons)"
+    assert len(st.clicadas) == 3, f"clicou em {len(st.clicadas)} cartas diferentes (com o jogo lento, bastam as 3 sorteadas)"
     escolhas.append(sorted(st.clicadas))
 assert escolhas[0] != escolhas[1], "as cartas deveriam ser sorteadas (variar entre lutas)"
 print("cartas sorteadas e abertas a tempo mesmo com o jogo lento OK")

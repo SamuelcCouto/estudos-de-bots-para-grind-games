@@ -4,11 +4,17 @@ Empacota uma sessao gravada em zips pequenos para enviar.
 
   python empacotar.py                  (usa a sessao mais recente em sessoes\\)
   python empacotar.py sessoes\\2026...  (uma sessao especifica)
+  python empacotar.py --tudo           (todos os prints, sem selecao)
 
 Reduz os quadros para 1280x720 (JPEG) e divide em partes de ate 20 MB (limite do GitHub: 100 MB).
 Saida: ddtank/envio/<sessao>_parte1.zip ...
+
+Sessao longa do bot (horas): o texto vai INTEIRO (eventos, resumo, relatorio, log), mas os prints vao SELECIONADOS
+para o envio nao virar gigabytes: tudo dos primeiros MINUTOS_COMPLETOS, todos os turnos de tiro, todos os problemas
+(com os prints dos SEGUNDOS_ANTES_DO_PROBLEMA anteriores). O resto continua no seu disco (sessoes\\).
 """
 import glob
+import json
 import os
 import sys
 import zipfile
@@ -18,6 +24,35 @@ import cv2
 import config
 
 LIMITE = 20 * 1024 * 1024
+MINUTOS_COMPLETOS = 15
+SEGUNDOS_ANTES_DO_PROBLEMA = 25
+EVENTOS_TURNO = {"turno", "turno_aviao", "turno_sombra", "turno_pulado"}
+EVENTOS_PROBLEMA = {"ordem_sem_cartas", "cartas_incompletas", "recuperacao", "desconhecida", "clique_sem_efeito",
+                    "turno_pulado"}
+
+
+def selecionar_prints(sessao):
+    """Nomes dos prints que vao no envio (None = todos)."""
+    arq = os.path.join(sessao, "eventos.jsonl")
+    if not os.path.exists(arq):
+        return None
+    evs = []
+    for linha in open(arq, encoding="utf-8"):
+        try:
+            evs.append(json.loads(linha))
+        except ValueError:
+            pass
+    problemas = [e["t"] for e in evs if e.get("tipo") in EVENTOS_PROBLEMA]
+    sel = set()
+    for e in evs:
+        t = e.get("t", 0)
+        fr = e.get("frames") or []
+        if (t <= MINUTOS_COMPLETOS * 60 or e.get("tipo") in EVENTOS_PROBLEMA
+                or any(0 <= p - t <= SEGUNDOS_ANTES_DO_PROBLEMA for p in problemas)):
+            sel.update(fr)
+        elif e.get("tipo") in EVENTOS_TURNO:
+            sel.update(f for f in fr if "turno_inicio" in f or "tiro_dado" in f)   # inicio e fim de cada turno
+    return sel
 
 
 def sessao_mais_recente():
@@ -31,12 +66,18 @@ def sessao_mais_recente():
 
 
 def main():
-    sessao = sys.argv[1] if len(sys.argv) > 1 else sessao_mais_recente()
+    args = [a for a in sys.argv[1:] if not a.startswith("--")]
+    tudo = "--tudo" in sys.argv
+    sessao = args[0] if args else sessao_mais_recente()
     frames = os.path.join(sessao, "frames")
     saida = os.path.join(config.PASTA, "envio")
     os.makedirs(saida, exist_ok=True)
     nome = os.path.basename(os.path.normpath(sessao))
     arquivos = sorted(os.listdir(frames))
+    sel = None if tudo else selecionar_prints(sessao)
+    if sel is not None:
+        print(f"Prints selecionados: {sum(f in sel for f in arquivos)} de {len(arquivos)} (texto completo; use --tudo para todos)")
+        arquivos = [f for f in arquivos if f in sel]
     parte, usado, zf = 0, 0, None
 
     def abrir():
@@ -75,7 +116,7 @@ def main():
             continue
         if img.shape[1] > 1280:
             img = cv2.resize(img, (1280, int(img.shape[0] * 1280 / img.shape[1])), interpolation=cv2.INTER_AREA)
-        ok, buf = cv2.imencode(".jpg", img, [cv2.IMWRITE_JPEG_QUALITY, 85])
+        ok, buf = cv2.imencode(".jpg", img, [cv2.IMWRITE_JPEG_QUALITY, 85 if (tudo or sel is None) else 75])
         if usado + len(buf) > LIMITE:
             abrir()
         zf.writestr(f"{nome}/frames/{os.path.splitext(f)[0]}.jpg", buf.tobytes())
