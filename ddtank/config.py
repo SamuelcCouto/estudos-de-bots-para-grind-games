@@ -3,8 +3,8 @@
 import os
 
 # Como achar a janela do launcher. Preencha pelo menos um (ou passe --titulo / --exe).
-TITULO_JANELA = ""   # trecho do titulo da janela, ex.: "DDTank"
-EXE_JANELA = ""      # nome do .exe do launcher, ex.: "Launcher.exe"
+TITULO_JANELA = ""            # trecho do titulo da janela (opcional)
+EXE_JANELA = "BetelTank.exe"  # nome do .exe do jogo (confirmado pelo --listar)
 
 PASTA = os.path.dirname(os.path.abspath(__file__))
 PASTA_CAPTURAS = os.path.join(PASTA, "capturas")

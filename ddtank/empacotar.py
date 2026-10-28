@@ -64,6 +64,10 @@ def main():
         usado += len(buf)
     zf.close()
     print(f"Pronto! {parte} arquivo(s) em: {saida}")
+    try:
+        os.startfile(saida)   # abre a pasta no Explorer
+    except (AttributeError, OSError):
+        pass
     print("Envie esses zips (site do GitHub > branch claude/wonderful-rubin-3oyqi3 > pasta ddtank/sessoes > Add file > Upload files).")
 
 

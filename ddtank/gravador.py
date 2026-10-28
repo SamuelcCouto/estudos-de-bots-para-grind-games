@@ -159,6 +159,8 @@ class Gravador:
             self.eventos.append(ev)
             self.arq_eventos.write(json.dumps(ev, ensure_ascii=False) + "\n")
             self.arq_eventos.flush()
+        if ev["tipo"] != "tela_mudou":
+            print(f"  [{ev['t']:7.1f}s] {self.descrever(ev)}")
 
     def _quadro_atual(self, rotulo):
         with self.trava:
@@ -195,7 +197,6 @@ class Gravador:
                 if f9 and not f9_antes:
                     nome = self._quadro_atual("marcador")
                     self._registrar({"t": self.agora(), "tipo": "marcador", "frames": [nome] if nome else []})
-                    print(f"  [{self.agora():7.1f}s] marcador")
                 f9_antes = f9
                 foco = self._jogo_em_foco()
                 x, y = self._cursor()
@@ -241,24 +242,24 @@ class Gravador:
         self._resumo()
 
     # ---------- resumo legivel ----------
+    @staticmethod
+    def descrever(ev):
+        tipo = ev["tipo"]
+        if tipo == "mouse":
+            desc = f"clique {ev['botao']} em ({ev['x']},{ev['y']}) por {ev['duracao']}s"
+            if abs(ev["x"] - ev["x_solto"]) + abs(ev["y"] - ev["y_solto"]) > 12:
+                desc += f" arrastando ate ({ev['x_solto']},{ev['y_solto']})"
+            return desc
+        if tipo == "tecla":
+            return f"tecla {ev['tecla']} segurada {ev['duracao']}s"
+        return "MARCADOR (F9)" if tipo == "marcador" else "tela mudou"
+
     def _resumo(self):
         linhas = []
         for ev in sorted(self.eventos, key=lambda e: e["t"]):
             mm, ss = divmod(ev["t"], 60)
-            hora = f"[{int(mm):02d}:{ss:04.1f}]"
             frames = [f for f in ev.get("frames", []) if os.path.exists(os.path.join(self.pasta_frames, f))]
-            tipo = ev["tipo"]
-            if tipo == "mouse":
-                desc = f"clique {ev['botao']} em ({ev['x']},{ev['y']}) por {ev['duracao']}s"
-                if abs(ev["x"] - ev["x_solto"]) + abs(ev["y"] - ev["y_solto"]) > 12:
-                    desc += f" arrastando ate ({ev['x_solto']},{ev['y_solto']})"
-            elif tipo == "tecla":
-                desc = f"tecla {ev['tecla']} segurada {ev['duracao']}s"
-            elif tipo == "marcador":
-                desc = "MARCADOR (F9)"
-            else:
-                desc = "tela mudou"
-            linhas.append(f"{hora} {desc}  {' '.join(frames)}")
+            linhas.append(f"[{int(mm):02d}:{ss:04.1f}] {self.descrever(ev)}  {' '.join(frames)}")
         with open(os.path.join(self.pasta, "resumo.txt"), "w", encoding="utf-8") as f:
             f.write("\n".join(linhas) + "\n")
         n = len(os.listdir(self.pasta_frames))

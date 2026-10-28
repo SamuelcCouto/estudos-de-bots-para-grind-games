@@ -85,7 +85,21 @@ def achar_janela(titulo="", exe=""):
         if exe and exe.lower() != j["exe"].lower():
             continue
         candidatas.append((j["w"] * j["h"], j["hwnd"]))
-    return max(candidatas)[1] if candidatas else None
+    return _melhor(candidatas)
+
+
+def _melhor(candidatas):
+    """Maior area; se ha empate (o jogo abre 2 janelas iguais), a que desenha conteudo."""
+    if not candidatas:
+        return None
+    maior = max(a for a, _ in candidatas)
+    empatadas = [h for a, h in candidatas if a == maior]
+    if len(empatadas) == 1:
+        return empatadas[0]
+    def variacao(h):
+        img = capturar(h)
+        return float(img.std()) if img is not None else -1.0
+    return max(empatadas, key=variacao)
 
 
 PALAVRAS_DO_JOGO = ("ddtank", "ddt", "betel", "gunny")
@@ -101,7 +115,7 @@ def resolver_janela(titulo="", exe=""):
         alvo = (j["titulo"] + " " + j["exe"]).lower()
         if any(p in alvo for p in PALAVRAS_DO_JOGO) and j["w"] >= 400 and j["h"] >= 300:
             candidatas.append((j["w"] * j["h"], j["hwnd"]))
-    return max(candidatas)[1] if candidatas else None
+    return _melhor(candidatas)
 
 
 def tamanho(hwnd):
