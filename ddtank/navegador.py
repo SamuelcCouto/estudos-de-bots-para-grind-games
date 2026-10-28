@@ -51,6 +51,8 @@ SALA_ICONE_TAREFAS = (806, 533)
 SALA_PORTA = (949, 522)
 TAREFA_FECHAR = (881, 190)
 TAREFA_BOTAO = (760, 513)
+MAX_ACOES_TAREFA = 40          # cliques no painel de tarefas por fim de rota (trava de seguranca)
+MAX_ROLAGENS_TAREFA = 12
 CARTAS_COLUNAS = [380, 468, 556, 644, 732, 820, 907]
 CARTAS_LINHAS = [262, 380, 498]
 # ordem de preferencia: fileira do meio (colunas 3, 4, 5), depois o resto
@@ -255,14 +257,16 @@ def em_1280(img):
 # leitura do painel de Tarefas (por cor, sem coordenadas fixas de itens)
 # ---------------------------------------------------------------------------
 def botao_recompensa_ativo(f):
-    """O botao 'Obter recompensa' fica vermelho quando da para coletar e cinza quando nao."""
+    """O botao 'Obter recompensa' fica vermelho quando da para coletar e cinza quando nao. O vermelho PULSA (R medio
+    154-204 nas gravacoes); o cinza fica em ~(94, 92, 90). Vale a diferenca de cor, nao o brilho."""
     reg = f[500:525, 700:820].astype(int)
     b, g, r = reg[..., 0].mean(), reg[..., 1].mean(), reg[..., 2].mean()
-    return r > 170 and r - g > 50 and r - b > 60
+    return r > 120 and r - g > 50 and r - b > 60
 
 
 def selos_ok(f):
-    """Posicoes (x, y) dos selos verdes 'OK!' na lista da esquerda do painel de Tarefas."""
+    """Posicoes (x, y) dos selos verdes 'OK!' na lista da esquerda do painel de Tarefas (em itens e em categorias
+    fechadas que tem alguma tarefa concluida dentro)."""
     x0, y0, x1, y1 = 335, 225, 600, 560
     c = f[y0:y1, x0:x1].astype(int)
     m = ((c[..., 1] > c[..., 2] + 35) & (c[..., 1] > c[..., 0] + 35)).astype(np.uint8)
@@ -272,9 +276,40 @@ def selos_ok(f):
     return sorted(achados, key=lambda p: p[1])
 
 
-def proxima_acao_tarefa(f, vezes):
-    """('botao', ponto) | ('item', ponto) | ('fim', None) para o quadro atual do painel."""
-    if botao_recompensa_ativo(f):
+_TPL_SETA_LISTA = []
+
+
+def seta_rolar_lista(f):
+    """(x, y) da setinha 'para baixo' da sub-lista aberta (as tarefas de uma categoria; so mostra 4 por vez) ou None.
+    A barra da sub-lista fica em x~573; a seta de baixo e o ponto MAIS BAIXO dessa coluna parecido com o modelo
+    (a seta de cima e o fim do cursor tambem parecem um pouco). A barra da lista de fora (x~591) nao conta."""
+    if not _TPL_SETA_LISTA:
+        _TPL_SETA_LISTA.append(cv2.imread(os.path.join(config.PASTA_TEMPLATES, "seta_lista_baixo.png"), cv2.IMREAD_GRAYSCALE))
+    t = _TPL_SETA_LISTA[0]
+    th, tw = t.shape
+    x0, y0 = 555, 220
+    g = cv2.cvtColor(f[y0:565, x0:600], cv2.COLOR_BGR2GRAY)
+    r = cv2.matchTemplate(g, t, cv2.TM_CCOEFF_NORMED)
+    ys, xs = np.where(r > 0.6)
+    cands = [(int(x) + x0 + tw // 2, int(y) + y0 + th // 2) for y, x in zip(ys, xs)]
+    cands = [p for p in cands if 568 <= p[0] <= 578]
+    return max(cands, key=lambda p: p[1]) if cands else None
+
+
+def recorte_sublista(f, seta):
+    """Pedaco da sub-lista acima da seta (para saber se rolar mudou alguma coisa)."""
+    return cv2.cvtColor(f[seta[1] - 85:seta[1] + 8, 335:580], cv2.COLOR_BGR2GRAY).astype(np.float32)
+
+
+def recorte_painel_tarefa(f):
+    """Painel de tarefas sem a faixa do botao (que pulsa): para saber se um clique mudou alguma coisa."""
+    return cv2.cvtColor(f[200:490, 340:880], cv2.COLOR_BGR2GRAY).astype(np.float32)
+
+
+def proxima_acao_tarefa(f, vezes, ignorar_botao=False):
+    """('botao', ponto) | ('item', ponto) | ('fim', None) para o quadro atual do painel.
+    vezes: Counter de cliques por posicao de selo (no maximo 2 por posicao; zere depois de cada coleta/rolagem)."""
+    if botao_recompensa_ativo(f) and not ignorar_botao:
         return "botao", TAREFA_BOTAO
     for bx, by in selos_ok(f):
         chave = (bx // 25, by // 25)
@@ -570,18 +605,59 @@ class Navegador:
             self.dormir(1.0)
 
     def coletar_tarefas(self):
-        self.log("[TAREFA] coletando recompensas (selo OK! + botao vermelho)")
+        """Coleta TODAS as tarefas concluidas (selo verde 'OK!'): clica na tarefa, depois no botao vermelho; categoria
+        fechada com selo -> abre; sem selo visivel -> rola a sub-lista ate o fim procurando mais. So fecha o painel
+        quando nao sobra selo nem lista para rolar."""
+        self.log("[TAREFA] procurando tarefas concluidas (selo OK!)")
         vezes = Counter()
-        for _ in range(14):
-            f, _e = self.ver()
+        coletadas, sem_reacao, rolagens, ignorar_botao = 0, 0, 0, False
+        for _ in range(MAX_ACOES_TAREFA):
+            f, achadas = self.ver()
             if f is None:
                 break
-            acao, ponto = proxima_acao_tarefa(f, vezes)
-            if acao == "fim":
+            if achadas and "TAREFA" not in achadas and not self.simular:
+                self.log(f"   (o painel de tarefas sumiu: tela {achadas[0]})")
                 break
-            self.log(f"   {'coletando' if acao == 'botao' else 'abrindo tarefa'} {ponto}")
-            self.clicar(ponto)
-            self.dormir(1.4)
+            acao, ponto = proxima_acao_tarefa(f, vezes, ignorar_botao)
+            if acao == "botao":
+                antes = recorte_painel_tarefa(f)
+                self.log(f"   coletando recompensa {ponto}")
+                self.clicar(ponto)
+                self.dormir(1.4)
+                g, _e = self.ver()
+                if g is not None and botao_recompensa_ativo(g) and float(np.abs(recorte_painel_tarefa(g) - antes).mean()) < 2.5:
+                    sem_reacao += 1                   # nada mudou: o clique nao pegou (ou o jogo recusa, ex.: mochila cheia)
+                    if sem_reacao >= 2:
+                        self.log("   ! o botao de recompensa nao reage; seguindo para as outras tarefas")
+                        ignorar_botao = True
+                else:
+                    coletadas += 1
+                    sem_reacao = 0
+                    vezes.clear()                     # a lista muda depois de coletar
+                    rolagens = 0
+                continue
+            if acao == "item":
+                ignorar_botao, sem_reacao = False, 0
+                self.log(f"   abrindo tarefa com selo OK! {ponto}")
+                self.clicar(ponto)
+                self.dormir(1.1)
+                continue
+            # nenhum selo visivel: pode haver tarefas concluidas escondidas mais abaixo na sub-lista
+            seta = seta_rolar_lista(f)
+            if seta is None or rolagens >= MAX_ROLAGENS_TAREFA:
+                break
+            antes = recorte_sublista(f, seta)
+            self.clicar(seta)
+            self.dormir(0.6)
+            g, _e = self.ver()
+            if g is None or float(np.abs(recorte_sublista(g, seta) - antes).mean()) < 2.5:
+                break                                 # a lista nao andou: chegou ao fim
+            rolagens += 1
+            vezes.clear()
+            self.log(f"   rolando a lista de tarefas ({rolagens}x) para procurar mais")
+        self.log(f"[TAREFA] {coletadas} recompensa(s) coletada(s)")
+        if self.reg:
+            self.reg.evento("tarefas", [], coletadas=coletadas, rolagens=rolagens)
         self.tarefas_ok = True
         self.clicar_e_verificar("TAREFA", TAREFA_FECHAR, descricao="fechar painel")
 

@@ -328,3 +328,46 @@ for nome, p in list(N.FOCO_PONTO_NEUTRO.items()) + [("padrao", N.FOCO_PONTO_PADR
         x0, y0, x1, y1 = caixa_chat
         assert not (x0 <= p[0] <= x1 and y0 <= p[1] <= y1), f"ponto neutro '{nome}' {p} cai no chat {caixa_chat}"
 print("nenhum ponto neutro cai no chat OK")
+
+# ---------------------------------------------------------------- SUA 5a RUN: varias tarefas concluidas, pegar TODAS
+# Quadros reais (gravacao do bot 20261028_044345): 2 diarias com OK! + a categoria "Tarefa/Missao ativa" FECHADA com OK!
+# (dentro dela: "Super Rota Norte"). O botao vermelho PULSA: no quadro mais escuro o detector antigo achava que estava
+# cinza e fechava o painel sem coletar a Super Rota Norte.
+assert N.botao_recompensa_ativo(img("TAREFA_SUPER_PULSO_FRACO")), "botao no brilho fraco do pulso nao reconhecido"
+assert not N.botao_recompensa_ativo(img("TAREFA_ATIVA_FECHADA_OK")) and not N.botao_recompensa_ativo(img("TAREFA_TUDO_COLETADO"))
+assert N.seta_rolar_lista(img("TAREFA_SUPER_PULSO_FRACO")) is not None
+
+class SimTarefas:
+    """So o painel de tarefas: estados = quadros reais; cliques levam de um ao outro.
+    escondida=True: ao rolar a sub-lista aparece mais uma tarefa concluida (que estava abaixo das 4 visiveis)."""
+    def __init__(self, escondida=False):
+        self.q = "TAREFA_DIARIAS_2OK"; self.coletadas = []; self.fechou = False; self.cliques = []
+        self.escondida = escondida; self.rolou = 0
+    def capturar(self): return img(self.q)
+    def clicar(self, x, y, modo):
+        p = (x, y); self.cliques.append((self.q, p)); q = self.q
+        if dentro(p, caixa(N.TAREFA_FECHAR, 30)): self.fechou = True; return
+        botao = dentro(p, caixa(N.TAREFA_BOTAO, 50))
+        if q == "TAREFA_DIARIAS_2OK" and botao: self.coletadas.append("diaria 1"); self.q = "TAREFA_COLETOU_1"
+        elif q == "TAREFA_COLETOU_1" and botao: self.coletadas.append("diaria 2"); self.q = "TAREFA_ATIVA_FECHADA_OK"
+        elif q == "TAREFA_ATIVA_FECHADA_OK" and dentro(p, (440, 425, 560, 460)): self.q = "TAREFA_SUPER_PULSO_FRACO"
+        elif q == "TAREFA_SUPER_PULSO_FRACO" and botao: self.coletadas.append("Super Rota Norte"); self.q = "TAREFA_TUDO_COLETADO"
+        elif q == "TAREFA_TUDO_COLETADO" and dentro(p, (563, 437, 583, 457)):    # setinha da sub-lista
+            self.rolou += 1
+            if self.escondida and self.rolou == 1:
+                self.escondida = False; self.q = "TAREFA_SUPER_PULSO_FRACO"         # apareceu outra concluida
+        elif q == "TAREFA_SUPER_PULSO_FRACO" and dentro(p, (563, 437, 583, 457)): pass
+    def tecla_apertada(self, vk): return False
+
+for escondida in (False, True):
+    st = SimTarefas(escondida)
+    relogio = [0.0]
+    logs = []
+    nav = N.Navegador(st, det, dormir=lambda s: relogio.__setitem__(0, relogio[0] + s), agora=lambda: relogio[0], log=logs.append)
+    nav.coletar_tarefas()
+    print("\n".join("   " + l for l in logs))
+    esperado = ["diaria 1", "diaria 2", "Super Rota Norte"] + (["Super Rota Norte"] if escondida else [])
+    assert st.coletadas == esperado, st.coletadas
+    assert st.fechou and st.rolou >= 1, (st.fechou, st.rolou)
+    print(f"tarefas: coletou {st.coletadas} (escondida na lista: {escondida}) e so depois fechou OK")
+print("\ncoleta de TODAS as tarefas OK")

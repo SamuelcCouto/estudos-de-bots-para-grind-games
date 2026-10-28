@@ -133,3 +133,13 @@ com o mesmo leitor). A faixa verde do mostrador = angulos permitidos naquele ter
 Se a seta nao mexe o ponteiro, o bot testa a seta CONTRARIA: se ela mexe, o teclado funciona e o angulo esta no limite
 -> volta e atira dali com a forca recalculada (antes ele trocava o modo de entrada e desistia).
 Ideia futura: ler o NUMERO do mostrador (angulo exato; a cor do numero muda: amarelo/vermelho/ciano/verde).
+
+## Tarefas: pegar TODAS (gravacao do bot 20261028_044345, 5 voltas)
+Na 3a e na 5a volta a "Super Rota Norte" (passar Fantasma, Profundezas e Minhocao 1x) ficou sem coletar: o botao
+"Obter recompensa" PULSA (R medio 154-204 quando ativo; cinza = (94,92,90)) e o detector exigia R>170 -> no quadro
+escuro do pulso achava que nao havia o que coletar e fechava o painel. Agora: R>120 e R-G>50 e R-B>60.
+Painel = arvore-acordeao: Tarefa/Missao primaria, de longo prazo, Tarefas diarias, Tarefa/Missao ativa; so uma
+categoria aberta por vez; categoria FECHADA com tarefa concluida mostra o selo OK! (aberta nao mostra; os itens mostram).
+Sub-lista mostra 4 itens e tem barra propria (x~573; seta de baixo = templates/seta_lista_baixo.png). Coleta: botao
+vermelho -> clica; selo OK! -> clica (item seleciona, categoria abre); sem selo -> rola a sub-lista (seta) ate ela
+parar de mudar; botao que nao reage 2x (mochila cheia?) e ignorado ate escolher outra tarefa. Teste com os quadros reais.
