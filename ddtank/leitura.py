@@ -24,6 +24,8 @@ _CRUZ = cv2.getStructuringElement(cv2.MORPH_CROSS, (3, 3))
 PONTO_TAMANHO_CHEIO = 8           # nucleo (px) a partir do qual um ponto conta "inteiro" no rastreador
 LEITURAS_MUDOU = 5                  # leituras seguidas sem o ponto antigo (e com um novo) = o boneco mudou de lugar
 VIDA_BOSS = (725, 812, 185, 191)     # barra de vida do boss (topo): cheia termina em ~811, comeca em ~725
+RETRATO_BOSS = (692, 176, 720, 200)  # x0, y0, x1, y1: retrato do boss a esquerda da barra (cinza = morto)
+SATURACAO_RETRATO_MORTO = 35
 ITENS_X = (951, 975)
 ITENS_Y0, ITENS_PASSO, ITENS_ALTURA = 247, 25.7, 22
 SATURACAO_ITEM_ATIVO = 75      # colorido ~87-127, cinza ~23-63
@@ -225,14 +227,23 @@ def itens_ativos(f):
     return out
 
 
+def boss_morto(f):
+    """O retrato do boss (ao lado da barra de vida) fica CINZA quando ele morre. Saturacao medida: vivo 82-218
+    (Escorpiao, Dragao, Rainha), morto 6-9."""
+    x0, y0, x1, y1 = RETRATO_BOSS
+    return float(cv2.cvtColor(f[y0:y1, x0:x1], cv2.COLOR_BGR2HSV)[..., 1].mean()) < SATURACAO_RETRATO_MORTO
+
+
 def vida_boss(f):
     """Vida do boss em % (0-100): ate onde vai a barra vermelha. Calibrada com 100% -> fim em x=811 e
-    42% -> fim em x=761; para decidir se um tiro acertou o que vale e a DIFERENCA entre antes e depois."""
+    42% -> fim em x=761; para decidir se um tiro acertou o que vale e a DIFERENCA entre antes e depois.
+    Barra vazia NAO e boss morto: com 1-3% a parte vermelha some (o numero na barra ainda diz "1%") e o Escorpiao
+    ainda se cura no turno dele. So devolve 0 com o retrato cinza (morto); vivo com a barra vazia = 1."""
     x0, x1, y0, y1 = VIDA_BOSS
     faixa = f[y0:y1, x0:x1].astype(int)
     b, g, r = faixa[..., 0], faixa[..., 1], faixa[..., 2]
     verm = ((r > 160) & (r - np.maximum(g, b) > 70)).mean(axis=0) > 0.5
     xs = np.where(verm)[0]
     if len(xs) == 0:
-        return 0.0
-    return float(min(100.0, max(0.0, (xs.max() + 1) / (x1 - x0) * 100)))
+        return 0.0 if boss_morto(f) else 1.0
+    return float(min(100.0, max(1.0, (xs.max() + 1) / (x1 - x0) * 100)))

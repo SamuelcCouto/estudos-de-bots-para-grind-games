@@ -67,7 +67,8 @@ rng = np.random.default_rng(7)
 MUNDO = {
     "FANTASMA": {"2,3,4": (1.0, 26, 45), "2,4": (1.0, 21, 40), "4": (0.1, 18, 40),   # "4" so mata quando crita
                  "3,4": (0.9, 25, 45), "1,4": (0.95, 29, 48), "3,3,4": (1.0, 30, 50)},
-    "ESCORPIAO_REI": {c: (0.03, 30, 44) for c in C.COMBOS},                             # nem o fogo mata
+    # nem o fogo mata no 1o turno (precisa upar), mas o 3,4 tira mais vida (hitbox so no pe) -> luta mais curta
+    "ESCORPIAO_REI": {**{c: (0.03, 30, 44) for c in C.COMBOS}, "3,4": (0.03, 30, 36), "4": (0.0, 30, 60)},
 }
 arq = os.path.join(tempfile.mkdtemp(), "combos.json")
 c = C.Combos(arq=arq)
@@ -84,7 +85,8 @@ print("Fantasma - combos nas 20 ultimas lutas:", {k: fim.count(k) for k in set(f
 assert fim.count("2,4") >= 15, "deveria ficar com 2,4 (mata no 1o turno com uma animacao so)"
 assert usados["FANTASMA"].count("4") <= 8, "o combo que so mata com critico nao pode ser escolhido de vez"
 print("Escorpiao:", c.escolher("ESCORPIAO_REI")[2])
-assert c.precisa_upar("ESCORPIAO_REI") and set(usados["ESCORPIAO_REI"][5:]) == {"2,3,4"}, set(usados["ESCORPIAO_REI"][5:])
+fim_e = usados["ESCORPIAO_REI"][-20:]
+assert c.precisa_upar("ESCORPIAO_REI") and fim_e.count("3,4") >= 15, {k: fim_e.count(k) for k in set(fim_e)}
 print("\n".join(c.texto()))
 # persistencia + ordem definida pelo usuario
 assert C.Combos(arq=arq).escolher("FANTASMA")[0] == c.escolher("FANTASMA")[0]

@@ -360,3 +360,11 @@ rodar(at, w, ate=w.t + 12)
 assert len(w.tiros) == n_tiros and len(w.itens_apertados) == n_itens, "atirou/gastou itens com o boss morto"
 print("sem turno fantasma depois do boss morto OK")
 print("\natirador (combos) OK")
+
+# ------------------------------------------------------------ 22) SUA MADRUGADA: boss com 1% (barra vazia, retrato colorido) = VIVO
+# O leitor antigo dizia 0% e o bot parou de atacar: Dragao ficou 15 min vivo; Escorpiao se curou e jogou o boneco fora.
+w.novo_turno(w.t + 1.0, w.t + 9.0); w.vida = 1.0
+n_tiros = len(w.tiros)
+rodar(at, w, ate=w.t + 12)
+assert len(w.tiros) == n_tiros + 1, "com o boss a 1% o bot tem que atacar"
+print("boss com 1% de vida: ataca OK")

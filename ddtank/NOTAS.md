@@ -198,3 +198,22 @@ Metricas: metricas.py (logs/relatorio.txt, lutas.csv, voltas.csv). Combos: combo
   muito dano): so concluir "mata no 1o turno" depois de dezenas de lutas. -> combos.py reescrito (tempo de luta medio
   com margem de duvida; fogo primeiro; so explora combos mais leves se o fogo mata em >= 50%).
 - Disco D: com bastante espaco: gravacao completa de volta como padrao; o empacotar seleciona os prints do envio.
+
+## Noite 28/10 (sessao 20261028_064645, rota T, 4h30, versao com gravacao leve e combos A/B/C/D)
+38 voltas, 8,4 voltas/hora, volta mediana ~6min40 (7min08 de media com 2 voltas ruins). Por instancia (mediana):
+menus ~10 s, luta 29-30 s (Fantasma/Profundezas/Minhocao/Rainha, 1 turno) e ~45 s (Escorpiao 3 turnos com aviao,
+Dragao 2-3), cartas 19,2 s (cronometro de 15 s da tela), tarefas ~13 s por volta. Minimapa: confianca >= 0,53 em todos
+os 337 turnos; 1o ataque errou 4/40 no Dragao e 1/40 na Rainha; cartas: nenhuma incompleta (32 recliques com o jogo lento).
+BUG GRAVE (corrigido): a barra de vida do boss com 1-3% fica sem vermelho (o numero na barra diz "1%") e o leitor dava 0.
+Com a trava do "turno fantasma" (vida 0 depois de atacar -> nao gasta itens) o bot PAROU DE ATACAR boss vivo:
+ - Dragao (volta 3): ficou em "0%" por 15min37s (boss vivo empurrando o boneco) ate a luta acabar sozinha;
+ - Escorpiao (volta 19): 43 -> 26 -> "0%", o Escorpiao se curou e na Investida jogou o boneco fora -> derrota.
+ Na sessao anterior (gravacao completa) o mesmo aparece: barra 100% -> 13% -> (cura) 34% -> 1% -> morto. O ESCORPIAO
+ SE CURA (~20%) no turno dele. Morto = RETRATO CINZA (saturacao 6-9; vivo 82-218 nas 3 do Sul) -> leitura.boss_morto;
+ vida_boss so devolve 0 com o retrato cinza (barra vazia e retrato colorido = 1).
+ Os "danos do 1o ataque = 100%" com 2+ turnos desta noite sao esse bug (1% lido como 0).
+Combos (versao antiga A=2,3,4 B=3,3,4 C=1,4 D=2,4): pressionados de fato A=[2,3,4], B=[3,4] (o 2o item 3 nunca fica
+colorido), C=[1,4], D=[2,4,7] / [2,4,8]. 1o ataque no Escorpiao: A ~58%, B 58-85%, C 28-58%, D ~14%; Dragao: A 16-59%,
+B 33-58%, C 2-14%, D 14-31%. Tridente (2) perde dano no Escorpiao (so o pe tem colisao).
+Combos agora: mesmo com PRECISA UPAR, explora os outros combos e fica com a luta mais curta (o diagnostico continua sendo
+o teste de fogo). Confirmacao de tela 0,45 -> 0,3 s. DURACAO_MAX_DA_VEZ 11 -> 14 s (o PASS fica na tela com o tiro voando).

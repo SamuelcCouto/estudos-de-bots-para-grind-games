@@ -36,6 +36,16 @@ for nome, gab, lado in [("MOSTRADOR_ESQ_48", 48, -1), ("MOSTRADOR_ESQ_61", 61, -
     print(f"mostrador {gab:2d} -> lido {a:.1f}, virado para a {'direita' if ld > 0 else 'esquerda'}")
     assert ld == lado and gab - 7 <= a <= gab + 2, (nome, a, ld)
 
+# vida do boss com a barra quase vazia: "1%" na barra (boss VIVO; a parte vermelha some) x boss morto (retrato cinza)
+def so_vida(nome):
+    f = np.zeros((720, 1280, 3), np.uint8)
+    f[160:215, 650:850] = cv2.imread(os.path.join(AQUI, "frames", nome + ".png"))
+    return f
+v1, vm, v100, v34 = (L.vida_boss(so_vida(n)) for n in ("VIDA_1PORCENTO", "VIDA_MORTO", "VIDA_100", "VIDA_34"))
+print(f"vida: barra '1%' -> {v1:.0f}, morto -> {vm:.0f}, cheia -> {v100:.0f}, '34%' -> {v34:.0f}")
+assert v1 >= 1 and vm == 0 and v100 > 95 and 28 <= v34 <= 45, (v1, vm, v100, v34)
+assert not L.boss_morto(so_vida("VIDA_1PORCENTO")) and L.boss_morto(so_vida("VIDA_MORTO"))
+
 # sua vez (PASS)
 assert all(L.minha_vez(img(f"VEZ_SIM_{i}")) for i in (21, 74, 214, 415, 602))
 assert not any(L.minha_vez(img(f"VEZ_NAO_{i}")) for i in (2, 66, 92, 355, 580))

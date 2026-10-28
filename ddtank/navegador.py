@@ -53,6 +53,7 @@ SALA_ICONE_TAREFAS = (806, 533)
 SALA_PORTA = (949, 522)
 TAREFA_FECHAR = (881, 190)
 TAREFA_BOTAO = (760, 513)
+ESPERA_CONFIRMAR_TELA = 0.3   # s entre as 2 leituras que confirmam uma tela (era 0,45: ~1 s a menos por instancia)
 MAX_ACOES_TAREFA = 40          # cliques no painel de tarefas por fim de rota (trava de seguranca)
 MAX_ROLAGENS_TAREFA = 12
 CARTAS_COLUNAS = [380, 468, 556, 644, 732, 820, 907]
@@ -468,7 +469,7 @@ class Navegador:
         _, a = self.ver()
         if not a:
             return None
-        self.dormir(0.45)
+        self.dormir(ESPERA_CONFIRMAR_TELA)
         _, b = self.ver()
         return a[0] if b and a[0] == b[0] else None
 

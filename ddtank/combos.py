@@ -7,8 +7,9 @@ O que conta e o TEMPO da luta (do inicio da batalha ate a vitoria), medido pelo 
   - entre combos que matam no 1o turno, o que tem MENOS ANIMACAO ganha: o item 3 (+1 ataque) e o 1 (+2 ataques)
     fazem o boneco atirar de novo (mais uma animacao); o 2 (tridente) sao 3 balas num tiro so; 4..8 so aumentam o dano.
     Ex.: se o Fantasma morre com 2,4,4,4, tirar o 3 poupa a animacao do 2o tiro.
-TESTE DE FOGO = 2,3,4,4 (+ os buffs que a stamina der): dano maximo. Se nem ele mata no 1o turno (com os tiros
-acertando), a instancia precisa de UPGRADE - ai o bot usa sempre o dano maximo.
+TESTE DE FOGO = 2,3,4,4 (+ os buffs que a stamina der): 5 lutas primeiro. Se nem ele mata no 1o turno (com os tiros
+acertando), a instancia precisa de UPGRADE (o relatorio avisa) - e mesmo assim o bot procura o combo de luta mais curta:
+no Escorpiao (so o pe tem colisao) o 3,4 tirou 58-85% no 1o ataque contra ~58% do 2,3,4 (o tridente espalha as balas).
 CRITICO: um tiro pode critar e matar "por sorte". Por isso nenhuma conclusao sai de poucas lutas: a escolha usa a media
 do tempo com uma margem de duvida (que so diminui depois de muitas lutas), e um combo que matou uma vez por sorte volta a
 ser testado ate a media mostrar o que ele realmente faz.
@@ -92,17 +93,18 @@ class Combos:
         nf, mf, _dpf, mataf, danof = self.resumo(inst, TESTE_DE_FOGO)
         if nf < FOGO_PARA_CONCLUIR:
             return TESTE_DE_FOGO, list(COMBOS[TESTE_DE_FOGO]), f"teste de fogo (dano maximo), luta {nf + 1}/{FOGO_PARA_CONCLUIR}"
-        if self.precisa_upar(inst):
-            return TESTE_DE_FOGO, list(COMBOS[TESTE_DE_FOGO]), (
-                f"nem o teste de fogo mata no 1o turno ({mataf:.0%} de {nf} lutas, 1o ataque ~{danof or 0:.0f}%): "
-                f"dano maximo sempre - PRECISA UPAR")
-        if mataf < FOGO_PARA_EXPLORAR:
+        precisa = self.precisa_upar(inst)
+        aviso = (f"PRECISA UPAR (nem o teste de fogo mata no 1o turno: {mataf:.0%} de {nf} lutas, 1o ataque "
+                 f"~{danof or 0:.0f}%); enquanto isso, ") if precisa else ""
+        if not precisa and mataf < FOGO_PARA_EXPLORAR:
             return TESTE_DE_FOGO, list(COMBOS[TESTE_DE_FOGO]), (
                 f"o teste de fogo mata no 1o turno so em {mataf:.0%} de {nf} lutas (critico?): dano maximo e continuo medindo")
         for c in ORDEM_TESTE:
             n = self.resumo(inst, c)[0]
             if n < MIN_AMOSTRAS and not self._descartado(inst, c, mataf):
-                return c, list(COMBOS[c]), f"testando um combo com menos animacao, luta {n + 1}/{MIN_AMOSTRAS}"
+                return c, list(COMBOS[c]), (aviso + (f"testando outro combo (o boss morre em mais turnos: o que tira mais "
+                                            f"vida pode encurtar a luta)" if precisa else "testando um combo com menos animacao")
+                                            + f", luta {n + 1}/{MIN_AMOSTRAS}")
         notas = {}
         for c in COMBOS:
             n, m, dp, mata, _d = self.resumo(inst, c)
@@ -111,7 +113,7 @@ class Combos:
             notas[c] = m - Z_DUVIDA * dp / math.sqrt(n)        # otimista: incerteza grande -> testa mais
         melhor = min(notas, key=notas.get)
         n, m, _dp, mata, _d = self.resumo(inst, melhor)
-        return melhor, list(COMBOS[melhor]), f"luta mais curta: {m:.0f}s em media em {n} lutas (mata no 1o turno {mata:.0%})"
+        return melhor, list(COMBOS[melhor]), aviso + f"luta mais curta: {m:.0f}s em media em {n} lutas (mata no 1o turno {mata:.0%})"
 
     def _descartado(self, inst, c, mata_fogo):
         if c == TESTE_DE_FOGO:

@@ -219,3 +219,8 @@ QUALIDADE DE VIDA - noites inteiras (28/10)
   boneco em todas as leituras; depois do aviao a posicao nova do boneco e usada no ataque seguinte.
 * Para deixar a noite toda: desligue a suspensao do Windows (Configuracoes > Sistema > Energia > Suspender: Nunca)
   e deixe o jogo na frente. Rode ATIRAR.bat e responda T.
+
+* (28/10, manha) VIDA DO BOSS: com 1-3% a barra fica sem vermelho e o bot achava que o boss tinha morrido - parava de
+  atacar (um Dragao ficou 15 min assim; um Escorpiao se curou e ganhou a luta). Agora "morto" = retrato do boss CINZA.
+  Combos: mesmo quando precisa upar, o bot testa os outros combos e fica com a luta mais curta (no Escorpiao o 3,4 tirou
+  mais vida que o 2,3,4 - o tridente espalha as balas e ele so tem colisao no pe).
