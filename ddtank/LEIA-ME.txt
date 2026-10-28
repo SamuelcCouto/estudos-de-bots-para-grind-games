@@ -192,22 +192,28 @@ QUALIDADE DE VIDA - noites inteiras (28/10)
     leve em D:\estudos-de-bots-para-grind-games e copia o que o bot aprendeu (dados\aprendizado.json, combos,
     artes, logs); 3) teste um ATIRAR.bat da pasta do D:; 4) funcionando, apague a pasta antiga do C: pelo Explorer.
   O Python continua instalado no C: (ocupa pouco). Os zips ja analisados eu apago do GitHub depois de ler.
-* GRAVACAO LEVE (agora e o padrao): grava todos os eventos (texto), mas prints so de problemas (tela desconhecida,
-  luta sem cartas, cartas que nao abriram, clique sem efeito, turno pulado) e no maximo 1 print de turno a cada 4 min.
-  Uma noite inteira fica em dezenas de MB. Para investigar algo com prints de tudo: python navegador.py --atirar --gravar-tudo
+* GRAVACAO (atualizado): o bot grava TUDO no disco (sessoes\, guarda as 3 ultimas). O EMPACOTAR manda o texto inteiro
+  (eventos, resumo, relatorio, csv, log do dia) e os prints SELECIONADOS: tudo dos primeiros 15 min, inicio e fim de
+  cada turno de tiro e todos os problemas (com os prints dos 25 s antes). Uma noite fica em algumas centenas de MB.
+  EMPACOTAR_TUDO.bat manda todos os prints (so se eu pedir). Disco pequeno: python navegador.py --atirar --gravacao-leve
 * CARTAS SORTEADAS: a cada luta o bot sorteia 3 cartas diferentes e clica nas 3 em seguida (a tela tem cronometro de
   15 s; com o PC ocupado o jogo demora a mostrar a carta virando e antes o bot esperava cada uma e estourava o tempo).
-  Se alguma nao virar em 3 s, clica de novo SO nas sorteadas (nunca numa 4a: custaria cupons).
+  Se alguma nao virar em 3 s, clica de novo nela; depois de 2 tentativas, sorteia outra (o jogo trava na 3a carta,
+  entao cliques a mais nao abrem nada).
 * CRONOMETRO (logs\relatorio.txt, atualizado a cada luta; logs\lutas.csv e logs\voltas.csv acumulam tudo):
   tempo de cada luta, de cada instancia (menus + luta + cartas) e de cada volta; voltas por hora; turnos por luta;
   quanto de vida o 1o ataque tira; e o DIAGNOSTICO de cada instancia:
      OK - mata no 1o turno | PRECISA UPAR - acerta mas nao mata (e quanto falta) | PONTARIA - o 1o tiro erra.
   No console aparece "[TEMPO] Dragao Gelado: luta 45s - VITORIA em 2 turno(s), 1o ataque tirou 64%".
   O EMPACOTAR manda o relatorio, os csv e o log do dia junto com a gravacao.
-* COMBOS DE ITENS (dados\combos.json): onde ja mata no 1o turno, o bot nao mexe. Onde nao mata, ele testa 4
-  combinacoes (A = 2,3,4,4..., B = 3,3,4,4..., C = 1,4,4..., D = 2,4,4...), 2 lutas cada, e fica com a que tira MAIS
-  vida no 1o ataque. Tirar itens para "economizar" nao compensa: poupa ~0,3 s, mas se o boss sobreviver custa um turno
-  inteiro do boss (10-15 s). --itens 2,3,4,4 fixa a sua ordem e desliga os testes.
+* COMBOS DE ITENS (dados\combos.json) - o bot procura a LUTA MAIS CURTA em cada instancia:
+  1) TESTE DE FOGO: 2,3,4,4 + os buffs que a stamina der (dano maximo), 5 lutas. Se nem ele mata no 1o turno (com os
+     tiros acertando) -> PRECISA UPAR: usa sempre o dano maximo e o relatorio avisa.
+  2) Se o fogo mata no 1o turno (em pelo menos metade das lutas), testa combos com MENOS ANIMACAO (cada item 3/1 e mais
+     um tiro do boneco): 2,4 (tridente, 1 tiro so) / 4 (so buffs) / 3,4 / 1,4 / 3,3,4 - 3 lutas cada.
+  3) Depois fica com o de menor tempo medio de luta, com margem de duvida: um combo que matou 1 vez por CRITICO
+     continua sendo medido; so vence quem e rapido NA MEDIA de muitas lutas. O relatorio mostra a tabela de combos.
+  --itens 2,3,4,4 fixa a sua ordem e desliga os testes.
 * Outras correcoes desta gravacao: o turno "extra" depois do boss morto nao gasta mais itens; o PASS que pisca no turno
   do Dragao nao vira mais "turno pulado"; o minimapa do Dragao Gelado (mapa todo azul, moldura azul) agora acha o
   boneco em todas as leituras; depois do aviao a posicao nova do boneco e usada no ataque seguinte.

@@ -186,3 +186,15 @@ cantos -> leitura._sem_linhas tira tracos retos >= 13 px (h) / 11 px (v). Rastre
 matar (Escorpiao). Os dois agora nao apertam nada.
 Disco: 1 hora de gravacao completa ~870 MB -> gravacao leve por padrao (registro.PRINTS_LEVE).
 Metricas: metricas.py (logs/relatorio.txt, lutas.csv, voltas.csv). Combos: combos.py (dados/combos.json).
+
+## PENDENCIAS - fazer SO quando o usuario pedir
+- Escorpiao Rei: REMOVER o aviao (F). Falta pouco upgrade para ele morrer no 1o turno do bot (antes do turno dele);
+  quando o usuario avisar, tirar ESCORPIAO_REI de estrategias.ESTRATEGIAS (ou desligar o aviao la).
+
+## Correcoes do usuario (28/10, 6h46)
+- Cartas: o jogo TRAVA na 3a carta; nao existe 4a (nem custo). Cliques a mais sao inofensivos.
+- Combos: o objetivo e a luta mais curta - menos animacao (tirar o item 3 tira o 2o tiro) se ainda matar no 1o turno.
+  "Teste de fogo" = 2,3,4,4 (+ buffs): se acertando tudo nao mata, precisa upar. CRITICO existe (pequena chance de
+  muito dano): so concluir "mata no 1o turno" depois de dezenas de lutas. -> combos.py reescrito (tempo de luta medio
+  com margem de duvida; fogo primeiro; so explora combos mais leves se o fogo mata em >= 50%).
+- Disco D: com bastante espaco: gravacao completa de volta como padrao; o empacotar seleciona os prints do envio.
