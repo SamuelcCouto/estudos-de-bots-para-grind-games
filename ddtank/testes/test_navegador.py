@@ -20,7 +20,8 @@ ESPERADO = {"CLIQUE_JOGO": "CLIQUE_JOGO", "MAPA": "MAPA", "CENTRAL": "CENTRAL", 
             "CONFIG_VAZIA": "CONFIG_VAZIA", "CONFIG_SEL": "CONFIG_SEL", "PRONTA_FANTASMA": "PRONTA_FANTASMA",
             "POPUP_SOZINHO": "POPUP_SOZINHO", "BATALHA": "BATALHA", "CARTAS": "CARTAS", "POPUP_CARTA": "POPUP_CARTA",
             "PRONTA_PROFUNDEZAS": "PRONTA_PROFUNDEZAS", "PRONTA_MINHOCAO": "PRONTA_MINHOCAO", "SALA_FINAL": "SALA_VAZIA",
-            "TAREFA_COM_OK": "TAREFA", "TAREFA_SEM_OK": "TAREFA", "TAREFA_ATIVA_OK": "TAREFA", "TAREFA_SUPER": "TAREFA"}
+            "TAREFA_COM_OK": "TAREFA", "TAREFA_SEM_OK": "TAREFA", "TAREFA_ATIVA_OK": "TAREFA", "TAREFA_SUPER": "TAREFA",
+            "CFG_SEL_ESCORPIAO": "CONFIG_SEL", "SALA_ESCORPIAO": "SALA"}
 ruim = 0
 for nome, esp in ESPERADO.items():
     got = det.detectar(E.normalizar(img(nome)))
@@ -372,6 +373,10 @@ for escondida in (False, True):
     print(f"tarefas: coletou {st.coletadas} (escondida na lista: {escondida}) e so depois fechou OK")
 print("\ncoleta de TODAS as tarefas OK")
 
+# ---------------------------------------------------------------- ROTA SUL: o Escorpiao (artes reais aprendidas na 1a gravacao)
+assert N.instancia_selecionada(img("CFG_SEL_ESCORPIAO")) == "ESCORPIAO_REI" and N.instancia_na_sala(img("SALA_ESCORPIAO")) == "ESCORPIAO_REI"
+print("artes do Escorpiao reconhecidas (configuracao e sala) OK")
+
 # ---------------------------------------------------------------- ROTA SUL: instancias que o bot nunca viu
 # Escorpiao Rei -> Dragao Gelado -> Rainha Liris (sem escolha de dificuldade). As artes (na configuracao e na sala) aqui sao
 # desenhos inventados: o bot nao tem modelo delas, entao tem que APRENDER na 1a vez e reconhecer depois (inclusive a
@@ -380,6 +385,12 @@ import shutil, tempfile
 import numpy as np
 APRENDIDOS_TESTE = tempfile.mkdtemp()
 N.PASTA_APRENDIDOS = APRENDIDOS_TESTE; N._TPL_CFG.clear(); N._TPL_SALA.clear()
+# modelos oficiais SEM as artes da Rota Sul (aqui as artes sao inventadas: o bot tem que aprender do zero)
+MODELOS_TESTE = os.path.join(tempfile.mkdtemp(), "templates")
+shutil.copytree(N.config.PASTA_TEMPLATES, MODELOS_TESTE,
+                ignore=lambda _d, nomes: [n for n in nomes if n.startswith(("cfg_", "sala_")) and not n.startswith(("cfg_FANTASMA", "cfg_PROFUNDEZAS", "cfg_MINHOCAO"))])
+PASTA_TEMPLATES_REAL = N.config.PASTA_TEMPLATES
+N.config.PASTA_TEMPLATES = MODELOS_TESTE
 
 # pergunta da rota ao abrir
 respostas = iter(["x", "s"])
@@ -442,4 +453,5 @@ print("artes aprendidas:", aprendidos)
 assert aprendidos == sorted([f"{p}_{n}.png" for p in ("cfg", "sala") for n in ROTA_SUL]), aprendidos
 assert sum("APRENDI" in l for l in logs) == 6, "aprendeu de novo o que ja sabia"
 shutil.rmtree(APRENDIDOS_TESTE); N._TPL_CFG.clear(); N._TPL_SALA.clear()
+N.config.PASTA_TEMPLATES = PASTA_TEMPLATES_REAL
 print("Rota Sul OK (aprende as artes sozinho, mantem a ordem, nao mexe na dificuldade)")

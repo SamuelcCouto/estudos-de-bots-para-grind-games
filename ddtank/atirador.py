@@ -13,6 +13,7 @@ Modo sombra (sombra=True): faz tudo menos apertar teclas; so registra o que fari
 """
 import numpy as np
 
+import estrategias
 import leitura as L
 from navegador import em_1280
 
@@ -24,6 +25,8 @@ TECLA_ESPACO = "espaco"
 ESPERA_VEZ = 0.35             # s com o PASS visivel antes de agir (o jogo aceita teclas durante a faixa "Sua vez!")
 DURACAO_MAX_DA_VEZ = 11.0     # s: se o PASS nunca some, considera que comecou outro turno
 INTERVALO_LEITURA = 1.0       # s entre leituras gravadas no registro (diagnostico)
+TOQUES_VIRAR = (0.08, 0.12, 0.18)  # s: toques na seta esquerda/direita para virar (toque curto quase nao anda)
+AVIAO_MOVEU = 4.0              # px de minimapa: depois do voo o boneco tem que ter saido do lugar
 INTERVALO_MINIMAPA = 0.4      # s entre leituras do minimapa para o rastreador (posicao do jogador = a que mais se repete)
 TOLERANCIA_ANGULO = 3.0       # graus
 TAXA_ANGULO_INICIAL = 28.0    # graus/s com a seta apertada (aprende sozinho)
@@ -39,6 +42,7 @@ class LeitorReal:
     def preparar(self, img): return em_1280(img)
     minha_vez = staticmethod(L.minha_vez)
     angulo = staticmethod(L.angulo)
+    mira = staticmethod(L.mira)                   # (angulo, lado): lado +1 virado para a direita, -1 para a esquerda
     forca = staticmethod(L.forca)
     pontos = staticmethod(L.pontos_minimapa)
     candidatos = staticmethod(L.candidatos_minimapa)
@@ -73,6 +77,10 @@ class Atirador:
         self.turnos = 0
         self.falhas_tecla = 0
         self.rastreador = L.RastreadorMinimapa()
+        self.avioes_na_luta = 0
+        self.aviao_pendente = None                # {"de": (x, y)} do ultimo voo: confere no turno seguinte se andou
+        self.falhas_aviao = 0
+        self.aviao_indisponivel = False
         self.ultimo_minimapa = -99.0
         self.inst_rastreada = None
         if getattr(memoria, "ignorados", 0):
@@ -121,6 +129,7 @@ class Atirador:
         if inst != self.inst_rastreada:
             self.rastreador.reiniciar()
             self.inst_rastreada = inst
+            self.avioes_na_luta, self.aviao_pendente = 0, None
         self.observar_minimapa(f)
         if self.reg and agora - self.ultima_leitura >= INTERVALO_LEITURA:
             self.ultima_leitura = agora
@@ -157,10 +166,11 @@ class Atirador:
         if self.pendente:
             p = self.pendente
             self.log(f"   [tiro] boss derrotado -> ACERTOU ({p['angulo']:.0f} graus, {p['forca']:.0f}%)")
-            self.mem.registrar(p["inst"], p["azul"], p["boss"], p["angulo"], p["forca"], True, origem="bot")
+            self.mem.registrar(p["inst"], p["azul"], p["boss"], p["angulo"], p["forca"], True, origem="bot", dano=p["hp0"])
             self.pendente = None
         self.vez_desde, self.agiu = None, False
         self.rastreador.reiniciar()               # proxima batalha: spawn novo
+        self.avioes_na_luta, self.aviao_pendente = 0, None
 
     # ------------------------------------------------------------------ um turno
     def devolver_foco(self):
@@ -185,8 +195,12 @@ class Atirador:
             g = self.ver()
             if g is not None:
                 azul, boss, conf = self.posicoes(g)
-        pred = self.mem.prever(inst, azul, boss)
+        self.conferir_aviao(azul)
         hp0 = self.lei.vida(f)
+        destino = self.plano_aviao(inst, azul, hp0)
+        if destino:
+            return self.turno_aviao(f, inst, azul, boss, destino, hp0)
+        pred = self.mem.prever(inst, azul, boss)
         itens0 = self.lei.itens(f)
         self.log(f"[tiro {self.turnos}] {inst}: voce {azul and tuple(round(v) for v in azul)} (em {conf:.0%} das leituras), "
                  f"boss {boss and tuple(round(v) for v in boss)}"
@@ -200,6 +214,8 @@ class Atirador:
             return
         if hasattr(self.io, "preparar_teclas"):
             self.io.preparar_teclas()            # o Chromium so entrega teclado a pagina em foco
+        if azul and boss and abs(boss[0] - azul[0]) >= 1.5:
+            self.virar_para(1 if boss[0] > azul[0] else -1)
         ok_ang = self.ajustar_angulo(pred["angulo"])
         t_ang = self.agora() - inicio
         if self.reg:
@@ -247,6 +263,101 @@ class Atirador:
                             taxa_forca=round(self.taxa_forca, 1), jogo_em_foco=(self.io.em_foco() if hasattr(self.io, "em_foco") else None),
                             nivel_foco=getattr(self.io, "foco_nivel", None),
                             tempos={"angulo": round(t_ang, 2), "itens": round(t_itens - t_ang, 2), "carga": round(t_tiro - t_itens, 2)})
+
+    # ------------------------------------------------------------------ virar / aviao
+    def lado(self, f):
+        """+1 virado para a direita, -1 para a esquerda (pelo lado do ponteiro no mostrador)."""
+        return self.lei.mira(f)[1] if hasattr(self.lei, "mira") else 1
+
+    def virar_para(self, lado):
+        """Toca a seta esquerda/direita ate o boneco olhar para o lado do alvo (a Rainha corre para os dois lados)."""
+        for dur in TOQUES_VIRAR:
+            f = self.ver()
+            if f is None or not self.lei.minha_vez(f):
+                return False
+            if self.lado(f) == lado:
+                return True
+            nome = "direita" if lado > 0 else "esquerda"
+            self.log(f"   virando para a {nome} (o boss esta desse lado): toque de {dur:.2f}s")
+            self.io.tecla(nome, dur)
+            self.dormir(0.25)
+        f = self.ver()
+        ok = f is not None and self.lado(f) == lado
+        if not ok:
+            self.log("   ! nao consegui virar o boneco (o ponteiro nao trocou de lado)")
+        return ok
+
+    def plano_aviao(self, inst, azul, vida):
+        """Destino (x, y) do voo com F, ou None para atacar normalmente (ver estrategias.py)."""
+        est = estrategias.estrategia(inst)
+        if not est or not azul or self.aviao_indisponivel or self.avioes_na_luta >= est.get("aviao_max_por_luta", 1):
+            return None
+        a0, a1 = est["arena"]
+        borda = min(azul[0] - a0, a1 - azul[0])
+        if borda > est["aviao_se_perto_da_borda"]:
+            return None
+        if vida <= est.get("atacar_se_vida_ate", 0):
+            self.log(f"   (perto da borda, mas o boss esta com {vida:.0f}%: da para matar neste turno -> ataco)")
+            return None
+        return (a0 + est.get("aviao_destino", 0.5) * (a1 - a0), azul[1])
+
+    def conferir_aviao(self, azul):
+        """No turno seguinte a um voo: o boneco saiu do lugar? Se nao, o F nao funcionou (2x -> desiste do F)."""
+        p, self.aviao_pendente = self.aviao_pendente, None
+        if not p or not azul:
+            return
+        andou = abs(azul[0] - p["de"][0]) + abs(azul[1] - p["de"][1])
+        if andou >= AVIAO_MOVEU:
+            self.falhas_aviao = 0
+            self.log(f"   [AVIAO] voo ok: de x={p['de'][0]:.0f} para x={azul[0]:.0f}")
+            return
+        self.falhas_aviao += 1
+        self.log(f"   ! [AVIAO] o boneco nao saiu do lugar depois do F ({self.falhas_aviao}x)")
+        if self.falhas_aviao >= 2:
+            self.aviao_indisponivel = True
+            self.log("   ! [AVIAO] desisto do F nesta sessao (sem o aviao? sem energia?) - ataco direto")
+
+    def turno_aviao(self, f, inst, azul, boss, destino, hp0):
+        dx, dy = destino[0] - azul[0], azul[1] - destino[1]
+        mt = self.mem.melhor_tiro(inst, abs(dx), dy)
+        if not mt:
+            return
+        ang, forca, _ch = mt
+        est = estrategias.estrategia(inst)
+        self.log(f"[tiro {self.turnos}] {inst}: voce em x={azul[0]:.0f}, a {min(azul[0] - est['arena'][0], est['arena'][1] - azul[0]):.0f} "
+                 f"da borda e o boss com {hp0:.0f}% -> [AVIAO] voando com F para x={destino[0]:.0f} (meio da arena): "
+                 f"mirar {ang:.0f} graus, forca {forca:.0f}%, sem itens")
+        fr = [self.reg.frame(f, "turno_inicio")] if self.reg else []
+        if self.sombra:
+            self.agiu = True
+            self.log("   [sombra] nao apertei nada.")
+            return
+        if hasattr(self.io, "preparar_teclas"):
+            self.io.preparar_teclas()
+        self.virar_para(1 if dx > 0 else -1)
+        self.io.tecla("f", 0.08)
+        self.dormir(0.25)
+        if not self.ajustar_angulo(ang):
+            self.log("   ! [AVIAO] nao consegui ajustar o angulo; pulando o turno.")
+            self.agiu = True
+            self.devolver_foco()
+            return
+        angulo_real = self.lei.angulo(self.ver())
+        if abs(angulo_real - ang) > 3:
+            alt = self.mem.melhor_tiro(inst, abs(dx), dy, angulo=angulo_real)
+            if alt:
+                forca = alt[1]
+        forca_real, soltou, trace, segurou = self.carregar(forca)
+        self.devolver_foco()
+        self.agiu = True
+        self.avioes_na_luta += 1
+        self.aviao_pendente = {"de": azul}
+        self.log(f"   [AVIAO] tiro dado: {angulo_real:.0f} graus, forca {forca_real:.0f}% (queria {forca:.0f}%)")
+        if self.reg:
+            fr.append(self.reg.frame(self.ver(), "tiro_dado"))
+            self.reg.evento("turno_aviao", fr, inst=inst, azul=azul, boss=boss, destino=destino, vida=hp0,
+                            angulo_real=round(angulo_real, 1), forca_real=round(forca_real), alvo_forca=round(forca),
+                            soltou=soltou, trace_barra=trace[-40:])
 
     # ------------------------------------------------------------------ angulo
     def ajustar_angulo(self, alvo):
@@ -423,4 +534,5 @@ class Atirador:
         hp1 = self.lei.vida(f)
         acertou = hp1 < p["hp0"] - 3
         self.log(f"   [tiro] vida do boss {p['hp0']:.0f}% -> {hp1:.0f}%: {'ACERTOU' if acertou else 'ERROU'}")
-        self.mem.registrar(p["inst"], p["azul"], p["boss"], p["angulo"], p["forca"], acertou, origem="bot")
+        self.mem.registrar(p["inst"], p["azul"], p["boss"], p["angulo"], p["forca"], acertou, origem="bot",
+                           dano=max(0.0, p["hp0"] - hp1))

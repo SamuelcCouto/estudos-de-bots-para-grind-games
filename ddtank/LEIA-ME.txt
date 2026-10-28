@@ -165,3 +165,18 @@ escolhe (aparece "[APRENDI] arte de ESCORPIAO_REI..." no log) e guarda em dados\
 esses desenhos junto com a gravacao para eu transformar em oficiais. A forca dos tiros tambem e aprendida: nas
 primeiras lutas de cada instancia nova ele pode errar alguns tiros ate acertar a "escala" do mapa (acerta em ~4).
 Rota Leste: ainda nao.
+
+ROTA SUL - ESCORPIAO, RAINHA E O TRIDENTE (28/10, noite)
+=======================================================
+* VIRAR O BONECO: o bot agora le o ponteiro dos DOIS lados do mostrador e sabe para onde o boneco olha. Se o boss
+  (a Rainha corre para os dois lados) estiver do outro lado, ele toca a seta esquerda/direita (toque curto) ate virar
+  e atira espelhado. Log: "virando para a esquerda (o boss esta desse lado)".
+* ESCORPIAO REI - AVIAO (F): ele nao morre num turno e a "Investida do rei" joga para fora quem esta perto da borda.
+  Se o boneco nasceu perto da borda (x ate ~29 ou a partir de ~77 no minimapa) e o boss tem mais de 55% de vida, o
+  1o turno e um VOO: aperta F, mira no meio da arena e atira SEM itens. Depois ataca normalmente. Log: "[AVIAO]".
+  No turno seguinte ele confere se o boneco saiu do lugar; se o F nao funcionar 2 vezes, desiste dele.
+  As regras ficam em estrategias.py (arena, distancia da borda, destino, vida para atacar direto) - da para ajustar.
+* HITBOX NO PE: o ponto vermelho do minimapa ja e a posicao do pe do boss (fica na altura do chao), entao a mira ja e
+  no pe. O bot aprendeu a forca do Escorpiao na 1a sessao (~20% a ~33 graus da borda esquerda).
+* TRIDENTE (item 2): os 3 projeteis caem espalhados; no Escorpiao (so o pe tem colisao) as vezes so 2 pegam. Agora o bot
+  guarda quanto de vida cada tiro tirou e, ao repetir um tiro, puxa a forca para a que tirou MAIS vida (3 acertos).

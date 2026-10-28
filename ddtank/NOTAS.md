@@ -157,3 +157,18 @@ Telas genericas novas (nao dependem da arte da instancia):
 As artes das instancias novas sao aprendidas: CONFIG/CONFIG_SEL depois de clicar na instancia (recorte CFG_REGIAO,
 so se tiver textura e a tela nao parecer CONFIG_VAZIA) e SALA depois de confirmar (recorte SALA_ARTE, apos 1 s).
 Ficam em dados/modelos_aprendidos e vao no zip do EMPACOTAR (junto com dados/aprendizado.json).
+
+## Rota Sul - 1a sessao do bot (20261028_052531): 7 lutas no Escorpiao, todas perdidas
+- Spawn em x=17,7 ou 23 (minimapa); arena (chao) de x~13 a ~93; boss em 48,8 (y igual ao do jogador: o ponto vermelho
+  e o PE do boss). Bot: 35% errou (passou), 48% errou, 22%/20% acertaram (vida 100 -> 86 -> 41 num turno, itens 2,3,4).
+- Turno do boss: "Investida do rei!" - corre para a esquerda (48,8 -> 27) e empurra o boneco para fora -> "Falhou
+  LOSE!!" -> sem cartas -> o bot repete a instancia (certo). Usuario: hitbox so no pe; usar F (aviao) para ir ao meio.
+- F = aviao (icone azul ao lado do mostrador; R = outro, "16"). Implementado em atirador.turno_aviao + estrategias.py.
+- Tridente: 3 projeteis; no voo (quadro 32) eles nao estao alinhados com a direcao de lancamento; as explosoes
+  ficaram ~85 px (tela 1280) espalhadas. Nao deu para concluir se o espalhamento e por angulo (ai ~45 graus juntaria os
+  3) ou por forca. Medida tomada: memoria pondera os acertos pelo dano (campo "dano" = % de vida tirada).
+- Lados: mostrador virado para a esquerda = ponteiro do lado esquerdo (nota 70-115 contra ~22 do direito; virado para
+  a direita, 98 contra 8). leitura.mira(f) -> (angulo, lado). Memoria usa |dx| (tiro espelhado).
+- A tela do jogo tem as TABELAS DE FORCA do servidor (EstrAng 20/30/50/65 graus: distancia 1-10 da regua -> forca) e a
+  regua 0-10 embaixo. Ideia futura: usar como semente da fisica (precisa converter minimapa -> regua por mapa).
+- Artes aprendidas do Escorpiao (cfg/sala) viraram modelos oficiais em templates/.

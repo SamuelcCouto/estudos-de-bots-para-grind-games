@@ -276,3 +276,62 @@ assert any("limite" in l for l in logs) and any("recalculada" in l for l in logs
 assert not any(m == "filha" for m in [w.modo]), "trocou o modo de entrada a toa (as setas funcionavam)"
 print("limite do angulo: atira do limite com a forca recalculada OK")
 print("\natirador (angulo baixo e limite) OK")
+
+# ------------------------------------------------------------ 19) ROTA SUL: virar para o lado do boss e o AVIAO (F)
+import math
+class MundoSul(MundoComThread):
+    """+ lado para onde o boneco olha (setas esquerda/direita viram; toque curto anda um pouco) e o aviao: F arma,
+    o proximo tiro leva o boneco ate onde cair (balistica com R_mundo)."""
+    R_mundo = 38.0
+    def __init__(self, **kw):
+        super().__init__(**kw); self.lado = 1; self.aviao_armado = False; self.voos = []
+    def capturar(self):
+        q = super().capturar(); q["lado"] = self.lado; return q
+    def tecla(self, nome, dur=0.05):
+        if self.teclado_ok() and nome in ("esquerda", "direita"):
+            self.lado = -1 if nome == "esquerda" else 1
+            self.azul = (self.azul[0] + self.lado * 0.3, self.azul[1])
+        if self.teclado_ok() and nome == "f": self.aviao_armado = True
+        super().tecla(nome, dur)
+    def soltar(self, nome):
+        n = len(self.tiros); super().soltar(nome)
+        if self.aviao_armado and len(self.tiros) > n:
+            forca = self.tiros[-1]; ang = math.radians(self.angulo)
+            dx = forca ** 2 * math.sin(2 * ang) / self.R_mundo
+            self.azul = (self.azul[0] + self.lado * dx, self.azul[1]); self.voos.append(self.azul); self.aviao_armado = False
+class LeitorSul(Leitor):
+    mira = staticmethod(lambda f: (f["ang"], f["lado"]))
+def novo_sul(mundo, inst):
+    tmp = tempfile.NamedTemporaryFile("w", suffix=".json", delete=False); tmp.close(); os.unlink(tmp.name)
+    mem = M.Memoria(arq_aprendizado=tmp.name); logs = []
+    at = A.Atirador(mundo, mem, lambda: inst, leitor=LeitorSul(), dormir=mundo.dormir, agora=lambda: mundo.t, log=logs.append)
+    return at, logs
+
+# a Rainha correu para a ESQUERDA do boneco: ele vira e atira para la
+w = MundoSul(); w.azul, w.boss = (60.0, 55.0), (30.0, 55.0)
+at, logs = novo_sul(w, "RAINHA_LIRIS"); rodar(at, w, ate=16)
+print("\n".join(l for l in logs if "virando" in l or "mirar" in l or "tiro dado" in l))
+assert w.lado == -1 and len(w.tiros) == 1, (w.lado, w.tiros)
+print("boss a esquerda: virou e atirou OK")
+
+# Escorpiao: nasceu colado na borda esquerda (x=18), boss com 100% -> 1o turno voa com F para o meio, sem itens;
+# no turno seguinte (ja no meio) ataca com os itens
+w = MundoSul(vez_inicio=1.0, vez_fim=9.0); w.azul, w.boss = (17.7, 60.6), (48.8, 60.0)
+at, logs = novo_sul(w, "ESCORPIAO_REI"); rodar(at, w, ate=14)
+print("\n".join(l for l in logs if "AVIAO" in l or "mirar" in l))
+assert [t for t in w.teclas if t[0] == "f"] and w.voos, "nao usou o aviao"
+assert w.itens_apertados == [], f"gastou itens no voo: {w.itens_apertados}"
+assert 40 <= w.azul[0] <= 66, f"voou para x={w.azul[0]:.0f} (meio da arena ~53)"
+w.novo_turno(w.t + 1.0, w.t + 9.0); rodar(at, w, ate=w.t + 12)
+print("\n".join(l for l in logs[-6:]))
+assert w.itens_apertados and len([t for t in w.teclas if t[0] == "f"]) == 1, (w.itens_apertados, w.teclas)
+assert any("voo ok" in l for l in logs)
+print("Escorpiao: voou para o meio no 1o turno e atacou no 2o OK")
+
+# boss ja fraco (da para matar neste turno): ataca mesmo perto da borda
+w = MundoSul(); w.azul, w.boss = (17.7, 60.6), (48.8, 60.0); w.vida = 41.0
+w.capturar_original = w.capturar
+at, logs = novo_sul(w, "ESCORPIAO_REI"); rodar(at, w, ate=14)
+assert not [t for t in w.teclas if t[0] == "f"] and w.itens_apertados, (w.teclas, w.itens_apertados)
+print("Escorpiao fraco: ataca direto OK")
+print("\natirador (Rota Sul) OK")

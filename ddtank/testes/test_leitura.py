@@ -29,6 +29,13 @@ for nome, gab in [("MOSTRADOR_1_VERMELHO", 1), ("MOSTRADOR_1_LARANJA", 1), ("MOS
     print(f"mostrador {gab:2d} -> lido {a:.1f}")
     assert gab - 7 <= a <= gab + 1.5, (nome, a)   # o ponteiro le ~2-5 graus abaixo do numero
 
+# boneco virado para a ESQUERDA: o ponteiro vai para o lado esquerdo do mostrador (o numero continua sendo o angulo
+# a partir do chao do lado para onde ele olha). Gravacao do usuario: tocou "esquerda" na Profundezas.
+for nome, gab, lado in [("MOSTRADOR_ESQ_48", 48, -1), ("MOSTRADOR_ESQ_61", 61, -1), ("MOSTRADOR_15", 15, 1), ("MOSTRADOR_1_VERMELHO", 1, 1)]:
+    a, ld = L.mira(so_mostrador(nome))
+    print(f"mostrador {gab:2d} -> lido {a:.1f}, virado para a {'direita' if ld > 0 else 'esquerda'}")
+    assert ld == lado and gab - 7 <= a <= gab + 2, (nome, a, ld)
+
 # sua vez (PASS)
 assert all(L.minha_vez(img(f"VEZ_SIM_{i}")) for i in (21, 74, 214, 415, 602))
 assert not any(L.minha_vez(img(f"VEZ_NAO_{i}")) for i in (2, 66, 92, 355, 580))

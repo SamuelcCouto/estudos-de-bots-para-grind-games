@@ -42,23 +42,47 @@ def minha_vez(f):
     return float(cv2.matchTemplate(roi, t, cv2.TM_CCOEFF_NORMED).max()) >= PASS_LIMIAR
 
 
-def angulo(f, pivo=MOSTRADOR_PIVO, rmin=10, rmax=28, faixa=(-30, 100), passo=0.5):
-    """Angulo de mira em graus, pela direcao do ponteiro (linha vermelha/laranja saindo do pivo).
-    Erro medio ~2 graus (o ponteiro laranja tende a ler ~3 graus abaixo do vermelho)."""
+_GEOM_PONTEIRO = {}
+
+
+def _coords_ponteiro(pivo, rmin, rmax, faixa, passo, lado):
+    """Pixels (ys, xs) amostrados ao longo de cada direcao candidata: [angulos, 3 linhas paralelas, raios]."""
+    chave = (pivo, rmin, rmax, faixa, passo, lado)
+    if chave not in _GEOM_PONTEIRO:
+        rs = np.arange(rmin, rmax + 1, 1.0)
+        angs = np.arange(faixa[0], faixa[1] + passo, passo)
+        t = np.radians(angs if lado > 0 else 180.0 - angs)[:, None, None]
+        dy = np.array([-0.7, 0.0, 0.7])[None, :, None]       # tolerancia de 1 px perpendicular
+        xs = np.round(pivo[0] + rs[None, None, :] * np.cos(t) - dy * np.sin(t)).astype(int)
+        ys = np.round(pivo[1] - rs[None, None, :] * np.sin(t) - dy * np.cos(t)).astype(int)
+        _GEOM_PONTEIRO[chave] = (angs, ys, xs)
+    return _GEOM_PONTEIRO[chave]
+
+
+def _ponteiro(cor, lado, pivo, rmin, rmax, faixa, passo):
+    """(angulo, nota) da melhor linha vermelha/laranja saindo do pivo para o lado dado (+1 direita, -1 esquerda)."""
+    angs, ys, xs = _coords_ponteiro(pivo, rmin, rmax, faixa, passo, lado)
+    notas = np.percentile(cor[ys, xs].max(axis=1), 20, axis=1)
+    i = int(np.argmax(notas))
+    return float(angs[i]), float(notas[i])
+
+
+def mira(f, pivo=MOSTRADOR_PIVO, rmin=10, rmax=28, faixa=(-30, 100), passo=0.5):
+    """(angulo, lado). lado = +1 se o boneco esta virado para a DIREITA (ponteiro do lado direito do mostrador), -1 para
+    a ESQUERDA (ponteiro espelhado). O angulo e sempre medido a partir do chao do lado para onde ele olha (o numero do
+    mostrador; o ponteiro le ~2-5 graus abaixo do numero).
+    Gravacoes: virado para a direita, nota ~98 no lado direito e ~8 no esquerdo; virado para a esquerda, ~70-115 no
+    esquerdo e ~22 no direito (sobra uma marca fina do tiro anterior)."""
     fi = f.astype(np.float32)
     cor = fi[..., 2] - fi[..., 0]                    # R - B
-    rs = np.arange(rmin, rmax + 1, 1.0)
-    angs = np.arange(faixa[0], faixa[1] + passo, passo)
-    notas = np.empty(len(angs))
-    for k, a in enumerate(angs):
-        t = np.radians(a)
-        v = []
-        for dy in (-0.7, 0.0, 0.7):                  # tolerancia de 1 px perpendicular
-            xs = np.round(pivo[0] + rs * np.cos(t) - dy * np.sin(t)).astype(int)
-            ys = np.round(pivo[1] - rs * np.sin(t) - dy * np.cos(t)).astype(int)
-            v.append(cor[ys, xs])
-        notas[k] = np.percentile(np.max(v, axis=0), 20)
-    return float(angs[int(notas.argmax())])
+    ad, nd = _ponteiro(cor, +1, pivo, rmin, rmax, faixa, passo)
+    ae, ne = _ponteiro(cor, -1, pivo, rmin, rmax, faixa, passo)
+    return (ad, 1) if nd >= ne else (ae, -1)
+
+
+def angulo(f, pivo=MOSTRADOR_PIVO, rmin=10, rmax=28, faixa=(-30, 100), passo=0.5):
+    """Angulo de mira em graus (do lado para onde o boneco olha). Erro medio ~2 graus."""
+    return mira(f, pivo, rmin, rmax, faixa, passo)[0]
 
 
 def forca(f):

@@ -86,3 +86,13 @@ for k in range(40):
 print(f"geometrias variadas (spawn/boss diferentes), depois de 8 tiros de aprendizado: {acertos}/{total} acertos")
 assert acertos / total >= 0.85, acertos / total
 print("\ngeneralizacao OK")
+
+# tridente: entre acertos na mesma situacao, a forca puxa para o que tirou MAIS vida (3 projeteis em vez de 2)
+tmp = tempfile.NamedTemporaryFile("w", suffix=".json", delete=False); tmp.close(); os.unlink(tmp.name)
+mem = M.Memoria(arq_semente=None, arq_aprendizado=tmp.name)
+for forca, dano in [(18, 30), (22, 59), (26, 30)]:
+    mem.registrar("ESCORPIAO_REI", (23.0, 60.0), (48.8, 60.0), 32.0, forca, True, dano=dano)
+p = mem.prever("ESCORPIAO_REI", (23.0, 60.0), (48.8, 60.0))
+print("tridente: forca escolhida", round(p["forca"], 1), p["origem"])
+assert 21 <= p["forca"] <= 23, p
+print("ponderacao pelo dano OK")
