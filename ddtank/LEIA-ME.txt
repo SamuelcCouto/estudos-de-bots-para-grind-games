@@ -115,3 +115,9 @@ IMPORTANTE (versao de 28/10, tarde)
   teclado de verdade); se a forca ficar muito abaixo do alvo, o bot troca sozinho de "olhar a barra" para "soltar
   pelo relogio". Cada tiro grava o trace da barra no registro. TESTE_FORCA.bat (numa batalha, na sua vez) mede qual
   forma de segurar o espaco o jogo aceita (esperado ~38% em 1,0 s).
+
+* FOCO DO TECLADO (28/10): o mouse funciona com o jogo em segundo plano, mas o TECLADO nao: o Chromium so entrega
+  teclas a pagina em foco (por isso o pop-up "Clique no jogo" aparece e as setas nao mudam o angulo). Na batalha o bot
+  pede foco antes de cada turno: 1o "virtual" (sem mexer nas suas janelas); se as setas nao funcionarem, sobe para
+  "jogo em primeiro plano durante o turno" e devolve o foco para a sua janela logo depois. Para ja comecar assim:
+  python navegador.py --atirar --foco 2   (ou deixe o jogo na frente). Sem foco real o teclado simplesmente nao chega.

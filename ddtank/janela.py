@@ -280,3 +280,57 @@ def tecla_cima(hwnd, nome, modo="top"):
     if modo == "filha":
         hwnd = filha_de_entrada(hwnd) or hwnd
     user32.PostMessageW(hwnd, WM_KEYUP, vk, _lparam_tecla(vk, subindo=True))
+
+
+# ---------------------------------------------------------------------------
+# FOCO. O Chromium so entrega teclado a pagina que esta em foco; o mouse funciona sem foco.
+# ---------------------------------------------------------------------------
+WM_ACTIVATE, WM_ACTIVATEAPP, WM_SETFOCUS = 0x0006, 0x001C, 0x0007
+SW_RESTORE = 9
+user32.GetForegroundWindow.restype = W.HWND
+
+
+def foco_virtual(hwnd):
+    """Avisa a janela (sem tirar o foco de ninguem) que ela foi ativada e que a janela interna ganhou o foco."""
+    filha = filha_de_entrada(hwnd) or hwnd
+    user32.SendMessageTimeoutW(hwnd, WM_ACTIVATE, 1, 0, 2, 200, None)        # WA_ACTIVE
+    user32.SendMessageTimeoutW(hwnd, WM_ACTIVATEAPP, 1, 0, 2, 200, None)
+    user32.SendMessageTimeoutW(filha, WM_SETFOCUS, 0, 0, 2, 200, None)
+
+
+def foco_real(hwnd):
+    """Traz a janela do jogo para o primeiro plano. Devolve a janela que estava na frente (para devolver depois)."""
+    anterior = user32.GetForegroundWindow()
+    if anterior == hwnd:
+        return None
+    try:
+        if user32.IsIconic(hwnd):
+            user32.ShowWindow(hwnd, SW_RESTORE)
+        meu = kernel32.GetCurrentThreadId()
+        tid_frente = user32.GetWindowThreadProcessId(anterior, None) if anterior else 0
+        if tid_frente and tid_frente != meu:
+            user32.AttachThreadInput(meu, tid_frente, True)       # truque: permite trocar o primeiro plano
+            user32.SetForegroundWindow(hwnd)
+            user32.AttachThreadInput(meu, tid_frente, False)
+        else:
+            user32.SetForegroundWindow(hwnd)
+    except Exception:
+        pass
+    return anterior
+
+
+def devolver_foco(anterior):
+    if not anterior:
+        return
+    try:
+        meu = kernel32.GetCurrentThreadId()
+        atual = user32.GetForegroundWindow()
+        tid = user32.GetWindowThreadProcessId(atual, None) if atual else 0
+        if tid and tid != meu:
+            user32.AttachThreadInput(meu, tid, True)
+            user32.SetForegroundWindow(anterior)
+            user32.AttachThreadInput(meu, tid, False)
+        else:
+            user32.SetForegroundWindow(anterior)
+    except Exception:
+        pass

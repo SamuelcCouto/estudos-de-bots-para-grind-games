@@ -120,6 +120,10 @@ class Atirador:
         self.vez_desde, self.agiu = None, False
 
     # ------------------------------------------------------------------ um turno
+    def devolver_foco(self):
+        if hasattr(self.io, "encerrar_teclas"):
+            self.io.encerrar_teclas()            # devolve o primeiro plano a janela em que voce estava
+
     def vez_ativa(self):
         f = self.ver()
         return f is not None and self.lei.minha_vez(f)
@@ -150,13 +154,17 @@ class Atirador:
             if self.reg:
                 self.reg.evento("turno_sombra", fr, inst=inst, azul=azul, boss=boss, previsto=pred, itens_coloridos=itens0)
             return
+        if hasattr(self.io, "preparar_teclas"):
+            self.io.preparar_teclas()            # o Chromium so entrega teclado a pagina em foco
         ok_ang = self.ajustar_angulo(pred["angulo"])
         t_ang = self.agora() - inicio
         if self.reg:
             fr.append(self.reg.frame(self.ver(), "apos_angulo"))
         if not ok_ang:
-            self.log("   ! nao consegui ajustar o angulo (as setas nao estao chegando ao jogo? ou a vez acabou). Pulando o tiro.")
+            self.log("   ! nao consegui ajustar o angulo (as setas nao estao chegando ao jogo? ou a vez acabou). Pulando o tiro. "
+                     "Dica: clique no jogo para ele ficar em primeiro plano, ou rode com --foco 2.")
             self.agiu = True
+            self.devolver_foco()
             if self.reg:
                 self.reg.evento("turno_pulado", fr, inst=inst, motivo="angulo", previsto=pred, tempo_s=round(t_ang, 2))
             return
@@ -172,6 +180,7 @@ class Atirador:
                 self.log(f"   angulo ficou em {angulo_real:.0f} (queria {pred['angulo']:.0f}): forca recalculada {pred['forca']:.0f}% -> {alt:.0f}%")
                 alvo_forca = alt
         forca_real, soltou, trace, segurou = self.carregar(alvo_forca)
+        self.devolver_foco()
         metodo_usado = self.metodo_forca
         if soltou != "vez_acabou" and alvo_forca - forca_real > 10 and forca_real < 0.75 * alvo_forca:
             self.subforcas += 1
@@ -192,6 +201,7 @@ class Atirador:
                             forca_real=round(forca_real), alvo_forca=round(alvo_forca), itens=apertados, itens_coloridos_inicio=itens0,
                             soltou=soltou, metodo_forca=metodo_usado, segurou_s=round(segurou, 2), trace_barra=trace[-40:],
                             taxa_forca=round(self.taxa_forca, 1), jogo_em_foco=(self.io.em_foco() if hasattr(self.io, "em_foco") else None),
+                            nivel_foco=getattr(self.io, "foco_nivel", None),
                             tempos={"angulo": round(t_ang, 2), "itens": round(t_itens - t_ang, 2), "carga": round(t_tiro - t_itens, 2)})
 
     # ------------------------------------------------------------------ angulo
@@ -213,10 +223,13 @@ class Atirador:
             mudou = b - a
             if abs(mudou) < 0.8:
                 sem_efeito += 1
-                if sem_efeito == 2 and hasattr(self.io, "trocar_modo"):
+                if hasattr(self.io, "escalar_foco") and self.io.escalar_foco():
+                    self.log(f"   ! as setas nao mudaram o angulo: o jogo provavelmente sem foco do teclado; "
+                             f"subindo o nivel de foco para {self.io.foco_nivel} ({'foco virtual' if self.io.foco_nivel == 1 else 'jogo em primeiro plano durante o turno'}).")
+                elif sem_efeito >= 2 and sem_efeito % 2 == 0 and hasattr(self.io, "trocar_modo"):
                     self.log("   ! as setas nao mudaram o angulo; tentando outro modo de entrada.")
                     self.io.trocar_modo()
-                if sem_efeito >= 4:
+                if sem_efeito >= 6:
                     return False
             else:
                 sem_efeito = 0

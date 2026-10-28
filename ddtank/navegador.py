@@ -126,6 +126,31 @@ class IOJanela:
     def trocar_modo(self):
         self.modo_teclas = "filha" if self.modo_teclas == "top" else "top"
 
+    # Foco do teclado: 0 = nenhum (so PostMessage), 1 = "virtual" (avisa a janela que ganhou foco),
+    # 2 = real (traz o jogo para a frente durante o turno e devolve depois). Sobe sozinho se as teclas nao chegarem.
+    foco_nivel = 1
+    _foco_anterior = None
+
+    def preparar_teclas(self):
+        if self.foco_nivel >= 1:
+            self.j.foco_virtual(self.hwnd)
+        if self.foco_nivel >= 2:
+            self._foco_anterior = self.j.foco_real(self.hwnd)
+            time.sleep(0.15)
+
+    def encerrar_teclas(self):
+        if self._foco_anterior:
+            self.j.devolver_foco(self._foco_anterior)
+            self._foco_anterior = None
+
+    def escalar_foco(self):
+        """Sobe o nivel de foco (ate 2). Devolve True se subiu."""
+        if self.foco_nivel >= 2:
+            return False
+        self.foco_nivel += 1
+        self.preparar_teclas()
+        return True
+
     def em_foco(self):
         """O jogo e a janela em primeiro plano do Windows? (em segundo plano ele pode rodar mais devagar)"""
         fg = self.j.user32.GetForegroundWindow()
@@ -620,6 +645,8 @@ def main():
     ap.add_argument("--atirar", action="store_true", help="o bot joga os turnos da batalha (tiro, itens)")
     ap.add_argument("--sombra", action="store_true", help="na batalha, so mostra o tiro que faria (nao aperta teclas)")
     ap.add_argument("--itens", default="", help="ordem dos itens, ex.: 2,3,4,4,4,5,6,7,8")
+    ap.add_argument("--foco", type=int, choices=(0, 1, 2), default=1,
+                    help="foco do teclado na batalha: 0 nenhum, 1 virtual (padrao; sobe sozinho), 2 jogo em primeiro plano durante o turno")
     ap.add_argument("--sem-gravar", action="store_true", help="nao grava prints/eventos do bot em sessoes\\")
     args = ap.parse_args()
 
@@ -633,6 +660,7 @@ def main():
     if janela.contar_janelas(titulo, exe) > 1:
         sys.exit("ERRO: ha mais de uma janela do jogo aberta. Deixe so uma.")
     io = IOJanela(hwnd)
+    io.foco_nivel = args.foco
     det = estados_mod.Detector()
     print("Janela:", janela.descrever_janela(hwnd))
 

@@ -45,16 +45,16 @@ class Mundo:
                 "itens": [self.stamina >= CUSTOS[i] for i in range(1, 9)], "vida": self.vida}
     def tecla(self, nome, dur=0.05):
         self.teclas.append((nome, round(dur, 2)))
-        if nome in ("cima", "baixo") and self.modo in self.setas_ok:
+        if self.teclado_ok() and nome in ("cima", "baixo") and self.modo in self.setas_ok:
             self.angulo += (1 if nome == "cima" else -1) * 30.0 * dur
-        if nome.isdigit():
+        if self.teclado_ok() and nome.isdigit():
             item = int(nome)
             if self.stamina >= CUSTOS[item]:
                 self.stamina -= CUSTOS[item]; self.itens_apertados.append(item)
         self.avancar(dur)
     def tecla_baixo(self, nome, rep=1):
         self.ultimo_baixo = self.t
-        if self.carregando_desde is None and self.atirou_em is None: self.carregando_desde = self.t
+        if self.teclado_ok() and self.carregando_desde is None and self.atirou_em is None: self.carregando_desde = self.t
     def tecla_cima(self, nome):
         if self.carregando_desde is None:                    # o jogo ja disparou sozinho
             self.avancar(0.1); return
@@ -62,13 +62,21 @@ class Mundo:
         self.avancar(0.1)                                    # atraso do KEYUP
         self.tiros.append(real); self.carregando_desde = None; self.atirou_em = self.t
     def trocar_modo(self): self.modo = "filha" if self.modo == "top" else "top"
+    # --- foco do teclado (so em Mundos que definem nivel_exigido)
+    nivel_exigido = 0; foco_nivel = 1; devolvidos = 0
+    def preparar_teclas(self): pass
+    def encerrar_teclas(self): self.devolvidos += 1
+    def escalar_foco(self):
+        if self.foco_nivel >= 2: return False
+        self.foco_nivel += 1; return True
+    def teclado_ok(self): return self.foco_nivel >= self.nivel_exigido
     def dormir(self, s): self.avancar(s)
 
 class MundoComThread(Mundo):
     """Como o IOJanela real: segurar() mantem a tecla com repeticao automatica em thread propria."""
     def segurar(self, nome):
         self.keepalive = True; self.ultimo_baixo = self.t
-        if self.carregando_desde is None and self.atirou_em is None: self.carregando_desde = self.t
+        if self.teclado_ok() and self.carregando_desde is None and self.atirou_em is None: self.carregando_desde = self.t
     def soltar(self, nome):
         Mundo.tecla_cima(self, nome); self.keepalive = False
 
@@ -197,3 +205,14 @@ assert len(w.tiros) == 1 and 66 <= w.tiros[0] <= 86, f"forca real {w.tiros} (que
 assert 14 <= at.taxa_forca <= 26, f"taxa aprendida {at.taxa_forca}"
 print("barra a 19%%/s: forca real %.0f%% (queria ~76%%), taxa aprendida %.0f%%/s OK" % (w.tiros[0], at.taxa_forca))
 print("\natirador (velocidade da barra) OK")
+
+# ------------------------------------------------------------ 13) SEU LOG: as setas so funcionam com o jogo em primeiro plano (foco real)
+class MundoFoco(MundoComThread):
+    nivel_exigido = 2
+w = MundoFoco(); at, mem, logs, arq = novo(w); rodar(at, w, ate=16)
+print("\n".join(l for l in logs if "foco" in l or "tiro dado" in l or "Pulando" in l))
+assert w.foco_nivel == 2, "nao subiu o foco"
+assert abs(w.angulo - 31) <= 3.5 and len(w.tiros) == 1 and abs(w.tiros[0] - 38) <= 7, (w.angulo, w.tiros)
+assert w.devolvidos >= 1, "nao devolveu o foco"
+print("foco do teclado: subiu de nivel, atirou e devolveu o foco OK")
+print("\natirador (foco) OK")
