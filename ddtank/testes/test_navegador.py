@@ -59,7 +59,7 @@ class Sim:
         self.instancias_clicadas = []; self.cliques = []; self.tarefas_ok = False; self.voltas = 0
         self.viradas = []; self.ignorar_1o = ignorar_1o; self.ja_ignorou = False
         self.slots = [True, True, True]          # True = aberto
-        self.inicios_com_vaga_aberta = 0; self.cliques_em_slot_fechado = 0
+        self.inicios_com_vaga_aberta = 0; self.cliques_em_slot_fechado = 0; self.jogar_cliques = 0
     def trocar(self, t): self.tela, self.desde = t, self.cap
     def quadro_cartas(self):
         f = img("CARTAS_COSTAS").copy(); rev = img("CARTAS_REVELADAS")
@@ -86,22 +86,21 @@ class Sim:
         self.viradas = []; self.ja_ignorou = False; self.inst += 1; self.trocar("SALA_VAZIA")
     def clicar(self, x, y, modo):
         p = (x, y); self.cliques.append((self.tela, p)); t = self.tela
+        if t == "SALA_VAZIA": self.clique_slot(p)
         if t == "MAPA" and dentro(p, caixa(N.MAPA_CENTRAL)): self.trocar("CENTRAL")
         elif t == "CENTRAL" and dentro(p, caixa(N.CENTRAL_JOGAR)):
+            self.jogar_cliques += 1
             self.trocar("SALA_VAZIA"); self.inst = 0; self.slots = [True, True, True]
         elif t == "SALA_VAZIA" and self.inst < 3 and dentro(p, caixa(N.SALA_TROCAR_INSTANCIA)): self.trocar("CONFIG_VAZIA")
         elif t == "SALA_VAZIA" and self.inst >= 3 and dentro(p, caixa(N.SALA_ICONE_TAREFAS)): self.trocar("TAREFA")
-        elif t == "SALA_VAZIA" and self.inst >= 3 and self.tarefas_ok and dentro(p, caixa(N.SALA_PORTA)):
-            self.trocar("CENTRAL"); self.voltas += 1; self.tarefas_ok = False
+        elif t == "SALA_VAZIA" and self.inst >= 3 and self.tarefas_ok and dentro(p, caixa(N.SALA_TROCAR_INSTANCIA)):
+            self.voltas += 1; self.tarefas_ok = False; self.inst = 0; self.trocar("CONFIG_VAZIA")   # mesma sala, nova volta
         elif t == "CONFIG_VAZIA":
             for nome, c in N.INSTANCIA_NA_CONFIG.items():
                 if dentro(p, caixa(c, 30)): self.instancias_clicadas.append(nome); self.trocar("CONFIG_SEL")
         elif t == "CONFIG_SEL" and dentro(p, caixa(N.CONFIG_SIM, 60)): self.trocar("PRONTA")
         elif t == "PRONTA":
-            for k, c in enumerate(N.SLOTS_SALA):
-                if dentro(p, (c[0] - 55, c[1] - 50, c[0] + 55, c[1] + 50)):
-                    if not self.slots[k]: self.cliques_em_slot_fechado += 1
-                    self.slots[k] = not self.slots[k]          # clicar de novo REABRE a vaga
+            self.clique_slot(p)
             if dentro(p, caixa(N.SALA_INICIO, 40)):
                 self.inicios_com_vaga_aberta += any(self.slots); self.trocar("POPUP_SOZINHO")
         elif t == "POPUP_SOZINHO" and dentro(p, caixa(N.POPUP_SOZINHO_SIM, 40)): self.trocar("BATALHA")
@@ -114,6 +113,11 @@ class Sim:
         elif t == "POPUP_CARTA" and dentro(p, caixa(N.POPUP_CARTA_SIM, 40)): self.viradas.append(self.pendente); self.trocar("CARTAS")
         elif t == "TAREFA" and not self.tarefas_ok and dentro(p, caixa(N.TAREFA_BOTAO, 50)): self.tarefas_ok = True
         elif t == "TAREFA" and self.tarefas_ok and dentro(p, caixa(N.TAREFA_FECHAR, 30)): self.trocar("SALA_VAZIA")
+    def clique_slot(self, p):
+        for k, c in enumerate(N.SLOTS_SALA):
+            if dentro(p, (c[0] - 55, c[1] - 50, c[0] + 55, c[1] + 50)):
+                if not self.slots[k]: self.cliques_em_slot_fechado += 1
+                self.slots[k] = not self.slots[k]          # clicar de novo REABRE a vaga
     def tecla_apertada(self, vk): return False
 
 for modo_k in (1.0,):
@@ -134,6 +138,7 @@ for modo_k in (1.0,):
     assert sim.instancias_clicadas == ["FANTASMA", "PROFUNDEZAS", "MINHOCAO"] * 2
     assert sim.inicios_com_vaga_aberta == 0, "iniciou a partida com vaga aberta"
     assert sim.cliques_em_slot_fechado == 0, "clicou numa vaga ja fechada (reabriria)"
+    assert sim.jogar_cliques == 1, f"saiu e entrou na sala {sim.jogar_cliques}x (deveria entrar 1 vez so)"
     sem_efeito = [c for c in sim.cliques]
     print("total de cliques:", len(sim.cliques))
 print("\nsimulador OK: o navegador percorreu a rota (3 instancias + cartas + tarefas + Central) 2 vezes seguidas")
@@ -173,12 +178,13 @@ print("modo simular OK (nenhum clique enviado)")
 # ---------------------------------------------------------------- 7) defeito real: 1o clique em carta ignorado
 sim = Sim(ignorar_1o=True); relogio = [0.0]
 nav = N.Navegador(sim, det, dormir=lambda s: relogio.__setitem__(0, relogio[0] + s), agora=lambda: relogio[0], log=lambda m: None)
-sim.tela = "CARTAS"; viu_popup = False
+sim.tela = "CARTAS"; viu_popup = False; max_viradas = 0
 for _ in range(40):
     e = nav.estado_estavel()
     if e == "POPUP_CARTA": viu_popup = True
     if e: nav.agir(e)
+    max_viradas = max(max_viradas, len(sim.viradas))
     if sim.tela == "SALA_VAZIA": break
 assert viu_popup, "com o 1o clique ignorado o bot nao chegou ao pop-up da 3a carta"
-assert len(sim.viradas) == 3
+assert max_viradas == 3, max_viradas
 print("cartas OK mesmo com o 1o clique ignorado (3 viradas, pop-up atendido)")

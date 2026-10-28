@@ -283,10 +283,25 @@ class Navegador:
                     if self.pontos_tarefa["abrir"] >= 3:
                         self.log("   ! nao consegui abrir as Tarefas; sigo sem coletar.")
                         self.tarefas_ok = True
-            elif self.run_completa:
-                self.clicar_e_verificar(estado, SALA_PORTA, descricao="voltar para a Central")
-            else:
-                self.clicar_e_verificar(estado, SALA_TROCAR_INSTANCIA, descricao=f"escolher instancia ({self.instancia})")
+                return
+            if self.run_completa:
+                # volta completa e tarefas coletadas: recomeca NA MESMA SALA (as vagas continuam fechadas)
+                self.voltas += 1
+                self.log(f"=== Volta {self.voltas} concluida. Recomecando na mesma sala. ===")
+                self.novo_ciclo()
+                self.pontos_tarefa.clear()
+                if self.uma_vez:
+                    self.parar = True
+                    return
+            f, _e = self.ver()
+            abertos = slots_abertos(f) if f is not None else []
+            if abertos and self.tentativas_slot < 6:
+                self.tentativas_slot += 1
+                self.log(f"[{estado}] fechando vaga aberta da sala {abertos[0]} ({len(abertos)} aberta(s))")
+                self.clicar(abertos[0])
+                self.dormir(0.9)
+                return
+            self.clicar_e_verificar(estado, SALA_TROCAR_INSTANCIA, descricao=f"escolher instancia ({self.instancia})")
         elif estado == "CONFIG_VAZIA":
             self.clicar_e_verificar(estado, INSTANCIA_NA_CONFIG[self.instancia], descricao=f"selecionar {self.instancia}")
         elif estado.startswith("PRONTA_"):
