@@ -178,16 +178,49 @@ def _lp(x, y):
     return ((int(y) & 0xFFFF) << 16) | (int(x) & 0xFFFF)
 
 
-def mover(hwnd, x, y):
-    user32.PostMessageW(hwnd, WM_MOUSEMOVE, 0, _lp(x, y))
+def filha_de_entrada(hwnd):
+    """A maior janela interna do Chromium (Chrome_RenderWidgetHostHWND), que e quem recebe
+    o mouse/teclado de verdade. None se nao houver."""
+    achadas = []
+
+    def cb(h, _):
+        buf = ctypes.create_unicode_buffer(128)
+        user32.GetClassNameW(h, buf, 128)
+        if "RenderWidgetHost" in buf.value:
+            r = W.RECT()
+            user32.GetClientRect(h, ctypes.byref(r))
+            achadas.append((r.right * r.bottom, h))
+        return True
+
+    user32.EnumChildWindows(hwnd, EnumProc(cb), 0)
+    return max(achadas)[1] if achadas else None
 
 
-def clicar(hwnd, x, y):
-    mover(hwnd, x, y)
+def _alvo(hwnd, x, y, modo):
+    """(janela_destino, x, y) conforme o modo: 'top' = janela principal; 'filha' = janela
+    interna do Chromium, com o ponto convertido para as coordenadas dela."""
+    if modo == "filha":
+        filha = filha_de_entrada(hwnd)
+        if filha:
+            pt = W.POINT(int(x), int(y))
+            user32.ClientToScreen(hwnd, ctypes.byref(pt))
+            user32.ScreenToClient(filha, ctypes.byref(pt))
+            return filha, pt.x, pt.y
+    return hwnd, x, y
+
+
+def mover(hwnd, x, y, modo="top"):
+    h, x, y = _alvo(hwnd, x, y, modo)
+    user32.PostMessageW(h, WM_MOUSEMOVE, 0, _lp(x, y))
+
+
+def clicar(hwnd, x, y, modo="top"):
+    h, x, y = _alvo(hwnd, x, y, modo)
+    user32.PostMessageW(h, WM_MOUSEMOVE, 0, _lp(x, y))
     time.sleep(0.06)
-    user32.PostMessageW(hwnd, WM_LBUTTONDOWN, MK_LBUTTON, _lp(x, y))
+    user32.PostMessageW(h, WM_LBUTTONDOWN, MK_LBUTTON, _lp(x, y))
     time.sleep(0.05)
-    user32.PostMessageW(hwnd, WM_LBUTTONUP, 0, _lp(x, y))
+    user32.PostMessageW(h, WM_LBUTTONUP, 0, _lp(x, y))
 
 
 def arrastar(hwnd, x0, y0, x1, y1, passo_px=5):
@@ -217,10 +250,12 @@ def _lparam_tecla(vk, subindo=False, repeticao=1):
     return lp
 
 
-def tecla(hwnd, nome, duracao=0.05):
+def tecla(hwnd, nome, duracao=0.05, modo="top"):
     """Aperta e solta uma tecla (ou segura por `duracao` segundos, ex.: barra de espaco
     para carregar a forca do tiro)."""
     vk = _vk(nome)
+    if modo == "filha":
+        hwnd = filha_de_entrada(hwnd) or hwnd
     user32.PostMessageW(hwnd, WM_KEYDOWN, vk, _lparam_tecla(vk))
     fim = time.time() + duracao
     while time.time() < fim:   # o Windows repete a tecla enquanto ela esta segura

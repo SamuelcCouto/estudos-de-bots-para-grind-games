@@ -59,3 +59,22 @@ Coordenadas = pixels da area cliente 1922x1034 (menus ficam sempre no mesmo luga
 ### Proxima etapa (fase 2): navegador
 Maquina de estados que reconhece a tela por imagem e executa os cliques acima, sem atirar (o usuario atira) ->
 depois a fase 3 adiciona o tiro (achar personagem/alvo, distancia -> forca pelas tabelas, espaco pelo tempo).
+
+
+## Itens e combos (explicacao do usuario, para a fase 3)
+- Os itens ficam na coluna da direita da batalha (1..8); ficam CINZA quando a stamina (energia) acaba -> validacao do bot.
+- Item 1: 3 tiros, dano bem menor (quase nunca usado). Item 2: "tridente" - 3 tiros (1x por turno).
+  Item 3: dispara 2x com % menos de dano. 2+3 = duas rajadas de tres. Item 4: +50% de potencia (potencializador).
+  Do 4 em diante: so potencializadores (podem ser usados quantas vezes quiser, se houver stamina).
+- Limites por turno: itens 1 e 3 ate 2x; item 2 ate 1x.
+- Nao ha combo padrao: 2 3 4, 3 4 4, e com a evolucao 2 3 4 4 4... O bot precisa escolher o combo conforme a stamina.
+- Angulo: depende da rota (regua no rosto do personagem); o usuario sobe o angulo ate pegar na hitbox do boss.
+- Vento: irrelevante nas instancias (hitboxes enormes) -> backlog. O bot deve identificar a hitbox do boss.
+- Tarefas ao fim de cada volta (3 bosses) NAO acumulam: tem que coletar; 3a carta e VIP, abre pop-up de custo pequeno: sempre sim.
+- Painel de Tarefas: itens prontos tem selo verde "OK!"; botao "Obter recompensa" vermelho = coletavel, cinza = nada.
+
+## Fase 2 (navegador) - decisoes tecnicas
+- Visao: cada tela tem 2 recortes fixos (templates/estados/) extraidos da gravacao e um limiar calibrado;
+  imagem normalizada para 1280 de largura. Cliques sao em coordenadas dessa mesma escala (x client/1280).
+- Validado so no simulador com quadros da propria gravacao (testes/test_navegador.py): falta provar em jogo
+  que o clique PostMessage chega (o bot alterna "janela principal" / "janela interna do Chromium").

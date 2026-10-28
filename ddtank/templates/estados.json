@@ -1,0 +1,215 @@
+{
+ "_largura_ref": 1280,
+ "estados": {
+  "BATALHA": {
+   "limiar": 0.416,
+   "patches": [
+    {
+     "arquivo": "BATALHA_0.png",
+     "x": 324,
+     "y": 503
+    },
+    {
+     "arquivo": "BATALHA_1.png",
+     "x": 881,
+     "y": 525
+    }
+   ]
+  },
+  "CARTAS": {
+   "limiar": 0.736,
+   "patches": [
+    {
+     "arquivo": "CARTAS_0.png",
+     "x": 410,
+     "y": 171
+    },
+    {
+     "arquivo": "CARTAS_1.png",
+     "x": 892,
+     "y": 176
+    }
+   ]
+  },
+  "CENTRAL": {
+   "limiar": 0.604,
+   "patches": [
+    {
+     "arquivo": "CENTRAL_0.png",
+     "x": 863,
+     "y": 243
+    },
+    {
+     "arquivo": "CENTRAL_1.png",
+     "x": 555,
+     "y": 162
+    }
+   ]
+  },
+  "CLIQUE_JOGO": {
+   "limiar": 0.645,
+   "patches": [
+    {
+     "arquivo": "CLIQUE_JOGO_0.png",
+     "x": 641,
+     "y": 371
+    },
+    {
+     "arquivo": "CLIQUE_JOGO_1.png",
+     "x": 900,
+     "y": 517
+    }
+   ]
+  },
+  "CONFIG_SEL": {
+   "limiar": 0.687,
+   "patches": [
+    {
+     "arquivo": "CONFIG_SEL_0.png",
+     "x": 437,
+     "y": 374
+    },
+    {
+     "arquivo": "CONFIG_SEL_1.png",
+     "x": 574,
+     "y": 449
+    }
+   ]
+  },
+  "CONFIG_VAZIA": {
+   "limiar": 0.631,
+   "patches": [
+    {
+     "arquivo": "CONFIG_VAZIA_0.png",
+     "x": 431,
+     "y": 438
+    },
+    {
+     "arquivo": "CONFIG_VAZIA_1.png",
+     "x": 567,
+     "y": 416
+    }
+   ]
+  },
+  "MAPA": {
+   "limiar": 0.579,
+   "patches": [
+    {
+     "arquivo": "MAPA_0.png",
+     "x": 822,
+     "y": 164
+    },
+    {
+     "arquivo": "MAPA_1.png",
+     "x": 888,
+     "y": 238
+    }
+   ]
+  },
+  "POPUP_CARTA": {
+   "limiar": 0.81,
+   "patches": [
+    {
+     "arquivo": "POPUP_CARTA_0.png",
+     "x": 678,
+     "y": 403
+    },
+    {
+     "arquivo": "POPUP_CARTA_1.png",
+     "x": 518,
+     "y": 289
+    }
+   ]
+  },
+  "POPUP_SOZINHO": {
+   "limiar": 0.873,
+   "patches": [
+    {
+     "arquivo": "POPUP_SOZINHO_0.png",
+     "x": 725,
+     "y": 342
+    },
+    {
+     "arquivo": "POPUP_SOZINHO_1.png",
+     "x": 571,
+     "y": 299
+    }
+   ]
+  },
+  "PRONTA_FANTASMA": {
+   "limiar": 0.667,
+   "patches": [
+    {
+     "arquivo": "PRONTA_FANTASMA_0.png",
+     "x": 653,
+     "y": 196
+    },
+    {
+     "arquivo": "PRONTA_FANTASMA_1.png",
+     "x": 688,
+     "y": 448
+    }
+   ]
+  },
+  "PRONTA_MINHOCAO": {
+   "limiar": 0.665,
+   "patches": [
+    {
+     "arquivo": "PRONTA_MINHOCAO_0.png",
+     "x": 652,
+     "y": 254
+    },
+    {
+     "arquivo": "PRONTA_MINHOCAO_1.png",
+     "x": 719,
+     "y": 443
+    }
+   ]
+  },
+  "PRONTA_PROFUNDEZAS": {
+   "limiar": 0.728,
+   "patches": [
+    {
+     "arquivo": "PRONTA_PROFUNDEZAS_0.png",
+     "x": 602,
+     "y": 199
+    },
+    {
+     "arquivo": "PRONTA_PROFUNDEZAS_1.png",
+     "x": 704,
+     "y": 450
+    }
+   ]
+  },
+  "SALA_VAZIA": {
+   "limiar": 0.692,
+   "patches": [
+    {
+     "arquivo": "SALA_VAZIA_0.png",
+     "x": 608,
+     "y": 195
+    },
+    {
+     "arquivo": "SALA_VAZIA_1.png",
+     "x": 745,
+     "y": 370
+    }
+   ]
+  },
+  "TAREFA": {
+   "limiar": 0.561,
+   "patches": [
+    {
+     "arquivo": "TAREFA_0.png",
+     "x": 772,
+     "y": 474
+    },
+    {
+     "arquivo": "TAREFA_1.png",
+     "x": 573,
+     "y": 462
+    }
+   ]
+  }
+ }
+}

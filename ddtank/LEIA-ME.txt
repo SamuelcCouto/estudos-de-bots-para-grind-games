@@ -56,3 +56,21 @@ Depois:  ATUALIZAR.bat = baixa as novidades.  ENVIAR_SESSAO.bat = envia os zips 
 O GRAVAR_SESSAO.bat ja pergunta no fim se quer enviar.
 
 ATALHOS (duplo clique):  LISTAR_JANELAS.bat | DIAGNOSTICO.bat | GRAVAR_SESSAO.bat | ENVIAR_SESSAO.bat | ATUALIZAR.bat
+
+
+NAVEGADOR (fase 2) - percorre a rota de instancias sozinho
+==========================================================
+Rota: Fantasma -> Profundezas -> O Minhocao -> coleta as Tarefas -> Central -> recomeca.
+A BATALHA ainda e sua (o tiro automatico e a fase 3): o bot espera a luta terminar.
+Ele nao usa o seu mouse. Teclas: F8 = pausar/continuar, F10 = sair.
+
+Ordem de teste (faca nesta ordem!):
+ 1) VER_TELA.bat       so mostra qual tela o bot reconhece, a cada segundo (nao clica).
+                       Navegue pelo jogo (mapa, Central, sala, cartas...) e confira se bate.
+ 2) NAVEGAR_SIMULADO.bat  mostra onde clicaria, sem clicar.
+ 3) NAVEGAR.bat        liga de verdade. Comece com o jogo no MAPA ou na CENTRAL.
+Se um clique "nao tiver efeito", o bot troca sozinho o jeito de enviar o clique (janela principal ->
+janela interna do Chromium) e avisa no console. Se mesmo assim nada acontecer, me mande o log
+(logs\navegador_<data>.log) e um print.
+Outros comandos:  python navegador.py --uma-vez   |  --sem-tarefas  |  --comecar-em 2
+Testes sem o jogo:  python testes\test_navegador.py
