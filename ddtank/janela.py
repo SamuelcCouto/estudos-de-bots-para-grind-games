@@ -88,6 +88,22 @@ def achar_janela(titulo="", exe=""):
     return max(candidatas)[1] if candidatas else None
 
 
+PALAVRAS_DO_JOGO = ("ddtank", "ddt", "betel", "gunny")
+
+
+def resolver_janela(titulo="", exe=""):
+    """hwnd da janela do jogo. Sem titulo/exe configurados, procura por palavras comuns
+    (ddtank, betel...) no titulo ou no nome do .exe e usa a maior janela que casar."""
+    if titulo or exe:
+        return achar_janela(titulo, exe)
+    candidatas = []
+    for j in listar_janelas():
+        alvo = (j["titulo"] + " " + j["exe"]).lower()
+        if any(p in alvo for p in PALAVRAS_DO_JOGO) and j["w"] >= 400 and j["h"] >= 300:
+            candidatas.append((j["w"] * j["h"], j["hwnd"]))
+    return max(candidatas)[1] if candidatas else None
+
+
 def tamanho(hwnd):
     r = W.RECT()
     user32.GetClientRect(hwnd, ctypes.byref(r))

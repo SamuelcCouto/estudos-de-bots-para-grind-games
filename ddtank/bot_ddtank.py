@@ -28,11 +28,10 @@ import janela
 def achar(args):
     titulo = args.titulo or config.TITULO_JANELA
     exe = args.exe or config.EXE_JANELA
-    if not (titulo or exe):
-        sys.exit("Diga qual e a janela: rode --listar e use --titulo/--exe (ou preencha config.py).")
-    hwnd = janela.achar_janela(titulo, exe)
+    hwnd = janela.resolver_janela(titulo, exe)
     if not hwnd:
-        sys.exit(f"Janela nao encontrada (titulo='{titulo}', exe='{exe}'). Rode --listar.")
+        sys.exit(f"Janela do jogo nao encontrada (titulo='{titulo}', exe='{exe}'). "
+                 "Rode --listar e use --titulo/--exe (ou preencha config.py).")
     return hwnd
 
 

@@ -30,3 +30,19 @@ Use  --modo tela  para forcar a captura por copia da tela (a janela tem que esta
 
 Pastas: capturas\ (prints) e logs\ ficam so no seu PC (nao vao para o GitHub).
 Coloque suas imagens-modelo do jogo em templates\ (nas proximas fases).
+
+
+GRAVADOR DE SESSAO (observa voce jogando - nao controla nada)
+==============================================================
+Duplo clique em GRAVAR_SESSAO.bat (ou: python gravador.py --nota "rota1") e jogue a rota
+normalmente. Ele registra cliques, teclas (e por quanto tempo cada uma ficou segurada: a
+barra de espaco = a forca do tiro) e prints antes/depois de cada acao.
+  F9  = marcador (ex.: "comecou a luta", "errei o tiro")      F10 = terminar
+So grava quando a janela do jogo esta em primeiro plano; o que voce faz em outros
+programas nao e registrado. (Se digitar no chat do jogo, isso aparece como teclas.)
+Ao terminar, o empacotar.py gera zips de ate 20 MB em sessoes\<sessao>\enviar\.
+Envie-os pelo site do GitHub: branch claude/wonderful-rubin-3oyqi3 > pasta ddtank\sessoes
+> Add file > Upload files. Dica: grave 3 a 5 rodadas completas da rota 1 e use F9 em cada
+inicio de luta.
+
+ATALHOS (duplo clique):  LISTAR_JANELAS.bat  |  DIAGNOSTICO.bat  |  GRAVAR_SESSAO.bat
