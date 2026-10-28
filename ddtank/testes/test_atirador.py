@@ -15,7 +15,8 @@ CUSTOS = {1: 110, 2: 110, 3: 110, 4: 85, 5: 80, 6: 70, 7: 55, 8: 50}
 class Mundo:
     """Simula a batalha: relogio, ponteiro do angulo, barra de forca, stamina/itens, PASS e vida do boss."""
     def __init__(self, angulo=15.0, stamina=240, setas_funcionam_em=("top", "filha"), vez_inicio=1.0, vez_fim=9.0,
-                 boss_hit=True, custo_captura=0.06, exige_repeticao=False, barra_quebrada=False):
+                 boss_hit=True, custo_captura=0.06, exige_repeticao=False, barra_quebrada=False, taxa=38.0):
+        self.taxa = taxa
         self.custo_captura = custo_captura; self.exige_repeticao = exige_repeticao; self.barra_quebrada = barra_quebrada
         self.ultimo_baixo = 0.0; self.keepalive = False
         self.t = 0.0; self.angulo = angulo; self.stamina = stamina; self.modo = "top"
@@ -27,10 +28,10 @@ class Mundo:
     def avancar(self, s):
         self.t += s
         if self.carregando_desde is not None:
-            self.barra = min(100.0, (self.t - self.carregando_desde) * 38.0)
+            self.barra = min(100.0, (self.t - self.carregando_desde) * self.taxa)
             # jogo "exigente": se as repeticoes da tecla param por mais de 80 ms, considera a tecla solta e DISPARA
             if self.exige_repeticao and not self.keepalive and self.t - self.ultimo_baixo > 0.08:
-                self.tiros.append(min(100.0, (self.ultimo_baixo - self.carregando_desde) * 38.0))
+                self.tiros.append(min(100.0, (self.ultimo_baixo - self.carregando_desde) * self.taxa))
                 self.carregando_desde = None; self.atirou_em = self.t
     def novo_turno(self, ini, fim):
         self.vez = (ini, fim); self.atirou_em = None; self.barra = 0.0; self.vida = 100.0; self.stamina = 240
@@ -57,7 +58,7 @@ class Mundo:
     def tecla_cima(self, nome):
         if self.carregando_desde is None:                    # o jogo ja disparou sozinho
             self.avancar(0.1); return
-        real = min(100.0, (self.t - self.carregando_desde) * 38.0)   # forca REAL = tempo segurado (a barra exibida pode estar velha)
+        real = min(100.0, (self.t - self.carregando_desde) * self.taxa)   # forca REAL = tempo segurado (a barra exibida pode estar velha)
         self.avancar(0.1)                                    # atraso do KEYUP
         self.tiros.append(real); self.carregando_desde = None; self.atirou_em = self.t
     def trocar_modo(self): self.modo = "filha" if self.modo == "top" else "top"
@@ -80,11 +81,11 @@ class Leitor:
     itens = staticmethod(lambda f: f["itens"])
     vida = staticmethod(lambda f: f["vida"])
 
-def novo(mundo, sombra=False):
+def novo(mundo, sombra=False, inst="MINHOCAO"):
     tmp = tempfile.NamedTemporaryFile("w", suffix=".json", delete=False); tmp.close(); os.unlink(tmp.name)
     mem = M.Memoria(arq_aprendizado=tmp.name)
     logs = []
-    at = A.Atirador(mundo, mem, lambda: "MINHOCAO", leitor=Leitor(), sombra=sombra, dormir=mundo.dormir,
+    at = A.Atirador(mundo, mem, lambda: inst, leitor=Leitor(), sombra=sombra, dormir=mundo.dormir,
                     agora=lambda: mundo.t, log=logs.append)
     return at, mem, logs, tmp.name
 
@@ -186,3 +187,13 @@ assert at.metodo_forca == "tempo" and len(w.tiros) == 2
 assert w.tiros[0] < 30 and abs(w.tiros[1] - 38) <= 7, w.tiros
 print("troca de metodo de carga apos subforca OK")
 print("\natirador (hipotese da repeticao) OK")
+
+# ------------------------------------------------------------ 12) MEDIDO NO JOGO: a barra enche a 19%/s (metade do esperado)
+w = MundoComThread(taxa=19.0, vez_fim=10.5)
+w.azul, w.boss = (32.0, 57.0), (90.3, 56.5)                      # Fantasma: precisa de ~76%
+at, mem, logs, arq = novo(w, inst="FANTASMA"); rodar(at, w, ate=18)
+print("\n".join(l for l in logs if "tiro dado" in l or "mirar" in l))
+assert len(w.tiros) == 1 and 66 <= w.tiros[0] <= 86, f"forca real {w.tiros} (queria ~76)"
+assert 14 <= at.taxa_forca <= 26, f"taxa aprendida {at.taxa_forca}"
+print("barra a 19%%/s: forca real %.0f%% (queria ~76%%), taxa aprendida %.0f%%/s OK" % (w.tiros[0], at.taxa_forca))
+print("\natirador (velocidade da barra) OK")

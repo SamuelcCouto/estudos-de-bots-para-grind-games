@@ -78,3 +78,11 @@ depois a fase 3 adiciona o tiro (achar personagem/alvo, distancia -> forca pelas
   imagem normalizada para 1280 de largura. Cliques sao em coordenadas dessa mesma escala (x client/1280).
 - Validado so no simulador com quadros da propria gravacao (testes/test_navegador.py): falta provar em jogo
   que o clique PostMessage chega (o bot alterna "janela principal" / "janela interna do Chromium").
+
+
+## Velocidade da barra de forca (medido pelo TESTE_FORCA em 28/10)
+Segurar o espaco 1,0 s deu 19% (nas gravacoes do usuario jogando manualmente dava ~38%/s), igual COM e SEM repeticao
+de tecla -> a barra enche na METADE da velocidade quando o bot joga. Hipoteses: jogo sem foco/segundo plano
+(Chromium reduz timers/frames), ou PC sobrecarregado. O atirador agora mede a taxa em todo tiro (regressao do trace da
+barra), aceita ate ~2,2x o tempo esperado (MAX_SEGURANDO 7 s) e solta olhando a barra, entao funciona em qualquer velocidade.
+Pendente: confirmar se o foco muda a taxa (TESTE_FORCA imprime "jogo em primeiro plano").

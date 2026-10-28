@@ -138,8 +138,9 @@ def cmd_teste_forca(args):
             io.tecla_baixo("espaco", 1); time.sleep(1.0); io.tecla_cima("espaco")
         time.sleep(0.4)
         v = L.forca(N.em_1280(io.capturar()))
-        print(f"  segurou 1,0 s {nome}: barra em {v:.0f}%   (esperado ~38%)")
-    print("\nMe mande esses dois numeros.")
+        foco = "SIM" if io.em_foco() else "NAO (outra janela na frente)"
+        print(f"  segurou 1,0 s {nome}: barra em {v:.0f}%   (esperado ~38%)   | jogo em primeiro plano: {foco}")
+    print("\nMe mande essas duas linhas. Se o jogo NAO estava em primeiro plano, rode de novo clicando no jogo antes de cada tiro.")
 
 
 def main():

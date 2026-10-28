@@ -126,6 +126,11 @@ class IOJanela:
     def trocar_modo(self):
         self.modo_teclas = "filha" if self.modo_teclas == "top" else "top"
 
+    def em_foco(self):
+        """O jogo e a janela em primeiro plano do Windows? (em segundo plano ele pode rodar mais devagar)"""
+        fg = self.j.user32.GetForegroundWindow()
+        return bool(fg) and (fg == self.hwnd or self.j.pid_da_janela(fg) == self.j.pid_da_janela(self.hwnd))
+
 
 _TPL_COSTAS = []
 

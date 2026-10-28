@@ -26,9 +26,9 @@ DURACAO_MAX_DA_VEZ = 11.0     # s: se o PASS nunca some, considera que comecou o
 INTERVALO_LEITURA = 1.0       # s entre leituras gravadas no registro (diagnostico)
 TOLERANCIA_ANGULO = 3.0       # graus
 TAXA_ANGULO_INICIAL = 28.0    # graus/s com a seta apertada (aprende sozinho)
-FORCA_POR_SEGUNDO = 38.0      # % da barra por segundo segurando espaco (medido nas gravacoes)
+FORCA_POR_SEGUNDO = 38.0      # % da barra por segundo segurando espaco (medido nas gravacoes; o bot aprende o valor real)
 ANTECIPACAO_INICIAL = 4.0     # % de folga: solta um pouco antes (atraso da captura + do KEYUP)
-MAX_SEGURANDO = 4.0           # s: trava de seguranca
+MAX_SEGURANDO = 7.0           # s: trava de seguranca (a carga pode andar na METADE da velocidade; ver NOTAS.md)
 MARGEM_TEMPO_MINIMO = 0.35    # s: tolerancia da trava de tempo minimo
 
 
@@ -60,6 +60,7 @@ class Atirador:
         self.ordem = ordem_itens or list(ORDEM_ITENS)
         self.taxa_angulo = TAXA_ANGULO_INICIAL
         self.taxa_forca = FORCA_POR_SEGUNDO       # % por segundo segurando (aprende no metodo "tempo")
+        self.taxa_medida_antes = False
         self.metodo_forca = "barra"               # "barra" = solta olhando a barra; "tempo" = solta pelo relogio
         self.subforcas = 0
         self.antecipacao = ANTECIPACAO_INICIAL
@@ -190,6 +191,7 @@ class Atirador:
             self.reg.evento("turno", fr, inst=inst, azul=azul, boss=boss, previsto=pred, angulo_real=round(angulo_real, 1),
                             forca_real=round(forca_real), alvo_forca=round(alvo_forca), itens=apertados, itens_coloridos_inicio=itens0,
                             soltou=soltou, metodo_forca=metodo_usado, segurou_s=round(segurou, 2), trace_barra=trace[-40:],
+                            taxa_forca=round(self.taxa_forca, 1), jogo_em_foco=(self.io.em_foco() if hasattr(self.io, "em_foco") else None),
                             tempos={"angulo": round(t_ang, 2), "itens": round(t_itens - t_ang, 2), "carga": round(t_tiro - t_itens, 2)})
 
     # ------------------------------------------------------------------ angulo
@@ -261,6 +263,16 @@ class Atirador:
         else:
             self.io.tecla_cima(TECLA_ESPACO)
 
+    @staticmethod
+    def _taxa_do_trace(trace):
+        """% por segundo da barra, pela inclinacao dos pontos (tempo, %) entre 5% e 95%. None se nao der."""
+        pts = [(t, v) for t, v in trace if 5 <= v <= 95]
+        if len(pts) < 3 or pts[-1][0] - pts[0][0] < 0.3:
+            return None
+        t, v = np.array(pts, dtype=float).T
+        taxa = float(np.polyfit(t, v, 1)[0])
+        return taxa if 5 < taxa < 120 else None
+
     def carregar(self, alvo):
         """Segura ESPACO e solta na forca alvo. Dois metodos:
           "barra": solta quando a barra chega em (alvo - antecipacao) - com trava de tempo minimo (a barra pode
@@ -272,11 +284,13 @@ class Atirador:
         por_tempo = self.metodo_forca == "tempo"
         minimo = max(0.0, quer / self.taxa_forca - MARGEM_TEMPO_MINIMO)
         tempo_alvo = quer / self.taxa_forca
-        limite = min(MAX_SEGURANDO, alvo / self.taxa_forca + 1.0)
+        # a barra pode encher bem mais devagar que o esperado (medido: 19%/s em vez de 38%/s): deixa ate ~2,2x o tempo
+        limite = min(MAX_SEGURANDO, alvo / (0.45 * self.taxa_forca) + 0.5)
         repetir_no_laco = self._segurar()
         rep = 1
         t0 = self.agora()
         v, motivo, trace, faltas = 0.0, "tempo_limite", [], 0
+        visto_baixo = False
         while self.agora() - t0 < limite:
             f = self.ver()
             dur = self.agora() - t0
@@ -290,11 +304,13 @@ class Atirador:
                     faltas = 0
                 v = self.lei.forca(f)
                 trace.append((round(dur, 2), round(v)))
+                if v <= 12:
+                    visto_baixo = True
                 if por_tempo:
                     if dur >= tempo_alvo:
                         motivo = "tempo_alvo"
                         break
-                elif v >= quer and dur >= minimo:
+                elif v >= quer and dur >= minimo and (visto_baixo or dur >= 2 * minimo + 0.5):
                     motivo = "alvo"
                     break
             elif por_tempo and dur >= tempo_alvo:
@@ -307,11 +323,17 @@ class Atirador:
         self._soltar()
         self.dormir(0.25)
         final = self.lei.forca(self.ver())
+        taxa_medida = self._taxa_do_trace(trace)
+        if taxa_medida:
+            # a 1a medicao real substitui o valor padrao; depois, media movel
+            peso = 0.5 if self.taxa_medida_antes else 1.0
+            self.taxa_forca = float(np.clip((1 - peso) * self.taxa_forca + peso * taxa_medida, 8.0, 80.0))
+            self.taxa_medida_antes = True
         if final > 0:
             if motivo == "alvo":
                 self.antecipacao = float(np.clip(self.antecipacao + 0.5 * (final - alvo), 0.0, 12.0))   # corrige o atraso
-            elif motivo == "tempo_alvo" and segurou > 0.3:
-                self.taxa_forca = float(np.clip(0.7 * self.taxa_forca + 0.3 * (final / segurou), 15.0, 80.0))
+            elif motivo == "tempo_alvo" and segurou > 0.3 and not taxa_medida:
+                self.taxa_forca = float(np.clip(0.7 * self.taxa_forca + 0.3 * (final / segurou), 8.0, 80.0))
         return (final if final > 0 else v), motivo, trace, segurou
 
     # ------------------------------------------------------------------ resultado
