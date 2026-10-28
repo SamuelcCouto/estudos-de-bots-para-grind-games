@@ -42,7 +42,13 @@ SALA_ICONE_TAREFAS = (806, 533)
 SALA_PORTA = (949, 522)
 TAREFA_FECHAR = (881, 190)
 TAREFA_BOTAO = (760, 513)
-CARTAS_PARA_ABRIR = [(556, 380), (644, 380), (732, 380)]   # 3 cartas da fileira do meio
+CARTAS_COLUNAS = [380, 468, 556, 644, 732, 820, 907]
+CARTAS_LINHAS = [262, 380, 498]
+# ordem de preferencia: fileira do meio (colunas 3, 4, 5), depois o resto
+CARTAS_PREFERENCIA = [(556, 380), (644, 380), (732, 380)] + [(x, y) for y in (380, 262, 498) for x in CARTAS_COLUNAS]
+CARTAS_VIRADAS_PARA_PAGAR = 3     # 2 gratis + a 3a (VIP, com pop-up de confirmacao)
+SLOTS_SALA = [(516, 242), (394, 366), (516, 366)]   # 3 vagas vazias da sala
+BRILHO_SLOT_ABERTO = 195          # aberto ~226 (creme); fechado ~110 (marrom com X)
 
 ROTA_PADRAO = ["FANTASMA", "PROFUNDEZAS", "MINHOCAO"]
 INSTANCIA_NA_CONFIG = {"FANTASMA": (509, 313), "PROFUNDEZAS": (591, 313), "MINHOCAO": (675, 318)}
@@ -75,6 +81,32 @@ class IOJanela:
 
     def tecla_apertada(self, vk):
         return bool(self.j.user32.GetAsyncKeyState(vk) & 0x8000)
+
+
+_TPL_COSTAS = []
+
+
+def cartas_de_costas(f):
+    """Centros (x, y) das cartas que ainda estao viradas para baixo (inclui a que so ficou com a
+    borda amarela). Compara o bauzinho do verso com o de cada uma das 21 posicoes."""
+    if not _TPL_COSTAS:
+        _TPL_COSTAS.append(cv2.imread(os.path.join(config.PASTA_TEMPLATES, "costas_carta.png"), cv2.IMREAD_GRAYSCALE))
+    t = _TPL_COSTAS[0]
+    th, tw = t.shape
+    g = cv2.GaussianBlur(cv2.cvtColor(f, cv2.COLOR_BGR2GRAY), (3, 3), 0)
+    achadas = []
+    for y in CARTAS_LINHAS:
+        for x in CARTAS_COLUNAS:
+            roi = g[y - th // 2 - 8:y + th // 2 + 8, x - tw // 2 - 8:x + tw // 2 + 8]
+            if roi.shape[0] >= th and roi.shape[1] >= tw and cv2.matchTemplate(roi, t, cv2.TM_CCOEFF_NORMED).max() > 0.55:
+                achadas.append((x, y))
+    return achadas
+
+
+def slots_abertos(f):
+    """Vagas da sala ainda abertas (creme claro). Fechadas (marrom com X) ou ocupadas por alguem nao contam."""
+    g = cv2.cvtColor(f, cv2.COLOR_BGR2GRAY)
+    return [(x, y) for x, y in SLOTS_SALA if g[y - 30:y + 30, x - 40:x + 40].mean() > BRILHO_SLOT_ABERTO]
 
 
 def em_1280(img):
@@ -130,7 +162,6 @@ class Navegador:
         self.voltas = 0
         self.novo_ciclo()
         self.cartas_vistas = False
-        self.cartas_clicadas = 0
         self.perdido_desde = None
         self.batalha_desde = None
         self.ultimo_aviso = 0.0
@@ -142,7 +173,8 @@ class Navegador:
         self.run_completa = False
         self.tarefas_ok = False
         self.cartas_vistas = False
-        self.cartas_clicadas = 0
+        self.tentativas_carta = Counter()
+        self.tentativas_slot = 0
 
     @property
     def instancia(self):
@@ -219,7 +251,7 @@ class Navegador:
         if not self.cartas_vistas:
             return
         self.cartas_vistas = False
-        self.cartas_clicadas = 0
+        self.tentativas_carta = Counter()
         self.idx += 1
         if self.idx >= len(self.rota):
             self.run_completa = True
@@ -262,17 +294,33 @@ class Navegador:
             if nome != self.instancia and nome in self.rota:
                 self.log(f"   sala ja esta em {nome}; sigo a partir dela.")
                 self.idx = self.rota.index(nome)
+            f, _e = self.ver()
+            abertos = slots_abertos(f) if f is not None else []
+            if abertos and self.tentativas_slot < 6:
+                self.tentativas_slot += 1
+                self.log(f"[{estado}] fechando vaga aberta da sala {abertos[0]} ({len(abertos)} aberta(s))")
+                self.clicar(abertos[0])
+                self.dormir(0.9)
+                return
             self.clicar_e_verificar(estado, SALA_INICIO, descricao=f"Inicio ({nome})", espera=6.0)
         elif estado == "CARTAS":
             self.cartas_vistas = True
-            if self.cartas_clicadas < len(CARTAS_PARA_ABRIR):
-                ponto = CARTAS_PARA_ABRIR[self.cartas_clicadas]
-                self.cartas_clicadas += 1
-                self.log(f"[CARTAS] virando a carta {self.cartas_clicadas} {ponto}")
-                self.clicar(ponto)
-                self.dormir(1.2)
-            else:
-                self.dormir(1.5)
+            f, _e = self.ver()
+            if f is None:
+                return
+            costas = cartas_de_costas(f)
+            viradas = len(CARTAS_LINHAS) * len(CARTAS_COLUNAS) - len(costas)
+            if viradas >= CARTAS_VIRADAS_PARA_PAGAR:
+                self.dormir(1.5)       # ja viramos as 3 (ou a contagem acabou e tudo abriu)
+                return
+            alvo = next((p for p in CARTAS_PREFERENCIA if p in costas and self.tentativas_carta[p] < 2), None)
+            if alvo is None:
+                self.dormir(1.0)
+                return
+            self.tentativas_carta[alvo] += 1
+            self.log(f"[CARTAS] {viradas} virada(s); virando a carta em {alvo}")
+            self.clicar(alvo)
+            self.dormir(1.3)
         elif estado == "TAREFA":
             self.coletar_tarefas()
         elif estado == "BATALHA":
@@ -350,16 +398,23 @@ def main():
     print("Janela:", janela.descrever_janela(hwnd))
 
     if args.so_ver:
-        print("Mostrando a tela detectada (Ctrl+C para sair). Navegue pelo jogo e veja se bate.")
+        print("Telas que o bot conhece (so as da rota de instancias):")
+        print("  " + ", ".join(det.estados))
+        print("Qualquer outra tela (Salao de jogos, PvP, resultado, carregando...) aparece como (desconhecida): normal.")
+        print("Navegue pelo jogo; so imprimo quando a tela muda. Ctrl+C para sair.\n")
+        ultimo = None
         while True:
             img = io.capturar()
             if img is not None:
-                notas = det.pontuar(estados_mod.normalizar(img))
-                achadas = det.detectar(estados_mod.normalizar(img))
-                top = sorted(notas.items(), key=lambda kv: -kv[1])[:3]
-                print(f"{datetime.datetime.now():%H:%M:%S}  detectado: {achadas or '(desconhecida)'}   "
-                      f"melhores notas: " + ", ".join(f"{n} {v:.2f}" for n, v in top))
-            time.sleep(1.0)
+                g = estados_mod.normalizar(img)
+                achadas = det.detectar(g)
+                if achadas != ultimo:
+                    notas = det.pontuar(g)
+                    top = sorted(notas.items(), key=lambda kv: -kv[1])[:3]
+                    print(f"{datetime.datetime.now():%H:%M:%S}  detectado: {achadas or '(desconhecida)'}   "
+                          f"mais parecidas: " + ", ".join(f"{n} {v:.2f}" for n, v in top), flush=True)
+                    ultimo = achadas
+            time.sleep(0.7)
 
     os.makedirs(config.PASTA_LOGS, exist_ok=True)
     arq = open(os.path.join(config.PASTA_LOGS, f"navegador_{datetime.datetime.now():%Y%m%d}.log"), "a", encoding="utf-8")
