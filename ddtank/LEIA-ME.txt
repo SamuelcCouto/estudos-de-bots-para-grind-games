@@ -1,0 +1,32 @@
+DDTANK - FASE 1 (captura e controle da janela)
+==============================================
+
+Esta fase ainda nao joga. Ela so confirma que o bot ENXERGA o jogo e consegue
+CLICAR / APERTAR TECLAS nele sem usar o seu mouse. Nada do launcher e modificado.
+
+Requisitos: Windows, Python, e:  pip install numpy opencv-python-headless
+Jogo em 1920x1080 com escala do Windows em 100% (se possivel).
+
+Passo a passo (na pasta ddtank, com o jogo aberto e logado)
+-----------------------------------------------------------
+1) python bot_ddtank.py --listar
+   Procure a linha do launcher/jogo e anote o EXE e um trecho do TITULO.
+   Preencha TITULO_JANELA / EXE_JANELA em config.py (ou use --titulo / --exe).
+
+2) python bot_ddtank.py --diagnostico
+   Salva duas capturas em ddtank\capturas (modos "print" e "tela") e diz se estao
+   pretas, brancas ou OK. Mande-me o texto que aparecer e os PNGs.
+
+3) Deixe o jogo numa tela qualquer e teste:
+   python bot_ddtank.py --clicar 960 540        (clica no meio e salva a captura com o alvo marcado)
+   python bot_ddtank.py --tecla espaco --segundos 1.5
+
+4) Para me mostrar como uma partida acontece (bala, vento, barra de forca):
+   python bot_ddtank.py --gravar 1 --n 60       (60 capturas, 1 por segundo)
+
+Se "print" der imagem PRETA, o launcher precisa ser aberto com flags que mantem o
+jogo desenhando coberto (como no INICIAR_FARM.bat do Social Empires) - me avise.
+Use  --modo tela  para forcar a captura por copia da tela (a janela tem que estar visivel).
+
+Pastas: capturas\ (prints) e logs\ ficam so no seu PC (nao vao para o GitHub).
+Coloque suas imagens-modelo do jogo em templates\ (nas proximas fases).
