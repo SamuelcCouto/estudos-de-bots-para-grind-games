@@ -134,7 +134,8 @@ for nome, acerto in [("DANO_ACERTO_4828", True), ("DANO_ACERTO_1076", True), ("D
 for nome, cheio in [("POW_CHEIO", True), ("POW_CHEIO_FRACO", True), ("POW_VAZIO", False), ("POW_USADO", False)]:
     assert L.pow_cheio(colar(nome, 915, 495)) == cheio, nome
 assert not any(L.pow_cheio(img(f"VEZ_SIM_{i}")) for i in (21, 74, 214, 415, 602)), "instancias normais: POW vazio"
-f = img("BATALHA_PERICAO")                      # 1o turno do usuario no Pericao (antes dos itens)
+# 1o turno do usuario no Pericao (antes dos itens). PNG: recomprimir em JPEG apaga o pontinho azul e mexe no ponteiro.
+f = cv2.imread(os.path.join(AQUI, "frames", "BATALHA_PERICAO.png"))
 j, b = L.pontos_minimapa(f)
 assert perto(j, (10.5, 58.4)) and perto(b, (76.3, 61.4)) and L.minha_vez(f), (j, b)
 assert L.mira(f) == (4.5, 1) and 40 <= L.vida_boss(f) <= 46, (L.mira(f), L.vida_boss(f))   # vida do servidor: 43%
