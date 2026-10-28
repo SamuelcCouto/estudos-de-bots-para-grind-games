@@ -123,3 +123,13 @@ O leitor de angulo atual so procura o ponteiro do lado direito (8-90 graus): vir
 antiga (ou 90). Para atirar no boss a esquerda (dx<0) falta: tocar esquerda, ler o ponteiro dos dois lados (ou ler o
 NUMERO do mostrador), e depois tocar direita para voltar. Hoje, com o boss a esquerda, o bot usa o acerto mais
 parecido e avisa no log ("boss a esquerda/em cima de voce").
+
+## Mostrador perto de 0 grau (gravacao do bot 20261028_043449, Profundezas)
+O angulo da arma continua do tiro anterior (Fantasma: 21) e o chao inclinado da Profundezas desconta ~17-20 graus: o
+mostrador mostrou "1" (ponteiro quase horizontal). leitura.angulo so procurava de 8 a 90 graus -> leu lixo (90 / 25 / 8),
+o bot apertou "baixo" (ja no limite), achou que as setas nao funcionavam e pulou 3 turnos. Agora a faixa e -30..100
+(le -2,5 / -4,5 para o "1"; o ponteiro sempre le ~2-5 graus abaixo do numero, o que e coerente com a memoria, gravada
+com o mesmo leitor). A faixa verde do mostrador = angulos permitidos naquele terreno.
+Se a seta nao mexe o ponteiro, o bot testa a seta CONTRARIA: se ela mexe, o teclado funciona e o angulo esta no limite
+-> volta e atira dali com a forca recalculada (antes ele trocava o modo de entrada e desistia).
+Ideia futura: ler o NUMERO do mostrador (angulo exato; a cor do numero muda: amarelo/vermelho/ciano/verde).

@@ -137,6 +137,8 @@ class Atirador:
         if self.agiu:
             # o PASS nunca sumiu entre dois turnos (ex.: o boss nao joga): depois de uma vez inteira, e outro turno
             if self.acao_em is not None and agora - self.acao_em > DURACAO_MAX_DA_VEZ:
+                if self.lei.vida(f) <= 0:
+                    return                            # boss morto: o PASS fica na tela ate a vitoria, nao e outro turno
                 self.log("   (o PASS continua visivel ha muito tempo: tratando como um novo turno)")
                 self.agiu, self.vez_desde = False, None
             else:
@@ -265,6 +267,8 @@ class Atirador:
             mudou = b - a
             if abs(mudou) < 0.8:
                 sem_efeito += 1
+                if sem_efeito == 2 and self._no_limite(tecla, b):
+                    return True
                 if sem_efeito == 1 and hasattr(self.io, "clicar_ref"):
                     # o foco do teclado pode estar no chat: um clique na CENA devolve o teclado ao jogo
                     self.log("   ! as setas nao mudaram o angulo: clicando na cena para devolver o foco do teclado ao jogo (e nao ao chat).")
@@ -284,6 +288,23 @@ class Atirador:
                 if 5 < taxa < 120 and mudou * erro > 0:       # aprende a velocidade do angulo
                     self.taxa_angulo = 0.6 * self.taxa_angulo + 0.4 * taxa
         return abs(alvo - self.lei.angulo(self.ver())) <= TOLERANCIA_ANGULO * 2
+
+    def _no_limite(self, tecla, a):
+        """A seta nao mexeu o ponteiro: teclado sem foco, ou o angulo ja esta no LIMITE da arma (no terreno inclinado o
+        limite muda). Testa a seta contraria: se ELA mexe, o teclado funciona e estamos no limite -> volta e atira daqui
+        (a forca e recalculada para o angulo real)."""
+        contraria = "baixo" if tecla == "cima" else "cima"
+        self.io.tecla(contraria, 0.15)
+        self.dormir(0.1)
+        b = self.lei.angulo(self.ver())
+        if abs(b - a) < 0.8:
+            return False
+        self.io.tecla(tecla, 0.3)                 # volta para o limite (o mais perto possivel do alvo)
+        self.dormir(0.1)
+        final = self.lei.angulo(self.ver())
+        self.log(f"   ! o angulo nao {'sobe' if tecla == 'cima' else 'desce'} alem de {final:.0f} graus (limite da arma neste "
+                 f"terreno; a seta contraria funciona): atirando deste angulo.")
+        return True
 
     # ------------------------------------------------------------------ itens
     def aplicar_itens(self):

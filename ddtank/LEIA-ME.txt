@@ -140,3 +140,8 @@ IMPORTANTE (versao de 28/10, tarde)
   Forca: o bot escolhe a forca com MAIOR CHANCE DE ACERTO ("chance de acerto ~95%" no log); se voce ja acertou daquela
   mesma posicao, ele repete a sua forca quando a fisica concorda.
   Boss a ESQUERDA do seu boneco: ainda nao vira o boneco (precisa de mais estudo do mostrador) - ele avisa no log.
+
+* ANGULO PERTO DE ZERO (28/10, madrugada): na Profundezas o chao inclinado faz o mostrador cair para ~1 grau. O bot so
+  sabia ler o ponteiro entre 8 e 90 graus, leu errado, apertou a seta para o lado errado e desistiu do turno ("parou de
+  mexer"). Agora le de -30 a 100 graus. E se uma seta nao mexer o ponteiro, ele testa a outra: se a outra funciona, o
+  angulo esta no limite da arma e ele atira dali, recalculando a forca.

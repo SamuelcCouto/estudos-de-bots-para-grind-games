@@ -18,6 +18,17 @@ erros = [abs(L.angulo(img(f"ANG_{i}")) - v) for i, v in GAB.items()]
 print(f"angulo: erro medio {np.mean(erros):.1f} graus, maximo {np.max(erros):.1f}")
 assert np.mean(erros) < 3.2 and np.max(erros) < 6, "leitura do angulo piorou"
 
+# mira quase na horizontal (Profundezas, mostrador "1"): a leitura antiga so ia de 8 a 90 graus e devolvia lixo (90),
+# o bot apertava "baixo" no limite e desistia do turno. Recortes do mostrador colados num quadro preto.
+def so_mostrador(nome):
+    f = np.zeros((720, 1280, 3), np.uint8)
+    f[470:580, 290:420] = cv2.imread(os.path.join(AQUI, "frames", nome + ".png"))
+    return f
+for nome, gab in [("MOSTRADOR_1_VERMELHO", 1), ("MOSTRADOR_1_LARANJA", 1), ("MOSTRADOR_15", 15)]:
+    a = L.angulo(so_mostrador(nome))
+    print(f"mostrador {gab:2d} -> lido {a:.1f}")
+    assert gab - 7 <= a <= gab + 1.5, (nome, a)   # o ponteiro le ~2-5 graus abaixo do numero
+
 # sua vez (PASS)
 assert all(L.minha_vez(img(f"VEZ_SIM_{i}")) for i in (21, 74, 214, 415, 602))
 assert not any(L.minha_vez(img(f"VEZ_NAO_{i}")) for i in (2, 66, 92, 355, 580))

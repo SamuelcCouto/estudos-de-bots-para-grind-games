@@ -42,7 +42,7 @@ def minha_vez(f):
     return float(cv2.matchTemplate(roi, t, cv2.TM_CCOEFF_NORMED).max()) >= PASS_LIMIAR
 
 
-def angulo(f, pivo=MOSTRADOR_PIVO, rmin=10, rmax=28, faixa=(8, 90), passo=0.5):
+def angulo(f, pivo=MOSTRADOR_PIVO, rmin=10, rmax=28, faixa=(-30, 100), passo=0.5):
     """Angulo de mira em graus, pela direcao do ponteiro (linha vermelha/laranja saindo do pivo).
     Erro medio ~2 graus (o ponteiro laranja tende a ler ~3 graus abaixo do vermelho)."""
     fi = f.astype(np.float32)

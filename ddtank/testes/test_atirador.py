@@ -50,6 +50,8 @@ class Mundo:
         self.teclas.append((nome, round(dur, 2)))
         if self.teclado_ok() and nome in ("cima", "baixo") and self.modo in self.setas_ok:
             self.angulo += (1 if nome == "cima" else -1) * 30.0 * dur
+            if self.limites_angulo:                          # a arma nao passa do limite (muda com a inclinacao do chao)
+                self.angulo = min(max(self.angulo, self.limites_angulo[0]), self.limites_angulo[1])
         if self.teclado_ok() and nome.isdigit():
             item = int(nome)
             if self.stamina >= CUSTOS[item]:
@@ -66,6 +68,7 @@ class Mundo:
         self.tiros.append(real); self.carregando_desde = None; self.atirou_em = self.t
     def trocar_modo(self): self.modo = "filha" if self.modo == "top" else "top"
     # --- foco do teclado (so em Mundos que definem nivel_exigido)
+    limites_angulo = None
     nivel_exigido = 0; foco_nivel = 1; devolvidos = 0; chat_com_foco = False; cliques_cena = 0
     def clicar_ref(self, x, y, modo="top"):
         self.cliques_cena += 1; self.chat_com_foco = False       # clicar na cena devolve o teclado ao jogo
@@ -254,3 +257,22 @@ p = mem.prever("FANTASMA", (32.0, 57.0), (90.3, 56.5))
 print("memoria com 4 erros antigos:", mem.ignorados, "ignorados; previsto", round(p["forca"]), "%", p["origem"])
 assert mem.ignorados == 4 and p["forca"] >= 65, p
 print("\natirador (minimapa) OK")
+
+# ------------------------------------------------------------ 17) SEU LOG (Profundezas): mira em 1 grau (o ponteiro le ~-3)
+# A leitura antiga nao enxergava abaixo de 8 graus, lia lixo (90), apertava "baixo" e desistia do turno.
+w = MundoComThread(angulo=-3.0)
+w.azul, w.boss = (27.0, 47.8), (52.9, 48.9)
+at, mem, logs, arq = novo(w, inst="PROFUNDEZAS"); rodar(at, w, ate=16)
+print("\n".join(l for l in logs if "mirar" in l or "tiro dado" in l or "!" in l))
+assert len(w.tiros) == 1 and abs(w.angulo - 33.5) <= 3.5, (w.angulo, w.tiros)
+print("mira saindo de perto de 0 grau OK")
+
+# ------------------------------------------------------------ 18) o angulo bate no LIMITE da arma antes do alvo
+w = MundoComThread(angulo=15.0); w.limites_angulo = (0.0, 24.0)
+at, mem, logs, arq = novo(w); rodar(at, w, ate=16)
+print("\n".join(l for l in logs if "limite" in l or "tiro dado" in l or "recalculada" in l or "Pulando" in l))
+assert len(w.tiros) == 1 and abs(w.angulo - 24) <= 1.5, ("atirou do limite?", w.angulo, w.tiros)
+assert any("limite" in l for l in logs) and any("recalculada" in l for l in logs), "nao reconheceu o limite / nao recalculou a forca"
+assert not any(m == "filha" for m in [w.modo]), "trocou o modo de entrada a toa (as setas funcionavam)"
+print("limite do angulo: atira do limite com a forca recalculada OK")
+print("\natirador (angulo baixo e limite) OK")
