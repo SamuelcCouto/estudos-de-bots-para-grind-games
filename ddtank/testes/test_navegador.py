@@ -371,3 +371,75 @@ for escondida in (False, True):
     assert st.fechou and st.rolou >= 1, (st.fechou, st.rolou)
     print(f"tarefas: coletou {st.coletadas} (escondida na lista: {escondida}) e so depois fechou OK")
 print("\ncoleta de TODAS as tarefas OK")
+
+# ---------------------------------------------------------------- ROTA SUL: instancias que o bot nunca viu
+# Escorpiao Rei -> Dragao Gelado -> Rainha Liris (sem escolha de dificuldade). As artes (na configuracao e na sala) aqui sao
+# desenhos inventados: o bot nao tem modelo delas, entao tem que APRENDER na 1a vez e reconhecer depois (inclusive a
+# sala que continua mostrando a instancia que acabou de ser jogada).
+import shutil, tempfile
+import numpy as np
+APRENDIDOS_TESTE = tempfile.mkdtemp()
+N.PASTA_APRENDIDOS = APRENDIDOS_TESTE; N._TPL_CFG.clear(); N._TPL_SALA.clear()
+
+# pergunta da rota ao abrir
+respostas = iter(["x", "s"])
+assert N.perguntar_rota(entrada=lambda _p: next(respostas), saida=lambda *_a: None) == "S"
+assert N.perguntar_rota(entrada=lambda _p: "", saida=lambda *_a: None) == "N"
+assert N.perguntar_rota(entrada=lambda _p: "t", saida=lambda *_a: None) == "T"
+nome_t, rota_t, _ = N.rota_dos_argumentos("T")
+assert rota_t == ["FANTASMA", "PROFUNDEZAS", "MINHOCAO", "ESCORPIAO_REI", "DRAGAO_GELADO", "RAINHA_LIRIS"], rota_t
+print("pergunta N/S/T OK; T =", " > ".join(rota_t))
+
+def arte_inventada(seed, h, w):
+    rng = np.random.default_rng(seed)
+    return cv2.resize(rng.integers(0, 255, (max(1, h // 8), max(1, w // 8), 3)).astype(np.uint8), (w, h), interpolation=cv2.INTER_NEAREST)
+
+class SimNova(Sim2):
+    def __init__(self):
+        super().__init__(); self.dif_cliques = []; self.dif_desde_config = False; self.confirmou_sem_dif = 0
+    def quadro_pronta(self):
+        f = self.quadro_sala("PRONTA_FANTASMA").copy()
+        x0, y0, x1, y1 = N.SALA_ARTE
+        f[y0 - 5:y1 + 5, x0 - 5:x1 + 5] = arte_inventada(10 + self.sala_inst, y1 - y0 + 10, x1 - x0 + 10)
+        return f
+    def capturar(self):
+        t = self.tela
+        if t == "CONFIG_SEL":
+            self.cap += 1
+            f = img("CFG_SEL_FANTASMA").copy()      # painel inteiro da arte trocado: o detector nao reconhece CONFIG_SEL
+            f[390:462, 452:652] = arte_inventada(20 + self.escolhida, 72, 200)
+            return f
+        if t == "SALA_VAZIA" and self.sala_inst is None and self.lutas and len(self.lutas) % len(ROTA) == 0:
+            self.cap += 1; return img("SALA_FINAL")
+        return super().capturar()
+    def clicar(self, x, y, modo):
+        if self.tela == "CONFIG_SEL":
+            for nome, c in N.DIFICULDADE_BOTAO.items():
+                if dentro((x, y), caixa(c, 25)): self.dif_cliques.append(nome); self.dif_desde_config = True; return
+            if dentro((x, y), caixa(N.CONFIG_SIM, 60)):
+                self.confirmou_sem_dif += not self.dif_desde_config
+            for nome, c in N.INSTANCIA_NA_CONFIG.items():   # clicar em outra instancia na grade troca a selecao
+                if dentro((x, y), caixa(c, 30)) and nome in ROTA: self.escolhida = ROTA.index(nome); self.instancias_clicadas.append(nome); return
+        if self.tela == "CONFIG_VAZIA": self.dif_desde_config = False
+        super().clicar(x, y, modo)
+
+nome_s, ROTA_SUL, dif = N.rota_dos_argumentos("S")
+ROTA = ROTA_SUL                     # Sim2 usa a variavel global ROTA
+sim = SimNova(); relogio = [0.0]; logs = []
+nav = N.Navegador(sim, det, rota=ROTA_SUL, dificuldade=dif, dormir=lambda s: relogio.__setitem__(0, relogio[0] + s),
+                  agora=lambda: relogio[0], log=logs.append)
+for _ in range(1200):
+    e = nav.estado_estavel()
+    if e: nav.agir(e)
+    if sim.voltas >= 2: break
+ordem = [ROTA_SUL[i] for i in sim.lutas]
+print("\n".join("   " + l for l in logs if "APRENDI" in l))
+print(f"{nome_s}, instancias lutadas:", ordem, "| dificuldades clicadas:", sim.dif_cliques)
+assert sim.voltas >= 2 and ordem[:6] == ROTA_SUL * 2, (sim.voltas, ordem)
+assert sim.dif_cliques == [], f"clicou em dificuldade numa instancia que nao tem: {sim.dif_cliques}"
+aprendidos = sorted(os.listdir(APRENDIDOS_TESTE))
+print("artes aprendidas:", aprendidos)
+assert aprendidos == sorted([f"{p}_{n}.png" for p in ("cfg", "sala") for n in ROTA_SUL]), aprendidos
+assert sum("APRENDI" in l for l in logs) == 6, "aprendeu de novo o que ja sabia"
+shutil.rmtree(APRENDIDOS_TESTE); N._TPL_CFG.clear(); N._TPL_SALA.clear()
+print("Rota Sul OK (aprende as artes sozinho, mantem a ordem, nao mexe na dificuldade)")

@@ -15,6 +15,7 @@ Teclas: F8 = pausar/continuar   F10 = sair
 """
 import argparse
 import datetime
+import glob
 import os
 import sys
 import time
@@ -65,8 +66,26 @@ BRILHO_SLOT_FECHADO = 140         # fechada ~110 (marrom); ocupada por jogador e
 CFG_REGIAO = (490, 395, 610, 455)  # arte da instancia selecionada na janela de configuracao
 CFG_LIMIAR = 0.7                   # certa >= ~0.9; qualquer outra coisa < 0.56
 
-ROTA_PADRAO = ["FANTASMA", "PROFUNDEZAS", "MINHOCAO"]
-INSTANCIA_NA_CONFIG = {"FANTASMA": (509, 313), "PROFUNDEZAS": (591, 313), "MINHOCAO": (675, 318)}
+# grade da aba "Instancia normal" da configuracao da sala (2 linhas x 4 colunas, centro de cada quadro)
+INSTANCIA_NA_CONFIG = {
+    "FANTASMA": (509, 313), "PROFUNDEZAS": (591, 313), "MINHOCAO": (675, 318), "ESCORPIAO_REI": (765, 316),
+    "DRAGAO_GELADO": (505, 357), "RAINHA_LIRIS": (591, 357), "ULTIMA_LUTA": (675, 357), "GATO_PRETO": (765, 357),
+}
+DIFICULDADE_BOTAO = {"NORMAL": (513, 495), "DIFICIL": (646, 495), "HEROI": (770, 495)}
+# rotas: letra -> (nome, instancias em ordem). T = as duas, uma volta so (coleta as tarefas no fim de tudo).
+ROTAS = {
+    "N": ("Rota Norte", ["FANTASMA", "PROFUNDEZAS", "MINHOCAO"]),
+    "S": ("Rota Sul", ["ESCORPIAO_REI", "DRAGAO_GELADO", "RAINHA_LIRIS"]),
+}
+ROTAS["T"] = ("Norte + Sul", ROTAS["N"][1] + ROTAS["S"][1])
+APELIDOS_ROTA = {"1": "N", "2": "S", "NORTE": "N", "SUL": "S", "TODAS": "T", "TUDO": "T", "AMBAS": "T"}
+ROTA_PADRAO = ROTAS["N"][1]
+# dificuldade clicada antes de confirmar, por instancia. As das rotas Norte e Sul NAO tem escolha (o quadro
+# "Dificuldade" fica vazio quando uma delas esta marcada); fica para rotas futuras (ou --dificuldade).
+DIFICULDADE_DA_INSTANCIA = {}
+SALA_ARTE = (600, 180, 800, 300)   # arte da instancia escolhida, no meio da sala (titulo + desenho)
+SALA_ARTE_LIMIAR = 0.8
+PASTA_APRENDIDOS = os.path.join(config.PASTA, "dados", "modelos_aprendidos")   # artes de instancias novas (o bot aprende)
 
 CLIQUE_SIMPLES = {                      # tela -> onde clicar para avancar
     "MAPA": MAPA_CENTRAL,
@@ -194,6 +213,7 @@ def cartas_de_costas(f):
 
 _TPL_SLOT = []
 _TPL_CFG = {}
+_TPL_SALA = {}
 
 
 def estado_vagas(f):
@@ -220,18 +240,67 @@ def slots_abertos(f):
     return [c for c, e in zip(SLOTS_SALA, estado_vagas(f)) if e == "aberto"]
 
 
+def _cinza(f):
+    return cv2.GaussianBlur(cv2.cvtColor(f, cv2.COLOR_BGR2GRAY), (3, 3), 0).astype(np.float32)
+
+
+def _carregar_modelos(prefixo):
+    """{instancia: modelo cinza} de templates/<prefixo>_*.png e dos aprendidos (dados/modelos_aprendidos)."""
+    out = {}
+    for pasta in (config.PASTA_TEMPLATES, PASTA_APRENDIDOS):
+        for arq in sorted(glob.glob(os.path.join(pasta, f"{prefixo}_*.png"))):
+            nome = os.path.basename(arq)[len(prefixo) + 1:-4]
+            t = cv2.imread(arq, cv2.IMREAD_GRAYSCALE)
+            if t is not None:
+                out[nome] = t.astype(np.float32)
+    return out
+
+
+def tem_modelo(prefixo, nome):
+    return nome in (_TPL_CFG if prefixo == "cfg" else _TPL_SALA) or any(
+        os.path.exists(os.path.join(p, f"{prefixo}_{nome}.png")) for p in (config.PASTA_TEMPLATES, PASTA_APRENDIDOS))
+
+
+def tem_textura(f, regiao, minimo=18.0):
+    """A regiao tem desenho (e nao um fundo liso/carregando)?"""
+    x0, y0, x1, y1 = regiao
+    return float(_cinza(f)[y0:y1, x0:x1].std()) >= minimo
+
+
+def aprender_modelo(prefixo, nome, f, regiao):
+    """Guarda o recorte `regiao` do quadro como modelo da arte de `nome` (instancia nova: o bot aprende sozinho)."""
+    x0, y0, x1, y1 = regiao
+    os.makedirs(PASTA_APRENDIDOS, exist_ok=True)
+    cv2.imwrite(os.path.join(PASTA_APRENDIDOS, f"{prefixo}_{nome}.png"), np.clip(_cinza(f)[y0:y1, x0:x1], 0, 255).astype(np.uint8))
+    (_TPL_CFG if prefixo == "cfg" else _TPL_SALA).clear()
+
+
+def _melhor_modelo(f, modelos, regiao, limiar, tol=6):
+    if not modelos:
+        return None
+    g = _cinza(f)
+    x0, y0, x1, y1 = regiao
+    roi = g[max(0, y0 - tol):y1 + tol, max(0, x0 - tol):x1 + tol]
+    notas = {n: float(cv2.matchTemplate(roi, t, cv2.TM_CCOEFF_NORMED).max()) for n, t in modelos.items()
+             if t.shape[0] <= roi.shape[0] and t.shape[1] <= roi.shape[1]}
+    if not notas:
+        return None
+    melhor = max(notas, key=notas.get)
+    return melhor if notas[melhor] >= limiar else None
+
+
 def instancia_selecionada(f):
     """Qual instancia esta marcada na janela de configuracao (pela arte), ou None."""
     if not _TPL_CFG:
-        for nome in ROTA_PADRAO:
-            _TPL_CFG[nome] = cv2.imread(os.path.join(config.PASTA_TEMPLATES, f"cfg_{nome}.png"), cv2.IMREAD_GRAYSCALE).astype(np.float32)
-    g = cv2.GaussianBlur(cv2.cvtColor(f, cv2.COLOR_BGR2GRAY), (3, 3), 0).astype(np.float32)
-    x0, y0, x1, y1 = CFG_REGIAO
-    tol = 6
-    roi = g[y0 - tol:y1 + tol, x0 - tol:x1 + tol]
-    notas = {n: float(cv2.matchTemplate(roi, t, cv2.TM_CCOEFF_NORMED).max()) for n, t in _TPL_CFG.items()}
-    melhor = max(notas, key=notas.get)
-    return melhor if notas[melhor] >= CFG_LIMIAR else None
+        _TPL_CFG.update(_carregar_modelos("cfg"))
+    return _melhor_modelo(f, _TPL_CFG, CFG_REGIAO, CFG_LIMIAR)
+
+
+def instancia_na_sala(f):
+    """Instancia mostrada no meio da sala, pelas artes APRENDIDAS (as 3 da rota 1 tem telas proprias PRONTA_*), ou None."""
+    if not _TPL_SALA:
+        _TPL_SALA.update(_carregar_modelos("sala"))
+    return _melhor_modelo(f, _TPL_SALA, SALA_ARTE, SALA_ARTE_LIMIAR)
 
 
 def instancia_unica():
@@ -322,8 +391,12 @@ def proxima_acao_tarefa(f, vezes, ignorar_botao=False):
 # ---------------------------------------------------------------------------
 class Navegador:
     def __init__(self, io, detector, rota=None, usar_tarefas=True, uma_vez=False, simular=False,
-                 dormir=time.sleep, agora=time.time, log=print, atirador=None, reg=None):
+                 dormir=time.sleep, agora=time.time, log=print, atirador=None, reg=None, dificuldade=None):
         self.io, self.det = io, detector
+        self.dificuldade = dificuldade    # None = a de cada instancia (DIFICULDADE_DA_INSTANCIA) | "NORMAL" | "DIFICIL" | "HEROI"
+        self.clicou_cfg = None            # instancia clicada por ultimo na configuracao
+        self.confirmada = None            # instancia confirmada ("Sim") por ultimo: a sala deve mostrar ela
+        self.dificuldade_clicada = False
         self.reg = reg                    # gravacao do bot em acao (registro.Registro) ou None
         self.ultimo_quadro = None
         self.achadas_atual = []
@@ -362,6 +435,7 @@ class Navegador:
         self.trocas_pronta = 0
         self.avisou_ocupado = False
         self.lutou = False
+        self.confirmada = None
 
     @property
     def instancia(self):
@@ -451,6 +525,7 @@ class Navegador:
             return
         self.cartas_vistas = False
         self.lutou = False
+        self.confirmada = None
         self.tentativas_carta = Counter()
         antes = self.instancia
         self.idx += 1
@@ -475,7 +550,7 @@ class Navegador:
         if estado != "BATALHA":
             self.batalha_desde = None
 
-        sala = estado == "SALA_VAZIA" or estado.startswith("PRONTA_")
+        sala = estado in ("SALA_VAZIA", "SALA") or estado.startswith("PRONTA_")
         if sala and self.run_completa:
             # a rota acabou: coleta as tarefas e so entao comeca outra volta (a sala pode continuar mostrando a
             # ultima instancia - antes o bot "aceitava" essa sala e repetia o Minhocao sem parar)
@@ -523,52 +598,63 @@ class Navegador:
             self.clicar_e_verificar(estado, SALA_TROCAR_INSTANCIA, descricao=f"escolher instancia ({self.instancia})")
         elif estado == "CONFIG_VAZIA":
             self.adotar_primeira = False
+            self.dificuldade_clicada = False
+            self.clicou_cfg = self.instancia
             self.clicar_e_verificar(estado, INSTANCIA_NA_CONFIG[self.instancia], descricao=f"selecionar {self.instancia}")
-        elif estado == "CONFIG_SEL":
+        elif estado in ("CONFIG_SEL", "CONFIG"):
+            # CONFIG = janela de configuracao com uma instancia marcada cuja arte o detector nao conhece (Rota Sul...)
             self.adotar_primeira = False
             f, _e = self.ver()
             sel = instancia_selecionada(f) if f is not None else None
+            if (sel is None and f is not None and self.clicou_cfg == self.instancia and not tem_modelo("cfg", self.instancia)
+                    and self.tentativas_cfg >= 1 and tem_textura(f, CFG_REGIAO)
+                    and self.det.pontuar(estados_mod.normalizar(f)).get("CONFIG_VAZIA", 0) < 0.45):
+                # instancia nova (sem modelo da arte): o bot clicou nela e a arte ja carregou -> aprende
+                self.log(f"   [APRENDI] arte de {self.instancia} na configuracao (instancia nova)")
+                aprender_modelo("cfg", self.instancia, f, CFG_REGIAO)
+                sel = self.instancia
             if sel == self.instancia:
                 self.tentativas_cfg = 0
-                self.clicar_e_verificar(estado, CONFIG_SIM, descricao=f"confirmar {self.instancia}")
+                dif = self.dificuldade or DIFICULDADE_DA_INSTANCIA.get(self.instancia)
+                if dif and not self.dificuldade_clicada:
+                    self.dificuldade_clicada = True
+                    self.log(f"[CONFIG_SEL] dificuldade {dif}")
+                    self.clicar(DIFICULDADE_BOTAO[dif])
+                    self.dormir(0.6)
+                    return
+                if self.clicar_e_verificar(estado, CONFIG_SIM, descricao=f"confirmar {self.instancia}"):
+                    self.confirmada = self.instancia
+                    self.dificuldade_clicada = False
             else:
                 self.tentativas_cfg += 1
                 if sel is None and self.tentativas_cfg <= 3:
                     self.dormir(0.7)                       # a arte pode ainda estar carregando
                     return
                 self.log(f"[CONFIG_SEL] marcada: {sel or 'nenhuma/desconhecida'}; quero {self.instancia} -> clicando nela")
+                self.clicou_cfg = self.instancia
+                self.dificuldade_clicada = False
                 self.clicar(INSTANCIA_NA_CONFIG[self.instancia])
                 self.dormir(1.0)
-        elif estado.startswith("PRONTA_"):
-            nome = estado.split("_", 1)[1]
-            if nome != self.instancia and nome in self.rota:
-                if self.adotar_primeira:
-                    self.log(f"   sala ja esta em {nome}; sigo a partir dela (so na 1a vez).")
-                    self.idx = self.rota.index(nome)
-                else:
-                    self.trocas_pronta += 1
-                    if self.trocas_pronta > 3:
-                        self.log(f"   ! nao consegui trocar a sala de {nome} para {self.instancia}; sigo com {nome}.")
-                        self.idx = self.rota.index(nome)
-                    else:
-                        self.clicar_e_verificar(estado, SALA_TROCAR_INSTANCIA,
-                                                descricao=f"sala esta em {nome} mas a ordem pede {self.instancia}: trocando")
-                        return
-            self.adotar_primeira = False
-            self.trocas_pronta = 0
+        elif estado == "SALA":
+            # sala com uma instancia cuja arte nao tem tela propria (instancia nova da rota): reconhece pela arte
+            # aprendida; se acabamos de confirmar a instancia na configuracao, e ela -> aprende a arte
             f, _e = self.ver()
-            vagas = estado_vagas(f) if f is not None else []
-            if "ocupado" in vagas and not self.avisou_ocupado:
-                self.avisou_ocupado = True
-                self.log(f"   ! outro jogador entrou na sala (vagas: {vagas}). Nao mexo na vaga dele; sigo.")
-            abertos = [c for c, e in zip(SLOTS_SALA, vagas) if e == "aberto"]
-            if abertos and self.tentativas_slot < 6:
-                self.tentativas_slot += 1
-                self.log(f"[{estado}] fechando vaga aberta {abertos[0]} (vagas: {vagas})")
-                self.clicar(abertos[0])
-                self.dormir(0.9)
+            nome = instancia_na_sala(f) if f is not None else None
+            if nome is None and f is not None and self.confirmada == self.instancia:
+                self.dormir(1.0)                          # a arte pode estar terminando de carregar
+                f, achadas = self.ver()
+                if f is None or (achadas and achadas[0] != "SALA"):
+                    return
+                if tem_textura(f, SALA_ARTE):
+                    self.log(f"   [APRENDI] arte de {self.instancia} na sala (instancia nova)")
+                    aprender_modelo("sala", self.instancia, f, SALA_ARTE)
+                nome = self.instancia
+            if nome is None:
+                self.clicar_e_verificar(estado, SALA_TROCAR_INSTANCIA, descricao=f"sala com instancia desconhecida: escolher {self.instancia}")
                 return
-            self.clicar_e_verificar(estado, SALA_INICIO, descricao=f"Inicio ({nome})", espera=6.0)
+            self.sala_pronta(estado, nome)
+        elif estado.startswith("PRONTA_"):
+            self.sala_pronta(estado, estado.split("_", 1)[1])
         elif estado == "CARTAS":
             self.cartas_vistas = True
             f, _e = self.ver()
@@ -603,6 +689,38 @@ class Navegador:
                 self.dormir(1.5)
         else:
             self.dormir(1.0)
+
+    def sala_pronta(self, estado, nome):
+        """Sala com a instancia `nome` escolhida: confere a ordem, fecha as vagas e da Inicio."""
+        if nome != self.instancia:
+            if self.adotar_primeira and nome in self.rota:
+                self.log(f"   sala ja esta em {nome}; sigo a partir dela (so na 1a vez).")
+                self.idx = self.rota.index(nome)
+            else:
+                self.trocas_pronta += 1
+                if self.trocas_pronta > 3 and nome in self.rota:
+                    self.log(f"   ! nao consegui trocar a sala de {nome} para {self.instancia}; sigo com {nome}.")
+                    self.idx = self.rota.index(nome)
+                else:
+                    # (instancia de OUTRA rota na sala: troca sempre - lutar nela baguncaria a ordem)
+                    self.clicar_e_verificar(estado, SALA_TROCAR_INSTANCIA,
+                                            descricao=f"sala esta em {nome} mas a ordem pede {self.instancia}: trocando")
+                    return
+        self.adotar_primeira = False
+        self.trocas_pronta = 0
+        f, _e = self.ver()
+        vagas = estado_vagas(f) if f is not None else []
+        if "ocupado" in vagas and not self.avisou_ocupado:
+            self.avisou_ocupado = True
+            self.log(f"   ! outro jogador entrou na sala (vagas: {vagas}). Nao mexo na vaga dele; sigo.")
+        abertos = [c for c, e in zip(SLOTS_SALA, vagas) if e == "aberto"]
+        if abertos and self.tentativas_slot < 6:
+            self.tentativas_slot += 1
+            self.log(f"[{estado}] fechando vaga aberta {abertos[0]} (vagas: {vagas})")
+            self.clicar(abertos[0])
+            self.dormir(0.9)
+            return
+        self.clicar_e_verificar(estado, SALA_INICIO, descricao=f"Inicio ({nome})", espera=6.0)
 
     def coletar_tarefas(self):
         """Coleta TODAS as tarefas concluidas (selo verde 'OK!'): clica na tarefa, depois no botao vermelho; categoria
@@ -720,13 +838,47 @@ class Navegador:
 
 
 # ---------------------------------------------------------------------------
+def rota_dos_argumentos(texto, dificuldade=None):
+    """'N' / 'S' / 'T' (ou 1, 2, norte, sul...) -> rota pronta; 'A,B,C' -> essas instancias.
+    Devolve (nome, instancias, dificuldade forcada ou None = a de cada instancia)."""
+    chave = APELIDOS_ROTA.get(texto.strip().upper(), texto.strip().upper())
+    if chave in ROTAS:
+        nome, rota = ROTAS[chave]
+        return nome, list(rota), dificuldade
+    rota = [r.strip().upper() for r in texto.split(",") if r.strip()]
+    desconhecidas = [r for r in rota if r not in INSTANCIA_NA_CONFIG]
+    if desconhecidas or not rota:
+        raise SystemExit(f"Rota invalida: {texto}. Use N, S ou T, ou instancias de: {', '.join(INSTANCIA_NA_CONFIG)}")
+    return "rota personalizada", rota, dificuldade
+
+
+def perguntar_rota(entrada=input, saida=print):
+    """Pergunta no console qual rota fazer. Enter sem nada (ou console sem teclado) = Norte."""
+    saida("Qual rota?  [N] Norte (Fantasma, Profundezas, Minhocao)   [S] Sul (Escorpiao Rei, Dragao Gelado, Rainha Liris)")
+    saida("            [T] Todas, na ordem: Norte e depois Sul; coleta as tarefas so no fim e recomeca")
+    for _ in range(5):
+        try:
+            r = entrada("Rota (N/S/T): ").strip().upper()
+        except EOFError:
+            return "N"
+        if r == "":
+            return "N"
+        if r[0] in ("N", "S", "T"):
+            return r[0]
+        saida("   responda N, S ou T")
+    return "N"
+
+
 def main():
     import janela
     ap = argparse.ArgumentParser(description="DDTank - navegador da rota de instancias")
     ap.add_argument("--titulo", default="")
     ap.add_argument("--exe", default="")
-    ap.add_argument("--rota", default=",".join(ROTA_PADRAO), help="instancias em ordem, ex.: FANTASMA,PROFUNDEZAS,MINHOCAO")
-    ap.add_argument("--comecar-em", type=int, default=1, help="numero da instancia (1 a 3) em que a rota comeca")
+    ap.add_argument("--rota", default=None, help="N (Norte), S (Sul) ou T (as duas); ou instancias em ordem, ex.: "
+                    "ESCORPIAO_REI,DRAGAO_GELADO (instancias: " + ", ".join(INSTANCIA_NA_CONFIG) + "). Sem isso, pergunta ao abrir.")
+    ap.add_argument("--dificuldade", default=None, choices=sorted(DIFICULDADE_BOTAO),
+                    help="clica nessa dificuldade antes de confirmar (as rotas Norte e Sul nao tem escolha)")
+    ap.add_argument("--comecar-em", type=int, default=1, help="numero da instancia (1, 2, 3...) em que a rota comeca")
     ap.add_argument("--sem-tarefas", action="store_true")
     ap.add_argument("--uma-vez", action="store_true")
     ap.add_argument("--so-ver", action="store_true", help="so mostra a tela detectada (nao clica)")
@@ -781,13 +933,15 @@ def main():
         arq.write(linha + "\n")
         arq.flush()
 
-    rota = [r.strip().upper() for r in args.rota.split(",") if r.strip()]
+    nome_rota, rota, dificuldade = rota_dos_argumentos(args.rota or perguntar_rota(), args.dificuldade)
     reg = None
     if not args.sem_gravar:
         import registro
         reg = registro.Registro("bot")
         log(f"Gravando o bot em: {reg.pasta}")
-    nav = Navegador(io, det, rota, not args.sem_tarefas, args.uma_vez, args.simular, log=log, reg=reg)
+    nav = Navegador(io, det, rota, not args.sem_tarefas, args.uma_vez, args.simular, log=log, reg=reg,
+                    dificuldade=dificuldade)
+    log(f"{nome_rota}: {' -> '.join(rota)}" + (f" (dificuldade {dificuldade} em todas)" if dificuldade else ""))
     if args.atirar or args.sombra:
         import atirador as atirador_mod
         import memoria as memoria_mod

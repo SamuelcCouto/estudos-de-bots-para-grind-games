@@ -49,6 +49,14 @@ def main():
             caminho = os.path.join(sessao, txt)
             if os.path.exists(caminho):
                 zf.write(caminho, f"{nome}/{txt}")
+        # artes de instancias que o bot aprendeu sozinho (Rota Sul...) e o que ele aprendeu dos tiros: viram oficiais
+        aprendidos = os.path.join(config.PASTA, "dados", "modelos_aprendidos")
+        if parte == 1 and os.path.isdir(aprendidos):
+            for arq in sorted(os.listdir(aprendidos)):
+                zf.write(os.path.join(aprendidos, arq), f"{nome}/modelos_aprendidos/{arq}")
+        tiros = os.path.join(config.PASTA, "dados", "aprendizado.json")
+        if parte == 1 and os.path.exists(tiros):
+            zf.write(tiros, f"{nome}/aprendizado.json")
 
     abrir()
     for f in arquivos:

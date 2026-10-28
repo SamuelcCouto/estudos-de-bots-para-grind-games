@@ -20,7 +20,9 @@ TOLERANCIA = 8   # px de folga ao procurar o recorte perto da posicao esperada
 
 # quando duas telas aparecem juntas (pop-up por cima de outra), vale a primeira da lista
 PRIORIDADE = ["CLIQUE_JOGO", "POPUP_CARTA", "POPUP_SOZINHO", "TAREFA", "CARTAS", "CONFIG_SEL", "CONFIG_VAZIA",
+              "CONFIG",          # janela de configuracao generica: vale quando a arte da instancia marcada e desconhecida
               "PRONTA_FANTASMA", "PRONTA_PROFUNDEZAS", "PRONTA_MINHOCAO", "SALA_VAZIA",
+              "SALA",            # sala generica (painel da direita): vale quando a arte da instancia e desconhecida
               "CENTRAL", "MAPA", "BATALHA"]
 
 

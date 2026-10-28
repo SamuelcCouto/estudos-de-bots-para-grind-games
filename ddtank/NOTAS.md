@@ -143,3 +143,17 @@ categoria aberta por vez; categoria FECHADA com tarefa concluida mostra o selo O
 Sub-lista mostra 4 itens e tem barra propria (x~573; seta de baixo = templates/seta_lista_baixo.png). Coleta: botao
 vermelho -> clica; selo OK! -> clica (item seleciona, categoria abre); sem selo -> rola a sub-lista (seta) ate ela
 parar de mudar; botao que nao reage 2x (mochila cheia?) e ignorado ate escolher outra tarefa. Teste com os quadros reais.
+
+## Rotas (28/10)
+Norte = Fantasma, Profundezas, Minhocao; Sul = Escorpiao Rei, Dragao Gelado, Rainha Liris (as 8 da aba "Instancia
+normal": linha 1 Fantasma, Profundezas, O Minhocao, Escorpiao Rei; linha 2 Dragao Gelado, Rainha Liris, A Ultima
+Luta, Gato Preto). T = Norte + Sul numa volta so. Leste: o usuario ainda nao consegue fazer.
+Nenhuma das 6 tem dificuldade: com uma delas marcada, o quadro "Dificuldade" fica VAZIO (os botoes Normal/Dificil/Heroi
+so aparecem com nada marcado). DIFICULDADE_DA_INSTANCIA = {} (suporte fica para rotas futuras, ou --dificuldade).
+Telas genericas novas (nao dependem da arte da instancia):
+- SALA: painel da direita da sala ("Minhas ferramentas"), patches (880,280) e (820,355): 1,00 em toda sala, <=0,24 no resto.
+- CONFIG: cromo da janela de configuracao, (632,196) e (776,268): 1,00 na janela, <=0,24 no resto.
+  (CONFIG_SEL foi minerado com a arte do Fantasma/Minhocao/Profundezas: com a arte de outra instancia nao casa.)
+As artes das instancias novas sao aprendidas: CONFIG/CONFIG_SEL depois de clicar na instancia (recorte CFG_REGIAO,
+so se tiver textura e a tela nao parecer CONFIG_VAZIA) e SALA depois de confirmar (recorte SALA_ARTE, apos 1 s).
+Ficam em dados/modelos_aprendidos e vao no zip do EMPACOTAR (junto com dados/aprendizado.json).

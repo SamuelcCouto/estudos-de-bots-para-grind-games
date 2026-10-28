@@ -145,3 +145,23 @@ IMPORTANTE (versao de 28/10, tarde)
   sabia ler o ponteiro entre 8 e 90 graus, leu errado, apertou a seta para o lado errado e desistiu do turno ("parou de
   mexer"). Agora le de -30 a 100 graus. E se uma seta nao mexer o ponteiro, ele testa a outra: se a outra funciona, o
   angulo esta no limite da arma e ele atira dali, recalculando a forca.
+
+* TAREFAS (28/10): o bot agora coleta TODAS as tarefas concluidas (selo verde "OK!") antes de recomecar: as diarias,
+  a "Super Rota Norte" e o que mais tiver. Antes, quando o botao vermelho "Obter recompensa" estava no momento mais
+  escuro do brilho (ele pisca), o bot achava que nao havia nada e fechava o painel. Ele tambem rola a lista de cada
+  categoria ate o fim procurando mais selos. O log mostra "[TAREFA] N recompensa(s) coletada(s)".
+
+ROTAS NORTE, SUL E TODAS (28/10)
+================================
+Ao abrir NAVEGAR / ATIRAR / ATIRAR_SOMBRA o bot pergunta:
+   N = Rota Norte: Fantasma > Profundezas > Minhocao
+   S = Rota Sul:   Escorpiao Rei > Dragao Gelado > Rainha Liris
+   T = Todas: Fantasma > Profundezas > Minhocao > Escorpiao Rei > Dragao Gelado > Rainha Liris; so depois coleta
+       as tarefas e recomeca.
+(Enter sem nada = Norte.) Para nao perguntar: python navegador.py --atirar --rota S   (ou N / T).
+Nenhuma dessas instancias tem dificuldade para escolher; o bot nao mexe nos botoes Normal/Dificil/Heroi.
+Primeira vez na Rota Sul: o bot ainda nao conhece o desenho dessas instancias. Ele APRENDE sozinho na 1a vez que as
+escolhe (aparece "[APRENDI] arte de ESCORPIAO_REI..." no log) e guarda em dados\modelos_aprendidos; o EMPACOTAR manda
+esses desenhos junto com a gravacao para eu transformar em oficiais. A forca dos tiros tambem e aprendida: nas
+primeiras lutas de cada instancia nova ele pode errar alguns tiros ate acertar a "escala" do mapa (acerta em ~4).
+Rota Leste: ainda nao.

@@ -205,6 +205,36 @@
      "y": 462
     }
    ]
+  },
+  "SALA": {
+   "limiar": 0.6,
+   "patches": [
+    {
+     "arquivo": "SALA_0.png",
+     "x": 880,
+     "y": 280
+    },
+    {
+     "arquivo": "SALA_1.png",
+     "x": 820,
+     "y": 355
+    }
+   ]
+  },
+  "CONFIG": {
+   "limiar": 0.6,
+   "patches": [
+    {
+     "arquivo": "CONFIG_0.png",
+     "x": 632,
+     "y": 196
+    },
+    {
+     "arquivo": "CONFIG_1.png",
+     "x": 776,
+     "y": 268
+    }
+   ]
   }
  }
 }
