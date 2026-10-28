@@ -121,3 +121,11 @@ IMPORTANTE (versao de 28/10, tarde)
   pede foco antes de cada turno: 1o "virtual" (sem mexer nas suas janelas); se as setas nao funcionarem, sobe para
   "jogo em primeiro plano durante o turno" e devolve o foco para a sua janela logo depois. Para ja comecar assim:
   python navegador.py --atirar --foco 2   (ou deixe o jogo na frente). Sem foco real o teclado simplesmente nao chega.
+
+* COMO O BOT DECIDE FORCA E ANGULO (28/10): (1) se ja acertou nessa mesma situacao (voce e o boss nas mesmas posicoes
+  do minimapa) repete o angulo e usa o CENTRO da faixa de forca aprendida; (2) senao, CALCULA pela balistica
+  (forca^2 = R * F(distancia, altura, angulo)); a constante R de cada instancia e APRENDIDA: cada acerto prende R
+  perto do que ele implica, cada erro descarta a faixa correspondente - numa instancia nova ele acerta em ate ~4
+  tiros e depois mantem; (3) o angulo preferido e o que voce costuma usar na instancia (ou 35), trocando por outro
+  se a forca ficar fora de 18-85%. O que aprende vai para dados\aprendizado.json. O log mostra "fisica: R=..."
+  e a incerteza (x1.3 = confiante; x3 = ainda procurando).

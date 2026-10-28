@@ -40,3 +40,49 @@ print()
 for k, v in erros.items():
     print(f"{k:12s} erro medio {np.mean(np.abs(v)):4.1f} pontos de forca (max {np.max(np.abs(v)):.0f}), n={len(v)}")
 print("\nprevisor OK (informativo: o acerto depende da hitbox; Profundezas e a instancia com mais variacao)")
+
+# ======================================================================================
+# INSTANCIA NOVA: o bot nunca viu essa constante R. Acerta por tentativa e erro inteligente?
+# Mundo simulado: o tiro acerta se a forca esta a +-22% da ideal (hitbox grande). So o resultado (acertou/errou) e informado.
+# ======================================================================================
+import tempfile
+print("\n=== instancia NOVA: busca da forca certa (so com acertou/errou) ===")
+def sessao(R_real, dx=60.0, dy=0.0, n=10, tol=0.22, inst="NOVA"):
+    tmp = tempfile.NamedTemporaryFile("w", suffix=".json", delete=False); tmp.close(); os.unlink(tmp.name)
+    mem = M.Memoria(arq_semente=None, arq_aprendizado=tmp.name)
+    azul, boss = (20.0, 50.0), (20.0 + dx, 50.0 - dy)
+    historico = []
+    for k in range(n):
+        p = mem.prever(inst, azul, boss)
+        ideal = np.sqrt(R_real * M.fator_balistico(dx, dy, p["angulo"]))
+        acertou = abs(p["forca"] - ideal) <= tol * ideal and p["forca"] < 95
+        mem.registrar(inst, azul, boss, p["angulo"], p["forca"], acertou)
+        historico.append((p["angulo"], p["forca"], ideal, acertou, p["origem"]))
+    return historico
+
+for R_real in (12, 28, 56, 90):
+    h = sessao(R_real)
+    primeiro = next((i + 1 for i, x in enumerate(h) if x[3]), None)
+    linha = " ".join(f"{x[1]:.0f}{'*' if x[3] else '.'}" for x in h)
+    print(f"R real {R_real:4d}: forca tentada por tiro (* acertou): {linha}   -> 1o acerto no tiro {primeiro}")
+    assert primeiro is not None and primeiro <= 5, f"R={R_real}: demorou demais ({primeiro})"
+    assert all(x[3] for x in h[primeiro:]), f"R={R_real}: depois de acertar voltou a errar: {h}"
+print("busca ok: acerta em <=5 tiros e depois nao volta a errar")
+
+# depois de calibrado, generaliza para OUTRAS posicoes (a instancia tem spawns/bosses diferentes)
+rng = np.random.default_rng(3)
+R_real = 40.0
+tmp = tempfile.NamedTemporaryFile("w", suffix=".json", delete=False); tmp.close(); os.unlink(tmp.name)
+mem = M.Memoria(arq_semente=None, arq_aprendizado=tmp.name)
+acertos = 0; total = 0
+for k in range(40):
+    dx = float(rng.uniform(30, 90)); dy = float(rng.uniform(-15, 15))
+    azul, boss = (10.0, 50.0), (10.0 + dx, 50.0 - dy)
+    p = mem.prever("OUTRA", azul, boss)
+    ideal = np.sqrt(R_real * M.fator_balistico(dx, dy, p["angulo"]))
+    ok = abs(p["forca"] - ideal) <= 0.22 * ideal and p["forca"] < 95
+    mem.registrar("OUTRA", azul, boss, p["angulo"], p["forca"], ok)
+    if k >= 8: acertos += ok; total += 1
+print(f"geometrias variadas (spawn/boss diferentes), depois de 8 tiros de aprendizado: {acertos}/{total} acertos")
+assert acertos / total >= 0.85, acertos / total
+print("\ngeneralizacao OK")

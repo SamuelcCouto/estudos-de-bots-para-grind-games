@@ -26,6 +26,14 @@ ANGULO_MIN, ANGULO_MAX = 15.0, 70.0
 FORCA_MIN, FORCA_MAX = 8.0, 95.0
 R_PADRAO = 38.0               # mediana das instancias medidas (Minhocao ~30, Fantasma ~55)
 ANGULO_PADRAO = 30.0
+# --- aprendizado da constante R (forca^2 = R * F): grade logaritmica + acertos/erros ---
+R_GRADE = np.exp(np.linspace(np.log(6.0), np.log(250.0), 200))
+R_PRIOR_SIGMA = 0.7           # incerteza (em ln) do palpite inicial R_PADRAO
+TOL_ACERTO = 0.22             # um acerto aceita forca ate +-22% da "ideal" (hitbox grande)
+TOL_ERRO = TOL_ACERTO         # um erro descarta exatamente a faixa que um acerto aceitaria (o erro pode ser do angulo: peso < 1)
+PESO_OUTLIER = 0.2            # um acerto "fora do padrao" nao derruba o resto
+PESO_ERRO = 0.1
+INCERTEZA_CONFIAVEL = 2.2       # q75/q25 de R abaixo disso = constante confiavel
 
 
 def fator_balistico(dx, dy_up, ang):
@@ -53,20 +61,56 @@ class Memoria:
         (bx, by), (rx, ry) = t["azul"], t["boss"]
         return rx - bx, by - ry          # dx (boss a direita > 0), dy_up (boss mais alto > 0)
 
-    def constante_r(self, inst):
-        """(R mediano, confiavel?) da instancia, a partir dos acertos."""
-        rs = []
+    def posterior_r(self, inst):
+        """Distribuicao de R (grade, probabilidades) para a instancia. Prior: R_PADRAO. Cada ACERTO prende R perto do
+        valor que ele implica (com tolerancia e chance de ser atipico); cada ERRO descarta, fracamente, os R
+        proximos do que ele implicaria. Sem dados, vale o prior."""
+        logp = -0.5 * ((np.log(R_GRADE) - np.log(R_PADRAO)) / R_PRIOR_SIGMA) ** 2
         for t in self._da(inst):
-            if not t["acertou"]:
-                continue
             dx, dy = self._geom(t)
+            if dx <= 0:
+                continue
             f = fator_balistico(dx, dy, t["angulo"])
-            if f:
-                rs.append(t["forca"] ** 2 / f)
-        if len(rs) < 3:
-            return (float(np.median(rs)) if rs else None), False
-        r = float(np.median(rs))
-        return r, bool(np.std(rs) / r < 0.45)
+            if not f:
+                continue
+            r_obs = t["forca"] ** 2 / f
+            if t["acertou"]:
+                dentro = (R_GRADE >= r_obs / (1 + TOL_ACERTO) ** 2) & (R_GRADE <= r_obs / (1 - TOL_ACERTO) ** 2)
+                logp += np.log((1 - PESO_OUTLIER) * dentro + PESO_OUTLIER)
+            else:
+                dentro = (R_GRADE >= r_obs / (1 + TOL_ERRO) ** 2) & (R_GRADE <= r_obs / (1 - TOL_ERRO) ** 2)
+                logp += np.log(np.where(dentro, PESO_ERRO, 1.0))
+        p = np.exp(logp - logp.max())
+        return R_GRADE, p / p.sum()
+
+    def r_estimado(self, inst):
+        """(R mediano, incerteza = razao q75/q25) da instancia."""
+        g, p = self.posterior_r(inst)
+        c = np.cumsum(p)
+        q = lambda x: float(g[min(np.searchsorted(c, x), len(g) - 1)])
+        return q(0.5), q(0.75) / q(0.25)
+
+    def constante_r(self, inst):
+        """(R mediano, confiavel?) - confiavel = o posterior esta estreito (varios acertos coerentes)."""
+        r, incerteza = self.r_estimado(inst)
+        return r, incerteza < INCERTEZA_CONFIAVEL
+
+    def _escolher_angulo(self, inst, dx, dy, r):
+        """Angulo e forca para o R dado. Prefere o angulo que o usuario costuma usar nessa instancia; senao 35."""
+        hist = [t["angulo"] for t in self._da(inst) if t["acertou"]]
+        base = float(np.median(hist)) if hist else 35.0
+        melhor = None
+        for d in (0, 8, -8, 16, -16, 24, -24):
+            ang = float(np.clip(base + d, ANGULO_MIN, ANGULO_MAX))
+            f = fator_balistico(dx, dy, ang)
+            if not f:
+                continue
+            p = float(np.sqrt(r * f))
+            if 18 <= p <= 85:                       # forca confortavel: nem fraca demais nem no limite da barra
+                return ang, p
+            if melhor is None or abs(p - 50) < abs(melhor[1] - 50):
+                melhor = (ang, p)
+        return melhor if melhor else (base, 50.0)
 
     def prever(self, inst, azul, boss):
         """dict(angulo, forca, origem, detalhe). azul/boss = (x, y) do minimapa ou None."""
@@ -80,39 +124,46 @@ class Memoria:
                 # so mistura (media) acertos com angulo parecido: 54 graus/15% e 12 graus/48% sao tiros DIFERENTES
                 perto = [t for t in ordem if dist(t) <= melhor + 3 and abs(t["angulo"] - ordem[0]["angulo"]) <= 8]
                 ang = float(np.mean([t["angulo"] for t in perto])); forca = float(np.mean([t["forca"] for t in perto]))
+                dx_, dy_ = boss[0] - azul[0], azul[1] - boss[1]
+                r, inc = self.r_estimado(inst)
+                f_ = fator_balistico(dx_, dy_, ang) if dx_ > 0 else None
+                if f_ and inc < INCERTEZA_CONFIAVEL:
+                    # a constante da instancia ja e confiavel: usa o CENTRO da faixa (um acerto antigo pode ter sido
+                    # marginal, na borda da tolerancia) mantendo o angulo que funcionou
+                    return self._limites(ang, np.sqrt(r * f_), "memoria+fisica",
+                                         f"{len(perto)} acerto(s) na mesma situacao; forca pelo centro de R={r:.0f} (x{inc:.1f})")
                 # erro recente nesta mesma situacao com valores parecidos: tenta mais forte, e alterna
                 for e in erros:
                     if dist(e) <= DIST_MESMA_SITUACAO and abs(e["forca"] - forca) < 6 and abs(e["angulo"] - ang) < 5:
                         forca += 8 if (len(erros) % 2) else -8
                 return self._limites(ang, forca, "memoria", f"{len(perto)} acerto(s) na mesma situacao (dist {melhor:.1f})")
-            r, ok = self.constante_r(inst)
-            if ok:
-                ang = float(np.clip(np.median([t["angulo"] for t in acertos]), ANGULO_MIN, ANGULO_MAX))
-                dx, dy = boss[0] - azul[0], azul[1] - boss[1]
-                f = fator_balistico(dx, dy, ang)
-                if f:
-                    return self._limites(ang, np.sqrt(r * f), "fisica", f"R={r:.0f}, dx={dx:.0f}, dy={dy:.0f}")
+            dx, dy = boss[0] - azul[0], azul[1] - boss[1]
+            if dx > 0:
+                r, inc = self.r_estimado(inst)
+                ang, p = self._escolher_angulo(inst, dx, dy, r)
+                return self._limites(ang, p, "fisica", f"R={r:.0f} (incerteza x{inc:.1f}), dx={dx:.0f}, dy={dy:.0f}")
             t = ordem[0]
             return self._limites(t["angulo"], t["forca"], "vizinho", f"acerto mais parecido (dist {melhor:.1f})")
         if acertos:
             return self._limites(float(np.median([t["angulo"] for t in acertos])), float(np.median([t["forca"] for t in acertos])),
                                  "vizinho", "sem leitura do minimapa: mediana dos acertos")
-        if azul and boss:
+        if azul and boss and boss[0] - azul[0] > 0:
             dx, dy = boss[0] - azul[0], azul[1] - boss[1]
-            f = fator_balistico(dx, dy, ANGULO_PADRAO)
-            if f:
-                return self._limites(ANGULO_PADRAO, np.sqrt(R_PADRAO * f), "padrao", "instancia sem dados")
+            r, inc = self.r_estimado(inst)
+            ang, p = self._escolher_angulo(inst, dx, dy, r)
+            return self._limites(ang, p, "fisica", f"instancia nova: R={r:.0f} (incerteza x{inc:.1f}), "
+                                 f"{len(erros)} erro(s) ja registrados; dx={dx:.0f}, dy={dy:.0f}")
         return self._limites(ANGULO_PADRAO, 50.0, "padrao", "sem dados nem minimapa")
 
     def forca_para(self, inst, azul, boss, angulo):
         """Forca pela fisica para um angulo dado (usa a constante R da instancia ou a padrao); None se nao der."""
         if not (azul and boss):
             return None
-        r, _ok = self.constante_r(inst)
+        r, _inc = self.r_estimado(inst)
         f = fator_balistico(boss[0] - azul[0], azul[1] - boss[1], angulo)
         if not f:
             return None
-        return float(np.clip(np.sqrt((r or R_PADRAO) * f), FORCA_MIN, FORCA_MAX))
+        return float(np.clip(np.sqrt(r * f), FORCA_MIN, FORCA_MAX))
 
     @staticmethod
     def _limites(ang, forca, origem, detalhe):

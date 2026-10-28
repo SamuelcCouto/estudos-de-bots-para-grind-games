@@ -86,3 +86,11 @@ de tecla -> a barra enche na METADE da velocidade quando o bot joga. Hipoteses: 
 (Chromium reduz timers/frames), ou PC sobrecarregado. O atirador agora mede a taxa em todo tiro (regressao do trace da
 barra), aceita ate ~2,2x o tempo esperado (MAX_SEGURANDO 7 s) e solta olhando a barra, entao funciona em qualquer velocidade.
 Pendente: confirmar se o foco muda a taxa (TESTE_FORCA imprime "jogo em primeiro plano").
+
+
+## Previsor de tiro (memoria.py) - versao com aprendizado de R
+Modelo: forca^2 = R * F(dx, dy_up, angulo), F = dx^2 / (2 cos^2(a) (dx tan a - dy)), dx/dy em px do minimapa.
+R por instancia e um posterior em grade log (prior R=38, sigma 0.7 em ln); acerto => R em [R_obs/(1+t)^2, R_obs/(1-t)^2]
+(t=0.22) com chance de ser atipico; erro => descarta a mesma faixa (peso 0.1). Teste sintetico: instancia nova acerta
+em <=4 tiros; geometrias variadas 32/32. LIMITES: assume boss a DIREITA do jogador (dx>0), sem vento, hitbox com
+tolerancia ~22% da forca; PvP (alvo que anda, vento, alvo pequeno) precisara de vento + posicao em tempo real + muito mais dados.
