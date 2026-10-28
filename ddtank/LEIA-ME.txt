@@ -92,3 +92,17 @@ Teste na ordem:
 Se as setas/teclas nao chegarem no jogo, o bot tenta outro modo de entrada sozinho e avisa; se nada
 funcionar ele NAO atira e escreve "Pulando o tiro" - me mande o log.
 Itens: python navegador.py --atirar --itens 3,4,4,5   (muda a ordem). Testes: python testes\test_atirador.py
+
+
+IMPORTANTE (versao de 28/10, tarde)
+===================================
+* USE SO UM BOT POR VEZ (NAVEGAR, ATIRAR_SOMBRA ou ATIRAR). Abrir mais de um faz todos clicarem e apertarem
+  teclas juntos, e a ordem das instancias e os tiros ficam malucos. Agora o programa recusa abrir uma 2a copia.
+* O bot GRAVA o que faz (cliques, turnos de tiro, prints) em sessoes\<data>_bot\ e, ao fechar, oferece
+  empacotar e enviar (EMPACOTAR_E_ENVIAR.bat). Assim eu vejo o que ele fez. (--sem-gravar desliga.)
+* Se o jogo perder o foco (voce clicou em outra janela) aparece "Clique no jogo para continuar jogando":
+  o bot reconhece esse pop-up em qualquer tela (inclusive na batalha) e clica nele.
+* Ordem das instancias: o bot confere qual instancia esta marcada na configuracao e na sala; se estiver
+  errada ele corrige, e no fim da rota coleta as tarefas antes de recomecar.
+* Vagas da sala: so clica nas que mostram "Em Espera". Vaga ocupada por outro jogador nao e tocada
+  (o bot avisa no log "outro jogador entrou na sala").

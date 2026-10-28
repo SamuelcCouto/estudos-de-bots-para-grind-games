@@ -104,6 +104,16 @@ class Memoria:
                 return self._limites(ANGULO_PADRAO, np.sqrt(R_PADRAO * f), "padrao", "instancia sem dados")
         return self._limites(ANGULO_PADRAO, 50.0, "padrao", "sem dados nem minimapa")
 
+    def forca_para(self, inst, azul, boss, angulo):
+        """Forca pela fisica para um angulo dado (usa a constante R da instancia ou a padrao); None se nao der."""
+        if not (azul and boss):
+            return None
+        r, _ok = self.constante_r(inst)
+        f = fator_balistico(boss[0] - azul[0], azul[1] - boss[1], angulo)
+        if not f:
+            return None
+        return float(np.clip(np.sqrt((r or R_PADRAO) * f), FORCA_MIN, FORCA_MAX))
+
     @staticmethod
     def _limites(ang, forca, origem, detalhe):
         return {"angulo": float(np.clip(ang, ANGULO_MIN, ANGULO_MAX)), "forca": float(np.clip(forca, FORCA_MIN, FORCA_MAX)),

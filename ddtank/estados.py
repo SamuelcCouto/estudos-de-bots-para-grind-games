@@ -19,9 +19,9 @@ LARGURA = 1280
 TOLERANCIA = 8   # px de folga ao procurar o recorte perto da posicao esperada
 
 # quando duas telas aparecem juntas (pop-up por cima de outra), vale a primeira da lista
-PRIORIDADE = ["POPUP_CARTA", "POPUP_SOZINHO", "TAREFA", "CARTAS", "CONFIG_SEL", "CONFIG_VAZIA",
+PRIORIDADE = ["CLIQUE_JOGO", "POPUP_CARTA", "POPUP_SOZINHO", "TAREFA", "CARTAS", "CONFIG_SEL", "CONFIG_VAZIA",
               "PRONTA_FANTASMA", "PRONTA_PROFUNDEZAS", "PRONTA_MINHOCAO", "SALA_VAZIA",
-              "CENTRAL", "MAPA", "BATALHA", "CLIQUE_JOGO"]
+              "CENTRAL", "MAPA", "BATALHA"]
 
 
 def normalizar(img):

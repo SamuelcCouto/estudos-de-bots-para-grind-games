@@ -77,6 +77,7 @@ class Sim:
         if t == "BATALHA" and self.cap - self.desde > 6: self.trocar("CARTAS"); t = "CARTAS"
         if t == "CARTAS" and len(self.viradas) >= 3 and self.cap - self.desde > 10: self.fim_cartas(); t = self.tela
         if t == "CARTAS": return self.quadro_cartas()
+        if t == "CONFIG_SEL": return img("CFG_SEL_" + self.instancias_clicadas[-1])
         if t == "PRONTA": return self.quadro_sala(["PRONTA_FANTASMA", "PRONTA_PROFUNDEZAS", "PRONTA_MINHOCAO"][self.inst])
         if t == "SALA_VAZIA" and self.inst >= 3: return img("SALA_FINAL")
         if t == "SALA_VAZIA": return self.quadro_sala("SALA_VAZIA")
@@ -208,3 +209,87 @@ for _ in range(80):
     if sim.tela != "BATALHA" and nav.em_batalha: nav.em_batalha = False; nav.atirador.fim_da_batalha(); break
 assert falso.passos > 3 and falso.fins == 1, (falso.passos, falso.fins)
 print("integracao navegador+atirador OK (passos na batalha:", falso.passos, ")")
+
+# ---------------------------------------------------------------- 9) a sala CONTINUA mostrando a ultima instancia depois das cartas
+class Sim2(Sim):
+    """Depois das cartas a sala volta mostrando a instancia que acabou de ser jogada (nao a tela 'Selecione')."""
+    def __init__(self):
+        super().__init__()
+        self.sala_inst = None; self.lutas = []; self.escolhida = None; self.sala_fica = True
+    def quadro_pronta(self):
+        return self.quadro_sala(["PRONTA_FANTASMA", "PRONTA_PROFUNDEZAS", "PRONTA_MINHOCAO"][self.sala_inst])
+    def capturar(self):
+        self.cap += 1; t = self.tela
+        if t == "BATALHA" and self.cap - self.desde > 6: self.trocar("CARTAS"); t = "CARTAS"
+        if t == "CARTAS" and len(self.viradas) >= 3 and self.cap - self.desde > 10: self.fim_cartas(); t = self.tela
+        if t == "CARTAS": return self.quadro_cartas()
+        if t == "CONFIG_SEL": return img("CFG_SEL_" + self.instancias_clicadas[-1])
+        if t == "PRONTA": return self.quadro_pronta()
+        if t == "SALA_VAZIA": return img("SALA_FINAL") if self.sala_inst is None and len(self.lutas) % 3 == 0 and self.lutas else self.quadro_sala("SALA_VAZIA")
+        if t == "TAREFA": return img("TAREFA_SEM_OK" if self.tarefas_ok else "TAREFA_COM_OK")
+        return img(t)
+    def fim_cartas(self):
+        self.viradas = []; self.ja_ignorou = False; self.lutas.append(self.sala_inst); self.trocar("PRONTA")   # sala continua na mesma instancia
+    def clicar(self, x, y, modo):
+        p = (x, y); self.cliques.append((self.tela, p)); t = self.tela
+        if t in ("SALA_VAZIA", "PRONTA"): self.clique_slot(p)
+        if t == "MAPA" and dentro(p, caixa(N.MAPA_CENTRAL)): self.trocar("CENTRAL")
+        elif t == "CENTRAL" and dentro(p, caixa(N.CENTRAL_JOGAR)):
+            self.jogar_cliques += 1; self.trocar("SALA_VAZIA"); self.sala_inst = None; self.slots = [True, True, True]
+        elif t in ("SALA_VAZIA", "PRONTA") and dentro(p, caixa(N.SALA_TROCAR_INSTANCIA)): self.trocar("CONFIG_VAZIA")
+        elif t in ("SALA_VAZIA", "PRONTA") and dentro(p, caixa(N.SALA_ICONE_TAREFAS)): self.volta_para = t; self.trocar("TAREFA")
+        elif t == "CONFIG_VAZIA":
+            for nome, c in N.INSTANCIA_NA_CONFIG.items():
+                if dentro(p, caixa(c, 30)): self.escolhida = ROTA.index(nome); self.instancias_clicadas.append(nome); self.trocar("CONFIG_SEL")
+        elif t == "CONFIG_SEL" and dentro(p, caixa(N.CONFIG_SIM, 60)): self.sala_inst = self.escolhida; self.trocar("PRONTA")
+        elif t == "PRONTA" and dentro(p, caixa(N.SALA_INICIO, 40)):
+            self.inicios_com_vaga_aberta += any(self.slots); self.trocar("POPUP_SOZINHO")
+        elif t == "POPUP_SOZINHO" and dentro(p, caixa(N.POPUP_SOZINHO_SIM, 40)): self.trocar("BATALHA")
+        elif t == "CARTAS":
+            for c in [(x, y) for y in N.CARTAS_LINHAS for x in N.CARTAS_COLUNAS]:
+                if dentro(p, caixa_carta(c)) and c not in self.viradas:
+                    if len(self.viradas) == 2: self.pendente = c; self.trocar("POPUP_CARTA")
+                    else: self.viradas.append(c)
+        elif t == "POPUP_CARTA" and dentro(p, caixa(N.POPUP_CARTA_SIM, 40)): self.viradas.append(self.pendente); self.trocar("CARTAS")
+        elif t == "TAREFA" and not self.tarefas_ok and dentro(p, caixa(N.TAREFA_BOTAO, 50)): self.tarefas_ok = True
+        elif t == "TAREFA" and self.tarefas_ok and dentro(p, caixa(N.TAREFA_FECHAR, 30)):
+            self.trocar(self.volta_para); self.voltas += 1; self.tarefas_ok = False
+ROTA = ["FANTASMA", "PROFUNDEZAS", "MINHOCAO"]
+sim = Sim2(); relogio = [0.0]
+nav = N.Navegador(sim, det, dormir=lambda s: relogio.__setitem__(0, relogio[0] + s), agora=lambda: relogio[0], log=lambda m: None)
+for _ in range(900):
+    e = nav.estado_estavel()
+    if e: nav.agir(e)
+    if sim.voltas >= 2: break
+ordem = [ROTA[i] for i in sim.lutas]
+print("instancias lutadas, na ordem:", ordem)
+assert sim.voltas >= 2, "nao completou 2 voltas"
+assert ordem[:6] == ROTA * 2, f"ordem errada: {ordem}"
+assert all(a != b for a, b in zip(ordem, ordem[1:])), f"repetiu a mesma instancia em seguida: {ordem}"
+assert sim.jogar_cliques == 1
+print("ordem OK mesmo quando a sala continua mostrando a ultima instancia (nao repete o Minhocao)")
+
+# ---------------------------------------------------------------- 10) o jogo perde o foco no meio da batalha: pop-up "Clique no jogo"
+class SimFoco(Sim2):
+    def __init__(self):
+        super().__init__(); self.popup = False; self.clicou_no_popup = False
+    def capturar(self):
+        f = super().capturar()
+        if self.popup:
+            f = f.copy(); caixa_popup = img("CLIQUE_JOGO")[316:410, 596:696]; f[316:410, 596:696] = caixa_popup
+        return f
+    def clicar(self, x, y, modo):
+        if self.popup:
+            if dentro((x, y), (596, 316, 696, 410)): self.popup = False; self.clicou_no_popup = True
+            return
+        super().clicar(x, y, modo)
+sim = SimFoco(); sim.tela = "BATALHA"; sim.sala_inst = 0; relogio = [0.0]; falso = AtiradorFalso()
+nav = N.Navegador(sim, det, atirador=falso, dormir=lambda s: relogio.__setitem__(0, relogio[0] + s), agora=lambda: relogio[0], log=lambda m: None)
+nav.em_batalha = True
+sim.desde = sim.cap + 100          # batalha "longa"
+sim.popup = True
+f, achadas = nav.ver()
+assert achadas and achadas[0] == "CLIQUE_JOGO", achadas            # tem prioridade sobre a batalha
+nav.agir("CLIQUE_JOGO")
+assert sim.clicou_no_popup and not sim.popup, "nao clicou no pop-up de foco"
+print("pop-up de foco durante a batalha OK (reconhecido por cima da batalha e clicado)")

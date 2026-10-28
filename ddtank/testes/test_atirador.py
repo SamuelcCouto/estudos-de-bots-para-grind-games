@@ -45,8 +45,9 @@ class Mundo:
     def tecla_baixo(self, nome, rep=1):
         if self.carregando_desde is None: self.carregando_desde = self.t
     def tecla_cima(self, nome):
+        real = min(100.0, (self.t - self.carregando_desde) * 38.0)   # forca REAL = tempo segurado (a barra exibida pode estar velha)
         self.avancar(0.1)                                    # atraso do KEYUP
-        self.tiros.append(self.barra); self.carregando_desde = None; self.atirou_em = self.t
+        self.tiros.append(real); self.carregando_desde = None; self.atirou_em = self.t
     def trocar_modo(self): self.modo = "filha" if self.modo == "top" else "top"
     def dormir(self, s): self.avancar(s)
 
@@ -118,3 +119,29 @@ at.fim_da_batalha()
 assert json.load(open(arq))["tiros"][-1]["acertou"] is True
 print("fim de batalha (boss morto) registra acerto OK")
 print("\natirador OK")
+
+# ------------------------------------------------------------ 8) defeito real: barra ainda mostra o tiro ANTERIOR (forca 10 em vez de 40)
+class MundoBarraVelha(Mundo):
+    """No inicio do turno a barra ainda mostra 48% (o tiro anterior); so zera ~0.3 s depois de apertar o espaco."""
+    def __init__(self, **kw):
+        super().__init__(**kw); self.barra = 48.0
+    def avancar(self, s):
+        self.t += s
+        if self.carregando_desde is not None:
+            dec = self.t - self.carregando_desde
+            self.barra = 48.0 if dec < 0.3 else min(100.0, (dec - 0.3) * 38.0 + 8)   # fica velha, depois zera e sobe
+w = MundoBarraVelha(); at, mem, logs, arq = novo(w); rodar(at, w)
+print("\n".join(l for l in logs if "tiro dado" in l))
+assert len(w.tiros) == 1 and w.tiros[0] >= 30, f"soltou cedo demais com a barra velha: {w.tiros}"
+print("barra velha: OK (forca solta %.0f%%, queria ~38%%)" % w.tiros[0])
+
+# ------------------------------------------------------------ 9) angulo final diferente do previsto -> forca recalculada
+w = Mundo(setas_funcionam_em=("top", "filha")); at, mem, logs, arq = novo(w)
+at.mem.prever = lambda inst, a, b: {"angulo": 45.0, "forca": 10.0, "origem": "teste", "detalhe": ""}   # previsao incoerente
+w.angulo = 15.0
+orig = at.ajustar_angulo
+at.ajustar_angulo = lambda alvo: (setattr(w, "angulo", 30.0) or True)    # o ajuste "parou" em 30 graus
+rodar(at, w)
+assert any("recalculada" in l for l in logs), logs
+print("forca recalculada quando o angulo nao chega no previsto OK")
+print("\natirador (regressoes) OK")

@@ -47,17 +47,12 @@
    ]
   },
   "CLIQUE_JOGO": {
-   "limiar": 0.645,
+   "limiar": 0.8,
    "patches": [
     {
      "arquivo": "CLIQUE_JOGO_0.png",
-     "x": 641,
-     "y": 371
-    },
-    {
-     "arquivo": "CLIQUE_JOGO_1.png",
-     "x": 900,
-     "y": 517
+     "x": 602,
+     "y": 324
     }
    ]
   },

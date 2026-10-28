@@ -30,7 +30,7 @@ import estados as estados_mod
 # Posicoes (em pixels de uma imagem com 1280 de largura; saem da sua gravacao)
 # ---------------------------------------------------------------------------
 LARGURA_REF = 1280
-FECHAR_CLIQUE_JOGO = (913, 190)
+FECHAR_CLIQUE_JOGO = (646, 345)     # centro do pop-up "Clique no jogo para continuar jogando" (aparece quando o jogo perde o foco)
 MAPA_CENTRAL = (872, 430)
 CENTRAL_JOGAR = (794, 472)
 SALA_TROCAR_INSTANCIA = (697, 302)
@@ -48,7 +48,11 @@ CARTAS_LINHAS = [262, 380, 498]
 CARTAS_PREFERENCIA = [(556, 380), (644, 380), (732, 380)] + [(x, y) for y in (380, 262, 498) for x in CARTAS_COLUNAS]
 CARTAS_VIRADAS_PARA_PAGAR = 3     # 2 gratis + a 3a (VIP, com pop-up de confirmacao)
 SLOTS_SALA = [(516, 242), (394, 366), (516, 366)]   # 3 vagas vazias da sala
-BRILHO_SLOT_ABERTO = 195          # aberto ~226 (creme); fechado ~110 (marrom com X)
+SLOT_RECORTE = (-36, 34, -37, 43)   # recorte (dx0, dx1, dy0, dy1) da silhueta "Em Espera" ao redor do centro da vaga
+SLOT_ABERTO_LIMIAR = 0.6          # aberta ~0.97-1.0; fechada (X) ~0.29; ocupada por jogador ~0.08
+BRILHO_SLOT_FECHADO = 140         # fechada ~110 (marrom); ocupada por jogador e mais clara
+CFG_REGIAO = (490, 395, 610, 455)  # arte da instancia selecionada na janela de configuracao
+CFG_LIMIAR = 0.7                   # certa >= ~0.9; qualquer outra coisa < 0.56
 
 ROTA_PADRAO = ["FANTASMA", "PROFUNDEZAS", "MINHOCAO"]
 INSTANCIA_NA_CONFIG = {"FANTASMA": (509, 313), "PROFUNDEZAS": (591, 313), "MINHOCAO": (675, 318)}
@@ -56,7 +60,6 @@ INSTANCIA_NA_CONFIG = {"FANTASMA": (509, 313), "PROFUNDEZAS": (591, 313), "MINHO
 CLIQUE_SIMPLES = {                      # tela -> onde clicar para avancar
     "CLIQUE_JOGO": FECHAR_CLIQUE_JOGO,
     "MAPA": MAPA_CENTRAL,
-    "CONFIG_SEL": CONFIG_SIM,
     "POPUP_SOZINHO": POPUP_SOZINHO_SIM,
     "POPUP_CARTA": POPUP_CARTA_SIM,
 }
@@ -118,10 +121,60 @@ def cartas_de_costas(f):
     return achadas
 
 
+_TPL_SLOT = []
+_TPL_CFG = {}
+
+
+def estado_vagas(f):
+    """Para cada uma das 3 vagas: 'aberto' (Em Espera), 'fechado' (X) ou 'ocupado' (outro jogador entrou)."""
+    if not _TPL_SLOT:
+        _TPL_SLOT.append(cv2.imread(os.path.join(config.PASTA_TEMPLATES, "slot_aberto.png"), cv2.IMREAD_GRAYSCALE))
+    t = _TPL_SLOT[0]
+    g = cv2.GaussianBlur(cv2.cvtColor(f, cv2.COLOR_BGR2GRAY), (3, 3), 0)
+    dx0, dx1, dy0, dy1 = SLOT_RECORTE
+    out = []
+    for cx, cy in SLOTS_SALA:
+        roi = g[cy + dy0 - 8:cy + dy1 + 8, cx + dx0 - 8:cx + dx1 + 8]
+        if cv2.matchTemplate(roi, t, cv2.TM_CCOEFF_NORMED).max() >= SLOT_ABERTO_LIMIAR:
+            out.append("aberto")
+        elif g[cy - 30:cy + 30, cx - 40:cx + 40].mean() < BRILHO_SLOT_FECHADO:
+            out.append("fechado")
+        else:
+            out.append("ocupado")
+    return out
+
+
 def slots_abertos(f):
-    """Vagas da sala ainda abertas (creme claro). Fechadas (marrom com X) ou ocupadas por alguem nao contam."""
-    g = cv2.cvtColor(f, cv2.COLOR_BGR2GRAY)
-    return [(x, y) for x, y in SLOTS_SALA if g[y - 30:y + 30, x - 40:x + 40].mean() > BRILHO_SLOT_ABERTO]
+    """Centros das vagas ainda abertas. Vagas fechadas ou ocupadas por outro jogador NAO entram."""
+    return [c for c, e in zip(SLOTS_SALA, estado_vagas(f)) if e == "aberto"]
+
+
+def instancia_selecionada(f):
+    """Qual instancia esta marcada na janela de configuracao (pela arte), ou None."""
+    if not _TPL_CFG:
+        for nome in ROTA_PADRAO:
+            _TPL_CFG[nome] = cv2.imread(os.path.join(config.PASTA_TEMPLATES, f"cfg_{nome}.png"), cv2.IMREAD_GRAYSCALE).astype(np.float32)
+    g = cv2.GaussianBlur(cv2.cvtColor(f, cv2.COLOR_BGR2GRAY), (3, 3), 0).astype(np.float32)
+    x0, y0, x1, y1 = CFG_REGIAO
+    tol = 6
+    roi = g[y0 - tol:y1 + tol, x0 - tol:x1 + tol]
+    notas = {n: float(cv2.matchTemplate(roi, t, cv2.TM_CCOEFF_NORMED).max()) for n, t in _TPL_CFG.items()}
+    melhor = max(notas, key=notas.get)
+    return melhor if notas[melhor] >= CFG_LIMIAR else None
+
+
+def instancia_unica():
+    """False se ja existe outro bot rodando neste PC (varios bots clicando juntos se atrapalham)."""
+    try:
+        import ctypes
+        k32 = ctypes.windll.kernel32
+        h = k32.CreateMutexW(None, False, "Local\\DDTankBotNavegador")
+        if k32.GetLastError() == 183:      # ERROR_ALREADY_EXISTS
+            return False
+        instancia_unica.handle = h         # mantem o mutex vivo ate o programa terminar
+    except Exception:
+        pass
+    return True
 
 
 def em_1280(img):
@@ -165,8 +218,12 @@ def proxima_acao_tarefa(f, vezes):
 # ---------------------------------------------------------------------------
 class Navegador:
     def __init__(self, io, detector, rota=None, usar_tarefas=True, uma_vez=False, simular=False,
-                 dormir=time.sleep, agora=time.time, log=print, atirador=None):
+                 dormir=time.sleep, agora=time.time, log=print, atirador=None, reg=None):
         self.io, self.det = io, detector
+        self.reg = reg                    # gravacao do bot em acao (registro.Registro) ou None
+        self.ultimo_quadro = None
+        self.ultimo_estado_reg = None
+        self.adotar_primeira = True       # 1a sala "pronta" que o bot ve: segue a partir dela; depois, ordem estrita
         self.atirador = atirador          # None = a batalha e sua; senao ele joga os turnos
         self.em_batalha = False
         self.fora_da_batalha_desde = None
@@ -193,6 +250,10 @@ class Navegador:
         self.cartas_vistas = False
         self.tentativas_carta = Counter()
         self.tentativas_slot = 0
+        self.tentativas_cfg = 0
+        self.trocas_pronta = 0
+        self.avisou_ocupado = False
+        self.lutou = False
 
     @property
     def instancia(self):
@@ -205,6 +266,7 @@ class Navegador:
             return None, None
         self.k = img.shape[1] / LARGURA_REF
         f = em_1280(img)
+        self.ultimo_quadro = f
         return f, self.det.detectar(estados_mod.normalizar(f))
 
     def estado_estavel(self):
@@ -237,6 +299,9 @@ class Navegador:
     def clicar(self, ponto):
         self.esperar_pausa()
         x, y = ponto
+        if self.reg:
+            self.reg.evento("bot_clique", [self.reg.frame(self.ultimo_quadro, "clique_antes")], ponto=list(ponto),
+                            modo=MODOS_ENTRADA[self.modo], instancia=self.instancia, idx=self.idx, estado=self.ultimo_estado_reg)
         if self.simular:
             self.log(f"   [simulando] clicaria em {ponto}")
             return
@@ -254,6 +319,8 @@ class Navegador:
             self.dormir(0.4)
             if self.estado_rapido() != estado:
                 self.falhas_clique = 0
+                if self.reg:
+                    self.reg.evento("bot_clique_ok", [self.reg.frame(self.ultimo_quadro, "clique_depois")], de=estado)
                 return True
         self.falhas_clique += 1
         self.log(f"   ! clique sem efeito ({self.falhas_clique}x, modo '{MODOS_ENTRADA[self.modo]}')")
@@ -265,23 +332,58 @@ class Navegador:
         return False
 
     def finalizar_instancia(self):
-        """Chamado quando saimos das cartas: a instancia atual acabou."""
+        """Chamado ao sair das cartas/batalha: a instancia atual acabou."""
         if not self.cartas_vistas:
+            if self.lutou:
+                self.lutou = False
+                self.log(f"   [ORDEM] ! a luta de {self.instancia} acabou SEM passar pelas cartas; repito {self.instancia}.")
+                if self.reg:
+                    self.reg.evento("ordem_sem_cartas", [self.reg.frame(self.ultimo_quadro, "sem_cartas")], instancia=self.instancia, idx=self.idx)
             return
         self.cartas_vistas = False
+        self.lutou = False
         self.tentativas_carta = Counter()
+        antes = self.instancia
         self.idx += 1
         if self.idx >= len(self.rota):
             self.run_completa = True
-            self.log(f"*** Rota completa ({self.voltas + 1}a volta). Falta coletar as tarefas. ***")
+            self.log(f"*** {antes} concluida: rota completa ({self.voltas + 1}a volta). Falta coletar as tarefas. ***")
         else:
-            self.log(f"Instancia concluida. Proxima: {self.instancia}")
+            self.log(f"[ORDEM] {antes} concluida. Proxima: {self.instancia} (idx {self.idx})")
+        if self.reg:
+            self.reg.evento("ordem", [], concluida=antes, proxima=None if self.run_completa else self.instancia, idx=self.idx,
+                            run_completa=self.run_completa)
 
     def agir(self, estado):
-        if estado not in ("CARTAS", "POPUP_CARTA", "BATALHA"):
+        if self.reg and estado != self.ultimo_estado_reg:
+            self.reg.evento("estado", [self.reg.frame(self.ultimo_quadro, "estado_" + estado)], estado=estado,
+                            instancia=self.instancia, idx=self.idx, voltas=self.voltas, run_completa=self.run_completa)
+        self.ultimo_estado_reg = estado
+        if estado not in ("CARTAS", "POPUP_CARTA", "BATALHA", "CLIQUE_JOGO"):
             self.finalizar_instancia()
         if estado != "BATALHA":
             self.batalha_desde = None
+
+        sala = estado == "SALA_VAZIA" or estado.startswith("PRONTA_")
+        if sala and self.run_completa:
+            # a rota acabou: coleta as tarefas e so entao comeca outra volta (a sala pode continuar mostrando a
+            # ultima instancia - antes o bot "aceitava" essa sala e repetia o Minhocao sem parar)
+            if self.usar_tarefas and not self.tarefas_ok:
+                if not self.clicar_e_verificar(estado, SALA_ICONE_TAREFAS, descricao="abrir Tarefas"):
+                    self.pontos_tarefa["abrir"] += 1
+                    if self.pontos_tarefa["abrir"] >= 3:
+                        self.log("   ! nao consegui abrir as Tarefas; sigo sem coletar.")
+                        self.tarefas_ok = True
+                return
+            self.voltas += 1
+            self.log(f"=== Volta {self.voltas} concluida. Recomecando na mesma sala pela {self.rota[0]}. ===")
+            self.novo_ciclo()
+            self.pontos_tarefa.clear()
+            if self.reg:
+                self.reg.evento("volta", [], voltas=self.voltas)
+            if self.uma_vez:
+                self.parar = True
+                return
 
         if estado in CLIQUE_SIMPLES:
             self.clicar_e_verificar(estado, CLIQUE_SIMPLES[estado], descricao="clicando")
@@ -295,22 +397,6 @@ class Navegador:
                     return
             self.clicar_e_verificar(estado, CENTRAL_JOGAR, descricao="Jogar")
         elif estado == "SALA_VAZIA":
-            if self.run_completa and self.usar_tarefas and not self.tarefas_ok:
-                if not self.clicar_e_verificar(estado, SALA_ICONE_TAREFAS, descricao="abrir Tarefas"):
-                    self.pontos_tarefa["abrir"] += 1
-                    if self.pontos_tarefa["abrir"] >= 3:
-                        self.log("   ! nao consegui abrir as Tarefas; sigo sem coletar.")
-                        self.tarefas_ok = True
-                return
-            if self.run_completa:
-                # volta completa e tarefas coletadas: recomeca NA MESMA SALA (as vagas continuam fechadas)
-                self.voltas += 1
-                self.log(f"=== Volta {self.voltas} concluida. Recomecando na mesma sala. ===")
-                self.novo_ciclo()
-                self.pontos_tarefa.clear()
-                if self.uma_vez:
-                    self.parar = True
-                    return
             f, _e = self.ver()
             abertos = slots_abertos(f) if f is not None else []
             if abertos and self.tentativas_slot < 6:
@@ -321,17 +407,49 @@ class Navegador:
                 return
             self.clicar_e_verificar(estado, SALA_TROCAR_INSTANCIA, descricao=f"escolher instancia ({self.instancia})")
         elif estado == "CONFIG_VAZIA":
+            self.adotar_primeira = False
             self.clicar_e_verificar(estado, INSTANCIA_NA_CONFIG[self.instancia], descricao=f"selecionar {self.instancia}")
+        elif estado == "CONFIG_SEL":
+            self.adotar_primeira = False
+            f, _e = self.ver()
+            sel = instancia_selecionada(f) if f is not None else None
+            if sel == self.instancia:
+                self.tentativas_cfg = 0
+                self.clicar_e_verificar(estado, CONFIG_SIM, descricao=f"confirmar {self.instancia}")
+            else:
+                self.tentativas_cfg += 1
+                if sel is None and self.tentativas_cfg <= 3:
+                    self.dormir(0.7)                       # a arte pode ainda estar carregando
+                    return
+                self.log(f"[CONFIG_SEL] marcada: {sel or 'nenhuma/desconhecida'}; quero {self.instancia} -> clicando nela")
+                self.clicar(INSTANCIA_NA_CONFIG[self.instancia])
+                self.dormir(1.0)
         elif estado.startswith("PRONTA_"):
             nome = estado.split("_", 1)[1]
             if nome != self.instancia and nome in self.rota:
-                self.log(f"   sala ja esta em {nome}; sigo a partir dela.")
-                self.idx = self.rota.index(nome)
+                if self.adotar_primeira:
+                    self.log(f"   sala ja esta em {nome}; sigo a partir dela (so na 1a vez).")
+                    self.idx = self.rota.index(nome)
+                else:
+                    self.trocas_pronta += 1
+                    if self.trocas_pronta > 3:
+                        self.log(f"   ! nao consegui trocar a sala de {nome} para {self.instancia}; sigo com {nome}.")
+                        self.idx = self.rota.index(nome)
+                    else:
+                        self.clicar_e_verificar(estado, SALA_TROCAR_INSTANCIA,
+                                                descricao=f"sala esta em {nome} mas a ordem pede {self.instancia}: trocando")
+                        return
+            self.adotar_primeira = False
+            self.trocas_pronta = 0
             f, _e = self.ver()
-            abertos = slots_abertos(f) if f is not None else []
+            vagas = estado_vagas(f) if f is not None else []
+            if "ocupado" in vagas and not self.avisou_ocupado:
+                self.avisou_ocupado = True
+                self.log(f"   ! outro jogador entrou na sala (vagas: {vagas}). Nao mexo na vaga dele; sigo.")
+            abertos = [c for c, e in zip(SLOTS_SALA, vagas) if e == "aberto"]
             if abertos and self.tentativas_slot < 6:
                 self.tentativas_slot += 1
-                self.log(f"[{estado}] fechando vaga aberta da sala {abertos[0]} ({len(abertos)} aberta(s))")
+                self.log(f"[{estado}] fechando vaga aberta {abertos[0]} (vagas: {vagas})")
                 self.clicar(abertos[0])
                 self.dormir(0.9)
                 return
@@ -357,6 +475,7 @@ class Navegador:
         elif estado == "TAREFA":
             self.coletar_tarefas()
         elif estado == "BATALHA":
+            self.lutou = True
             if self.batalha_desde is None:
                 self.batalha_desde = self.agora()
                 self.em_batalha = True
@@ -397,6 +516,9 @@ class Navegador:
             if self.atirador and self.em_batalha:
                 # na batalha o tempo importa (a sua vez dura ~8 s): sem a dupla leitura de confirmacao
                 f, achadas = self.ver()
+                if achadas and achadas[0] == "CLIQUE_JOGO":
+                    self.agir("CLIQUE_JOGO")          # o jogo perdeu o foco: nao responde ate clicar nele
+                    continue
                 if achadas and achadas[0] == "BATALHA":
                     self.fora_da_batalha_desde = None
                     self.atirador.passo(f)
@@ -425,6 +547,8 @@ class Navegador:
         if agora - self.perdido_desde > 45 and agora - self.ultimo_aviso > 45:
             self.ultimo_aviso = agora
             self.log("? tela desconhecida ha mais de 45 s (carregando, ou uma tela que o bot ainda nao conhece).")
+            if self.reg:
+                self.reg.evento("desconhecida", [self.reg.frame(self.ultimo_quadro, "desconhecida")], desde_s=round(agora - self.perdido_desde))
 
 
 # ---------------------------------------------------------------------------
@@ -442,8 +566,12 @@ def main():
     ap.add_argument("--atirar", action="store_true", help="o bot joga os turnos da batalha (tiro, itens)")
     ap.add_argument("--sombra", action="store_true", help="na batalha, so mostra o tiro que faria (nao aperta teclas)")
     ap.add_argument("--itens", default="", help="ordem dos itens, ex.: 2,3,4,4,4,5,6,7,8")
+    ap.add_argument("--sem-gravar", action="store_true", help="nao grava prints/eventos do bot em sessoes\\")
     args = ap.parse_args()
 
+    if not args.so_ver and not instancia_unica():
+        sys.exit("ERRO: ja existe um bot (navegador/atirador) rodando. Feche os outros .bat antes: "
+                 "varios bots juntos clicam e apertam teclas ao mesmo tempo e se atrapalham.")
     titulo, exe = args.titulo or config.TITULO_JANELA, args.exe or config.EXE_JANELA
     hwnd = janela.resolver_janela(titulo, exe)
     if not hwnd:
@@ -483,18 +611,27 @@ def main():
         arq.flush()
 
     rota = [r.strip().upper() for r in args.rota.split(",") if r.strip()]
-    nav = Navegador(io, det, rota, not args.sem_tarefas, args.uma_vez, args.simular, log=log)
+    reg = None
+    if not args.sem_gravar:
+        import registro
+        reg = registro.Registro("bot")
+        log(f"Gravando o bot em: {reg.pasta}")
+    nav = Navegador(io, det, rota, not args.sem_tarefas, args.uma_vez, args.simular, log=log, reg=reg)
     if args.atirar or args.sombra:
         import atirador as atirador_mod
         import memoria as memoria_mod
         ordem = [int(x) for x in args.itens.split(",") if x.strip()] or None
         nav.atirador = atirador_mod.Atirador(io, memoria_mod.Memoria(), lambda: nav.instancia, sombra=args.sombra, log=log,
-                                             ordem_itens=ordem)
+                                             ordem_itens=ordem, reg=reg)
     nav.idx = max(0, min(len(rota) - 1, args.comecar_em - 1))
     try:
         nav.rodar()
     except KeyboardInterrupt:
         log("Parado pelo usuario.")
+    finally:
+        if reg:
+            reg.fechar()
+            print(f"Gravacao salva em {reg.pasta}  (rode EMPACOTAR_E_ENVIAR.bat para me mandar)")
 
 
 if __name__ == "__main__":
