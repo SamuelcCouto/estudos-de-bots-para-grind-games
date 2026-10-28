@@ -24,6 +24,7 @@ TECLA_ESPACO = "espaco"
 ESPERA_VEZ = 0.35             # s com o PASS visivel antes de agir (o jogo aceita teclas durante a faixa "Sua vez!")
 DURACAO_MAX_DA_VEZ = 11.0     # s: se o PASS nunca some, considera que comecou outro turno
 INTERVALO_LEITURA = 1.0       # s entre leituras gravadas no registro (diagnostico)
+INTERVALO_MINIMAPA = 0.4      # s entre leituras do minimapa para o rastreador (posicao do jogador = a que mais se repete)
 TOLERANCIA_ANGULO = 3.0       # graus
 TAXA_ANGULO_INICIAL = 28.0    # graus/s com a seta apertada (aprende sozinho)
 FORCA_POR_SEGUNDO = 38.0      # % da barra por segundo segurando espaco (medido nas gravacoes; o bot aprende o valor real)
@@ -40,6 +41,7 @@ class LeitorReal:
     angulo = staticmethod(L.angulo)
     forca = staticmethod(L.forca)
     pontos = staticmethod(L.pontos_minimapa)
+    candidatos = staticmethod(L.candidatos_minimapa)
     itens = staticmethod(L.itens_ativos)
     vida = staticmethod(L.vida_boss)
 
@@ -70,11 +72,43 @@ class Atirador:
         self.pendente = None
         self.turnos = 0
         self.falhas_tecla = 0
+        self.rastreador = L.RastreadorMinimapa()
+        self.ultimo_minimapa = -99.0
+        self.inst_rastreada = None
+        if getattr(memoria, "ignorados", 0):
+            self.log(f"(memoria: {memoria.ignorados} tiro(s) antigos ignorados - foram gravados com a leitura antiga do "
+                     f"minimapa, que podia confundir a agua/efeitos com o seu boneco)")
 
     # ------------------------------------------------------------------ leitura
     def ver(self):
         img = self.io.capturar()
         return None if img is None else self.lei.preparar(img)
+
+    def _candidatos(self, f):
+        if hasattr(self.lei, "candidatos"):
+            return self.lei.candidatos(f)
+        az, vm = self.lei.pontos(f)               # leitor simples (testes): um ponto de cada
+        return ([az] if az else []), ([vm] if vm else [])
+
+    def observar_minimapa(self, f, forcar=False):
+        agora = self.agora()
+        if not forcar and agora - self.ultimo_minimapa < INTERVALO_MINIMAPA:
+            return
+        self.ultimo_minimapa = agora
+        self.rastreador.observar(*self._candidatos(f))
+
+    def _resumo_minimapa(self):
+        j, c = self.rastreador.jogador()
+        ult = self.rastreador.azuis[-1] if self.rastreador.azuis else []
+        r = lambda p: p and [round(p[0], 1), round(p[1], 1)]
+        return {"jogador": r(j), "confianca": round(c, 2), "boss": r(self.rastreador.boss), "azuis_agora": [r(p) for p in ult]}
+
+    def posicoes(self, f):
+        """(jogador, boss, confianca do jogador) - jogador pelo rastreador (o que mais se repete na batalha), boss pela
+        leitura mais recente."""
+        self.observar_minimapa(f, forcar=True)
+        azul, conf = self.rastreador.jogador()
+        return azul, self.rastreador.boss, conf
 
     # ------------------------------------------------------------------ laco (chamado varias vezes por segundo)
     def passo(self, f=None):
@@ -83,11 +117,16 @@ class Atirador:
             return
         vez = self.lei.minha_vez(f)
         agora = self.agora()
+        inst = self.instancia()
+        if inst != self.inst_rastreada:
+            self.rastreador.reiniciar()
+            self.inst_rastreada = inst
+        self.observar_minimapa(f)
         if self.reg and agora - self.ultima_leitura >= INTERVALO_LEITURA:
             self.ultima_leitura = agora
             self.reg.evento("leitura", [self.reg.frame(f, "leitura")], vez=bool(vez), agiu=self.agiu,
                             angulo=round(self.lei.angulo(f), 1), forca=round(self.lei.forca(f)), vida=round(self.lei.vida(f)),
-                            itens=self.lei.itens(f))
+                            itens=self.lei.itens(f), minimapa=self._resumo_minimapa())
         if not vez:
             if self.pendente and not self.agiu_recentemente():
                 self.concluir_tiro(f)
@@ -119,6 +158,7 @@ class Atirador:
             self.mem.registrar(p["inst"], p["azul"], p["boss"], p["angulo"], p["forca"], True, origem="bot")
             self.pendente = None
         self.vez_desde, self.agiu = None, False
+        self.rastreador.reiniciar()               # proxima batalha: spawn novo
 
     # ------------------------------------------------------------------ um turno
     def devolver_foco(self):
@@ -135,18 +175,19 @@ class Atirador:
         self.acao_em = inicio
         self.turno_abortado = False
         inst = self.instancia()
-        azul, boss = self.lei.pontos(f)
+        azul, boss, conf = self.posicoes(f)
         for _ in range(3):
             if azul and boss:
                 break
             self.dormir(0.1)
             g = self.ver()
             if g is not None:
-                azul, boss = self.lei.pontos(g)
+                azul, boss, conf = self.posicoes(g)
         pred = self.mem.prever(inst, azul, boss)
         hp0 = self.lei.vida(f)
         itens0 = self.lei.itens(f)
-        self.log(f"[tiro {self.turnos}] {inst}: voce {azul and tuple(round(v) for v in azul)}, boss {boss and tuple(round(v) for v in boss)}"
+        self.log(f"[tiro {self.turnos}] {inst}: voce {azul and tuple(round(v) for v in azul)} (em {conf:.0%} das leituras), "
+                 f"boss {boss and tuple(round(v) for v in boss)}"
                  f" -> mirar {pred['angulo']:.0f} graus, forca {pred['forca']:.0f}% ({pred['origem']}: {pred['detalhe']})")
         fr = [self.reg.frame(f, "turno_inicio")] if self.reg else []
         if self.sombra:
@@ -198,7 +239,7 @@ class Atirador:
                  f"[{metodo_usado}, soltou por '{soltou}'] tempo: angulo {t_ang:.1f}s, itens {t_itens - t_ang:.1f}s, carga {t_tiro - t_itens:.1f}s (total {t_tiro:.1f}s)")
         if self.reg:
             fr.append(self.reg.frame(self.ver(), "tiro_dado"))
-            self.reg.evento("turno", fr, inst=inst, azul=azul, boss=boss, previsto=pred, angulo_real=round(angulo_real, 1),
+            self.reg.evento("turno", fr, inst=inst, azul=azul, boss=boss, confianca_jogador=round(conf, 2), previsto=pred, angulo_real=round(angulo_real, 1),
                             forca_real=round(forca_real), alvo_forca=round(alvo_forca), itens=apertados, itens_coloridos_inicio=itens0,
                             soltou=soltou, metodo_forca=metodo_usado, segurou_s=round(segurou, 2), trace_barra=trace[-40:],
                             taxa_forca=round(self.taxa_forca, 1), jogo_em_foco=(self.io.em_foco() if hasattr(self.io, "em_foco") else None),

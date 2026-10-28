@@ -16,6 +16,12 @@ PASS_LIMIAR = 0.65             # na vez: >= 0.79; fora dela: < 0.25
 MOSTRADOR_PIVO = (345.2, 526.0)  # pivo do ponteiro do angulo
 BARRA_FORCA = (414, 745, 544, 556)   # x0, x1, y0, y1 da barra de forca
 MINIMAPA = (872, 976, 172, 244)      # x0, x1, y0, y1
+MINIMAPA_Y_CONTEUDO = 14             # px do minimapa: acima disso ficam o cabecalho (facil/normal, 2/200, botoes) e a moldura
+MINIMAPA_Y_MAX = 69.5                # abaixo: moldura de baixo
+MINIMAPA_X_LIM = (3.5, 101.5)        # fora: molduras dos lados
+MINIMAPA_PONTO_MAX = 7               # px: o nucleo de um ponto (jogador/boss) cabe num quadrado 7x7
+_CRUZ = cv2.getStructuringElement(cv2.MORPH_CROSS, (3, 3))
+LEITURAS_MUDOU = 5                  # leituras seguidas sem o ponto antigo (e com um novo) = o boneco mudou de lugar
 VIDA_BOSS = (725, 812, 185, 191)     # barra de vida do boss (topo): cheia termina em ~811, comeca em ~725
 ITENS_X = (951, 975)
 ITENS_Y0, ITENS_PASSO, ITENS_ALTURA = 247, 25.7, 22
@@ -65,23 +71,98 @@ def forca(f):
     return 0.0 if len(xs) == 0 else (xs.max() + 1) / (x1 - x0) * 100
 
 
+def _pontos_redondos(mk):
+    """[(x, y, tamanho)] dos pontos compactos da mascara, maiores primeiro. A erosao em cruz apaga o que tem ate 2 px de
+    largura (moldura do minimapa, que fica verde/azul/vermelha conforme a instancia; rastro da cachoeira) e manchas
+    grandes (agua, efeitos de tela) ficam de fora pelo tamanho. Fora tambem: cabecalho e as bordas."""
+    nucleo = cv2.erode(mk.astype(np.uint8), _CRUZ)
+    n, _, st, ce = cv2.connectedComponentsWithStats(nucleo)
+    out = []
+    for i in range(1, n):
+        _x, _y, w, h, a = st[i]
+        cx, cy = float(ce[i][0]), float(ce[i][1])
+        if w > MINIMAPA_PONTO_MAX or h > MINIMAPA_PONTO_MAX or a < 2:
+            continue
+        if cy < MINIMAPA_Y_CONTEUDO or cy > MINIMAPA_Y_MAX or not (MINIMAPA_X_LIM[0] <= cx <= MINIMAPA_X_LIM[1]):
+            continue
+        out.append((cx, cy, int(a)))
+    return sorted(out, key=lambda c: -c[2])
+
+
+def candidatos_minimapa(f):
+    """(pontos azuis, pontos vermelhos) do minimapa: listas [(x, y, tamanho)], maiores primeiro.
+    Coordenadas em pixels do minimapa (y cresce para baixo).
+    Cores (HSV do OpenCV, medidas nas 3 instancias): ponto do jogador H 111-116, S > 200 (a agua da Profundezas e
+    H 101-104: fica de fora); faixa azul-escura do chao do Minhocao tem V < 120; boss H 0-6 ou >= 172."""
+    x0, x1, y0, y1 = MINIMAPA
+    hsv = cv2.cvtColor(f[y0:y1, x0:x1], cv2.COLOR_BGR2HSV).astype(int)
+    h, s, v = hsv[..., 0], hsv[..., 1], hsv[..., 2]
+    azul = (h >= 107) & (h <= 124) & (s > 170) & (v > 120)
+    verm = ((h <= 6) | (h >= 172)) & (s > 170) & (v > 150)
+    return _pontos_redondos(azul), _pontos_redondos(verm)
+
+
 def pontos_minimapa(f):
     """((x, y) do jogador - ponto azul, (x, y) do boss - ponto vermelho); cada um None se nao achar.
-    Coordenadas em pixels do minimapa (y cresce para baixo)."""
-    x0, x1, y0, y1 = MINIMAPA
-    m = f[y0:y1, x0:x1].astype(int)
-    b, g, r = m[..., 0], m[..., 1], m[..., 2]
-    azul = (b > 170) & (r < 100) & (g < 150) & (b - r > 90)
-    verm = (r > 190) & (g < 90) & (b < 90)
+    So um quadro: na batalha use RastreadorMinimapa, que filtra leituras passageiras."""
+    az, vm = candidatos_minimapa(f)
+    return (az[0][:2] if az else None), (vm[0][:2] if vm else None)
 
-    def centro(mk):
-        n, _, st, ce = cv2.connectedComponentsWithStats(mk.astype(np.uint8))
-        if n < 2:
-            return None
-        i = 1 + int(np.argmax(st[1:, 4]))
-        return (float(ce[i][0]), float(ce[i][1]))
 
-    return centro(azul), centro(verm)
+class RastreadorMinimapa:
+    """Acompanha o minimapa durante a batalha.
+    Jogador: o bot nunca anda, entao a posicao certa e a que MAIS SE REPETE nas leituras (um ponto azul passageiro -
+    efeito, tiro, animacao - nao engana, mesmo que esconda o boneco por um instante). Se o boneco for empurrado, a
+    posicao nova assume depois de LEITURAS_MUDOU leituras (~2 s).
+    Boss: anda; vale a leitura mais recente (ou a ultima conhecida, se o ponto sumiu por um instante)."""
+    def __init__(self, janela=30, raio=2.5):
+        self.janela, self.raio = janela, raio
+        self.azuis = []          # uma lista de candidatos (x, y) por leitura, mais antiga primeiro
+        self.boss = None
+
+    def reiniciar(self):
+        self.azuis, self.boss = [], None
+
+    def observar(self, azuis, vermelhos):
+        """azuis/vermelhos: listas de (x, y[, tamanho]) de UM quadro."""
+        self.azuis.append([tuple(c[:2]) for c in azuis[:4]])
+        del self.azuis[:-self.janela]
+        if vermelhos:
+            self.boss = tuple(vermelhos[0][:2])
+
+    def _mais_frequente(self, leituras):
+        """(ponto, em quantas das leituras ele aparece) - empate: o visto primeiro."""
+        melhor, n_m = None, 0
+        for leit in leituras:
+            for p in leit:
+                n = sum(1 for l2 in leituras if any(self._perto(p, q) for q in l2))
+                if n > n_m:
+                    melhor, n_m = p, n
+        return melhor, n_m
+
+    def _perto(self, p, q):
+        return abs(p[0] - q[0]) + abs(p[1] - q[1]) <= self.raio
+
+    def jogador(self):
+        """((x, y) ou None, confianca 0..1 = fracao das leituras da janela em que o ponto apareceu).
+        Vale o ponto que aparece em MAIS leituras; so troca de lugar se o ponto antigo sumir por LEITURAS_MUDOU leituras
+        seguidas e outro aparecer em quase todas elas (boneco empurrado)."""
+        if not self.azuis:
+            return None, 0.0
+        melhor, n_m = self._mais_frequente(self.azuis)
+        recentes = self.azuis[-LEITURAS_MUDOU:]
+        if melhor is not None and len(recentes) == LEITURAS_MUDOU and not any(self._perto(melhor, q) for l2 in recentes for q in l2):
+            novo, n_novo = self._mais_frequente(recentes)
+            if novo is not None and n_novo >= LEITURAS_MUDOU - 1:
+                melhor = novo
+                n_m = sum(1 for l2 in self.azuis if any(self._perto(novo, q) for q in l2))
+        if melhor is None:
+            return None, 0.0
+        # posicao refinada: media dos pontos do grupo nas ultimas leituras
+        grupo = [q for l2 in self.azuis[-5:] for q in l2 if self._perto(melhor, q)]
+        if grupo:
+            melhor = (float(np.mean([q[0] for q in grupo])), float(np.mean([q[1] for q in grupo])))
+        return melhor, n_m / len(self.azuis)
 
 
 def itens_ativos(f):

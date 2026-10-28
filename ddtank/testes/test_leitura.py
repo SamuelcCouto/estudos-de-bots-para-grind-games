@@ -38,8 +38,54 @@ f = [L.forca(img(f"TIRO_{i}")) for i in (75, 84, 85, 86)]
 print("forca nos quadros do tiro:", [round(v) for v in f])
 assert f[0] < 5 and f[1] > 30 and abs(f[2] - f[3]) < 3
 
-# minimapa: jogador a esquerda do boss (Profundezas: azul ~(12,34), vermelho ~(66,46))
+# minimapa: jogador = ponto azul pequeno; a AGUA da Profundezas (mancha azul-clara grande a esquerda, ~(12,34)) NAO e o
+# jogador - o leitor antigo pegava "a maior mancha azul" e confundia (forca toda errada)
 az, vm = L.pontos_minimapa(img("TIRO_75"))
-print("minimapa:", az, vm)
-assert az and vm and vm[0] - az[0] > 30
+print("minimapa (Profundezas):", az, vm)
+perto = lambda p, q, tol=1.5: p is not None and abs(p[0] - q[0]) <= tol and abs(p[1] - q[1]) <= tol
+assert perto(az, (27, 47)) and perto(vm, (65.4, 46.8)), (az, vm)
+
+
+def so_minimapa(nome):
+    """quadro preto 1280 com o recorte do minimapa (testes/frames/MINI_*.png) no lugar certo"""
+    f = np.zeros((720, 1280, 3), np.uint8)
+    x0, x1, y0, y1 = L.MINIMAPA
+    f[y0:y1, x0:x1] = cv2.imread(os.path.join(AQUI, "frames", f"MINI_{nome}.png"))
+    return f
+
+
+GAB_MINI = {   # (jogador, boss) conferidos a olho
+    "FANTASMA": ((32, 57.2), (90.5, 56.5)),
+    "PROFUNDEZAS_AGUA": ((27, 47), (65.4, 46.8)),
+    "MINHOCAO": ((37.8, 67.5), (73.1, 64.9)),
+    "MOLDURA_VERMELHA": ((5.6, 66.2), (73.1, 64.9)),     # a moldura do minimapa fica vermelha: nao e o boss
+    "EFEITO_AZUL": ((14, 56.7), None),                   # efeito azul enorme cobrindo o minimapa: ignorado
+}
+for nome, (gj, gb) in GAB_MINI.items():
+    j, b = L.pontos_minimapa(so_minimapa(nome))
+    print(f"minimapa {nome}: jogador {j and tuple(round(v, 1) for v in j)}, boss {b and tuple(round(v, 1) for v in b)}")
+    assert perto(j, gj), (nome, j, gj)
+    assert (b is None) if gb is None else perto(b, gb), (nome, b, gb)
+
+# rastreador: um quadro sozinho pode pegar a setinha acima do boneco (ou um efeito); a posicao que mais se repete vence
+j1, _ = L.pontos_minimapa(so_minimapa("PROFUNDEZAS_SETA"))
+print("quadro isolado com a seta:", j1)
+r = L.RastreadorMinimapa()
+for nome in ["PROFUNDEZAS_AGUA"] * 6 + ["PROFUNDEZAS_SETA"] * 2:
+    r.observar(*L.candidatos_minimapa(so_minimapa(nome)))
+j, conf = r.jogador()
+print(f"rastreado: {j}, confianca {conf:.2f}, boss {r.boss}")
+assert perto(j, (27, 47)) and conf > 0.5, (j, conf)
+# leituras falsas passageiras (ex.: algo azul em (71,23)) nao vencem a posicao estavel
+r = L.RastreadorMinimapa()
+for k in range(12):
+    r.observar([(32.0, 57.0, 9)] + ([(71.0, 23.0, 20)] if k in (9, 10) else []), [(90.0, 56.0, 12)])
+assert perto(r.jogador()[0], (32, 57)), r.jogador()
+# se o boneco for empurrado, a posicao nova assume em poucas leituras
+for k in range(6):
+    r.observar([(40.0, 57.0, 9)], [(90.0, 56.0, 12)])
+assert perto(r.jogador()[0], (40, 57)), r.jogador()
+r.reiniciar()
+assert r.jogador() == (None, 0.0) and r.boss is None
+print("rastreador OK")
 print("\nleituras OK")

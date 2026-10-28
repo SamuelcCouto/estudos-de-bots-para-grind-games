@@ -94,3 +94,32 @@ R por instancia e um posterior em grade log (prior R=38, sigma 0.7 em ln); acert
 (t=0.22) com chance de ser atipico; erro => descarta a mesma faixa (peso 0.1). Teste sintetico: instancia nova acerta
 em <=4 tiros; geometrias variadas 32/32. LIMITES: assume boss a DIREITA do jogador (dx>0), sem vento, hitbox com
 tolerancia ~22% da forca; PvP (alvo que anda, vento, alvo pequeno) precisara de vento + posicao em tempo real + muito mais dados.
+
+## Minimapa (28/10, noite) - a causa da "forca fraca"
+Log do usuario no Fantasma: "voce (71,23), boss (90,56)" -> dx=19, dy=-34 -> a fisica pedia 10-21% e errou 4 vezes.
+O jogador estava na verdade em ~(32,57) (onde o usuario acerta com 76-81%). Leitor antigo = "maior mancha azul" com
+B>170: o ponto do jogador (BGR ~(156,52,18)) quase nao passava, entao qualquer outra coisa azul vencia. Na
+Profundezas ele pegava a AGUA (mancha ~16x24 em (11,34)): as 6 sementes da Profundezas estavam com o jogador errado.
+Leitor novo (leitura.candidatos_minimapa): HSV - jogador H 107-124, S>170, V>120 (agua H 101-104; chao azul-escuro
+do Minhocao V<120); boss H<=6 ou >=172, S>170, V>150. Erosao em cruz 3x3 apaga linhas de ate 2 px (a MOLDURA do minimapa
+muda de cor: verde/azul/vermelha) e o nucleo do ponto tem que caber em 7x7; ignora cabecalho (y<14), bordas (x<3.5,
+x>101.5, y>69.5). Validado em todos os 580 quadros de batalha das 2 gravacoes.
+RastreadorMinimapa: o bot nunca anda -> jogador = ponto que aparece em MAIS leituras (0,4 s entre leituras); so troca se
+o antigo sumir 5 leituras seguidas e outro aparecer em >=4 delas (boneco empurrado). A setinha azul acima do boneco as
+vezes vira o maior ponto num quadro isolado (ex.: (26,38) na Profundezas) - o rastreador resolve.
+Sementes relidas (campo "leitura": 2). Tiros sem "leitura">=2 (gravados pelo bot com o leitor velho, no
+dados/aprendizado.json do usuario) sao IGNORADOS pela memoria - eles ensinavam um R errado.
+R por instancia com as posicoes certas: Fantasma ~54, Minhocao ~34, Profundezas ~24 (R = escala do minimapa de cada
+mapa; Profundezas varia muito: hitbox grande). Decisao da forca: a que tem MAIOR CHANCE DE ACERTO somando as hipoteses
+de R (nao a mediana: com duas hipoteses separadas, a mediana cai no meio e erra as duas). Acerto antigo na mesma
+situacao e repetido se a fisica der >=60% de chance para aquela forca.
+
+## Boneco virado para a ESQUERDA (descoberto em 28/10; ainda NAO implementado)
+Gravacao 20261028_021750, quadros 104-113 (Profundezas): o usuario tocou "esquerda" 0,1 s -> o boneco virou (andou ~0)
+e o mostrador mudou: o numero passou de 14 para 48, o ponteiro foi para o lado ESQUERDO (48 graus a partir da
+horizontal esquerda) e ficou uma linha vermelha fina do lado direito (~10-14 graus: marca do tiro anterior?).
+14 -> 48 sugere que o numero = angulo da arma + inclinacao do chao (w - s = 14, w + s = 48 -> s ~17 graus).
+O leitor de angulo atual so procura o ponteiro do lado direito (8-90 graus): virado para a esquerda ele leria a marca
+antiga (ou 90). Para atirar no boss a esquerda (dx<0) falta: tocar esquerda, ler o ponteiro dos dois lados (ou ler o
+NUMERO do mostrador), e depois tocar direita para voltar. Hoje, com o boss a esquerda, o bot usa o acerto mais
+parecido e avisa no log ("boss a esquerda/em cima de voce").

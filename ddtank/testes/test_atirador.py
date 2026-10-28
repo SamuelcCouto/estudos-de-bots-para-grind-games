@@ -10,6 +10,9 @@ sys.path.insert(0, os.path.dirname(AQUI))
 import atirador as A
 import memoria as M
 
+# forca que o previsor escolhe para a situacao padrao do Mundo (Minhocao, jogador (38,67), boss (73.1,64.5))
+ALVO = M.Memoria(arq_aprendizado=None).prever("MINHOCAO", (38.0, 67.0), (73.1, 64.5))["forca"]
+
 CUSTOS = {1: 110, 2: 110, 3: 110, 4: 85, 5: 80, 6: 70, 7: 55, 8: 50}
 
 class Mundo:
@@ -110,7 +113,7 @@ print("\n".join(logs))
 assert abs(w.angulo - 31) <= 3.5, f"angulo final {w.angulo:.1f}"
 assert w.itens_apertados[:2] == [2, 3], w.itens_apertados            # stamina 240: 2 (110) e 3 (110); depois nao sobra para o 4
 assert 2 not in w.itens_apertados[1:], "item 2 so pode 1x por turno"
-alvo = 38.0
+alvo = ALVO
 assert len(w.tiros) == 1 and abs(w.tiros[0] - alvo) <= 6, f"forca solta {w.tiros}"
 assert any("ACERTOU" in l for l in logs), "nao registrou o acerto"
 assert json.load(open(arq))["tiros"][-1]["acertou"] is True
@@ -184,7 +187,7 @@ assert w.tiros and w.tiros[0] < 25, "o simulador deveria reproduzir o disparo pr
 
 w = MundoComThread(exige_repeticao=True, custo_captura=0.12); at, mem, logs, arq = novo(w); rodar(at, w, ate=16)
 print("com thread de repeticao (30 ms):         forca REAL", [round(x) for x in w.tiros])
-assert len(w.tiros) == 1 and abs(w.tiros[0] - 38) <= 7, w.tiros
+assert len(w.tiros) == 1 and abs(w.tiros[0] - ALVO) <= 7, w.tiros
 print("repeticao de tecla em thread propria: OK")
 
 # ------------------------------------------------------------ 11) leitura da barra quebrada: troca para o metodo por tempo
@@ -194,7 +197,7 @@ w.novo_turno(13, 22); rodar(at, w, ate=26)
 print("barra quebrada: forca REAL por turno", [round(x) for x in w.tiros], "| metodo agora:", at.metodo_forca)
 print("\n".join(l for l in logs if "trocando o metodo" in l))
 assert at.metodo_forca == "tempo" and len(w.tiros) == 2
-assert w.tiros[0] < 30 and abs(w.tiros[1] - 38) <= 7, w.tiros
+assert w.tiros[0] < 30 and abs(w.tiros[1] - ALVO) <= 7, w.tiros
 print("troca de metodo de carga apos subforca OK")
 print("\natirador (hipotese da repeticao) OK")
 
@@ -214,7 +217,7 @@ class MundoFoco(MundoComThread):
 w = MundoFoco(); at, mem, logs, arq = novo(w); rodar(at, w, ate=16)
 print("\n".join(l for l in logs if "foco" in l or "tiro dado" in l or "Pulando" in l))
 assert w.foco_nivel == 2, "nao subiu o foco"
-assert abs(w.angulo - 31) <= 3.5 and len(w.tiros) == 1 and abs(w.tiros[0] - 38) <= 7, (w.angulo, w.tiros)
+assert abs(w.angulo - 31) <= 3.5 and len(w.tiros) == 1 and abs(w.tiros[0] - ALVO) <= 7, (w.angulo, w.tiros)
 assert w.devolvidos >= 1, "nao devolveu o foco"
 print("foco do teclado: subiu de nivel, atirou e devolveu o foco OK")
 print("\natirador (foco) OK")
@@ -225,3 +228,29 @@ print("\n".join(l for l in logs if "cena" in l or "tiro dado" in l or "Pulando" 
 assert w.cliques_cena == 1 and abs(w.angulo - 31) <= 3.5 and len(w.tiros) == 1, (w.cliques_cena, w.angulo, w.tiros)
 print("teclado no chat -> clique na cena devolve o foco ao jogo OK")
 print("\natirador (foco no chat) OK")
+
+# ------------------------------------------------------------ 15) SEU LOG (Fantasma): leu "voce (71,23)" e atirou com 10-21%
+# Um ponto azul falso no minimapa bem na hora do turno nao pode virar "o jogador": vale a posicao que se repete.
+class MundoPontoFalso(MundoComThread):
+    def capturar(self):
+        q = MundoComThread.capturar(self)
+        if 2.8 <= self.t <= 3.6:
+            q["azul"] = (71.0, 23.0)                     # efeito/objeto azul passageiro
+        return q
+w = MundoPontoFalso(vez_inicio=3.0, vez_fim=11.0, taxa=38.0)
+w.azul, w.boss = (32.0, 57.0), (90.3, 56.5)
+at, mem, logs, arq = novo(w, inst="FANTASMA"); rodar(at, w, ate=16)
+print("\n".join(l for l in logs if "mirar" in l or "tiro dado" in l))
+assert any("voce (32, 57)" in l for l in logs), "usou a leitura falsa do minimapa"
+assert len(w.tiros) == 1 and w.tiros[0] >= 60, f"forca {w.tiros}: no Fantasma, dessa posicao, voce acerta com 71-81%"
+print("ponto azul falso no minimapa ignorado OK")
+
+# ------------------------------------------------------------ 16) tiros antigos (leitor velho do minimapa) nao contaminam a memoria
+tmp = tempfile.NamedTemporaryFile("w", suffix=".json", delete=False, encoding="utf-8")
+json.dump({"tiros": [{"inst": "FANTASMA", "azul": [71, 23], "boss": [90, 56], "angulo": 20, "forca": f, "acertou": False,
+                      "origem": "bot"} for f in (10, 18, 21, 21)]}, tmp); tmp.close()
+mem = M.Memoria(arq_aprendizado=tmp.name); os.unlink(tmp.name)
+p = mem.prever("FANTASMA", (32.0, 57.0), (90.3, 56.5))
+print("memoria com 4 erros antigos:", mem.ignorados, "ignorados; previsto", round(p["forca"]), "%", p["origem"])
+assert mem.ignorados == 4 and p["forca"] >= 65, p
+print("\natirador (minimapa) OK")

@@ -129,3 +129,14 @@ IMPORTANTE (versao de 28/10, tarde)
   tiros e depois mantem; (3) o angulo preferido e o que voce costuma usar na instancia (ou 35), trocando por outro
   se a forca ficar fora de 18-85%. O que aprende vai para dados\aprendizado.json. O log mostra "fisica: R=..."
   e a incerteza (x1.3 = confiante; x3 = ainda procurando).
+
+* MINIMAPA CORRIGIDO (28/10, noite): a causa da "forca fraca" no Fantasma era a LEITURA DO MINIMAPA. O bot achava que voce
+  estava em (71,23) - la em cima do mapa - quando voce estava no chao em ~(32,57); com a posicao errada a conta da forca
+  da 10-20%. O leitor antigo pegava "a maior mancha azul" (na Profundezas era a AGUA). O novo procura so pontos redondos
+  da cor exata do seu marcador e, na batalha, usa a posicao que MAIS SE REPETE (um efeito azul passageiro nao engana).
+  O log agora mostra "voce (32, 57) (em 90% das leituras)". Se esse numero vier baixo ou a posicao parecer estranha,
+  me mande a gravacao.
+  Os tiros que o bot aprendeu com a leitura antiga (dados\aprendizado.json) sao ignorados automaticamente.
+  Forca: o bot escolhe a forca com MAIOR CHANCE DE ACERTO ("chance de acerto ~95%" no log); se voce ja acertou daquela
+  mesma posicao, ele repete a sua forca quando a fisica concorda.
+  Boss a ESQUERDA do seu boneco: ainda nao vira o boneco (precisa de mais estudo do mostrador) - ele avisa no log.
