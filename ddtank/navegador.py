@@ -30,7 +30,12 @@ import estados as estados_mod
 # Posicoes (em pixels de uma imagem com 1280 de largura; saem da sua gravacao)
 # ---------------------------------------------------------------------------
 LARGURA_REF = 1280
-FECHAR_CLIQUE_JOGO = (646, 345)     # centro do pop-up "Clique no jogo para continuar jogando" (aparece quando o jogo perde o foco)
+# Pop-up "Clique no jogo para continuar jogando" (aparece quando o jogo perde o foco). Qualquer clique dentro do jogo
+# o fecha, mas o clique tambem vale para o que esta POR BAIXO - entao nunca clicar no pop-up (no mapa ele cobre a
+# Sala de Casamento!). Usa um ponto neutro: o chat nas telas de cidade/sala, o texto do log na batalha etc.
+FOCO_PONTO_PADRAO = (450, 485)
+FOCO_PONTO_NEUTRO = {"BATALHA": (420, 290), "CARTAS": (590, 190), "POPUP_CARTA": (590, 190)}
+POPUP_FOCO_CAIXA = (596, 316, 696, 410)
 MAPA_CENTRAL = (872, 430)
 CENTRAL_JOGAR = (794, 472)
 SALA_TROCAR_INSTANCIA = (697, 302)
@@ -58,7 +63,6 @@ ROTA_PADRAO = ["FANTASMA", "PROFUNDEZAS", "MINHOCAO"]
 INSTANCIA_NA_CONFIG = {"FANTASMA": (509, 313), "PROFUNDEZAS": (591, 313), "MINHOCAO": (675, 318)}
 
 CLIQUE_SIMPLES = {                      # tela -> onde clicar para avancar
-    "CLIQUE_JOGO": FECHAR_CLIQUE_JOGO,
     "MAPA": MAPA_CENTRAL,
     "POPUP_SOZINHO": POPUP_SOZINHO_SIM,
     "POPUP_CARTA": POPUP_CARTA_SIM,
@@ -222,6 +226,10 @@ class Navegador:
         self.io, self.det = io, detector
         self.reg = reg                    # gravacao do bot em acao (registro.Registro) ou None
         self.ultimo_quadro = None
+        self.achadas_atual = []
+        self.ultimo_conhecido = None
+        self.ultima_recuperacao = -99.0
+        self.recuperacoes = 0
         self.ultimo_estado_reg = None
         self.adotar_primeira = True       # 1a sala "pronta" que o bot ve: segue a partir dela; depois, ordem estrita
         self.atirador = atirador          # None = a batalha e sua; senao ele joga os turnos
@@ -267,7 +275,8 @@ class Navegador:
         self.k = img.shape[1] / LARGURA_REF
         f = em_1280(img)
         self.ultimo_quadro = f
-        return f, self.det.detectar(estados_mod.normalizar(f))
+        self.achadas_atual = self.det.detectar(estados_mod.normalizar(f))
+        return f, self.achadas_atual
 
     def estado_estavel(self):
         """Tela detectada de forma igual em 2 leituras seguidas (None = desconhecida/transicao)."""
@@ -359,6 +368,8 @@ class Navegador:
             self.reg.evento("estado", [self.reg.frame(self.ultimo_quadro, "estado_" + estado)], estado=estado,
                             instancia=self.instancia, idx=self.idx, voltas=self.voltas, run_completa=self.run_completa)
         self.ultimo_estado_reg = estado
+        self.ultimo_conhecido = estado
+        self.recuperacoes = 0
         if estado not in ("CARTAS", "POPUP_CARTA", "BATALHA", "CLIQUE_JOGO"):
             self.finalizar_instancia()
         if estado != "BATALHA":
@@ -385,7 +396,11 @@ class Navegador:
                 self.parar = True
                 return
 
-        if estado in CLIQUE_SIMPLES:
+        if estado == "CLIQUE_JOGO":
+            por_baixo = next((e for e in self.achadas_atual if e != "CLIQUE_JOGO"), None)
+            ponto = FOCO_PONTO_NEUTRO.get(por_baixo, FOCO_PONTO_PADRAO)
+            self.clicar_e_verificar(estado, ponto, descricao=f"jogo sem foco (tela por baixo: {por_baixo}); clicando em area neutra")
+        elif estado in CLIQUE_SIMPLES:
             self.clicar_e_verificar(estado, CLIQUE_SIMPLES[estado], descricao="clicando")
         elif estado == "CENTRAL":
             if self.run_completa:
@@ -544,11 +559,23 @@ class Navegador:
         agora = self.agora()
         if self.perdido_desde is None:
             self.perdido_desde = agora
-        if agora - self.perdido_desde > 45 and agora - self.ultimo_aviso > 45:
+        parado = agora - self.perdido_desde
+        # parou numa tela de cidade que a rota nao usa (Sala de Casamento, Leilao...): volta pela porta da barra de baixo
+        if (parado >= 6 and self.ultimo_conhecido in ("MAPA", "CENTRAL", "CLIQUE_JOGO") and not self.em_batalha
+                and agora - self.ultima_recuperacao >= 8 and self.recuperacoes < 4):
+            self.ultima_recuperacao = agora
+            self.recuperacoes += 1
+            self.log(f"? tela desconhecida ha {parado:.0f} s depois de {self.ultimo_conhecido} (tela fora da rota?): "
+                     f"voltando pela porta {SALA_PORTA} (tentativa {self.recuperacoes}/4)")
+            if self.reg:
+                self.reg.evento("recuperacao", [self.reg.frame(self.ultimo_quadro, "recuperacao")], de=self.ultimo_conhecido)
+            self.clicar(SALA_PORTA)
+            return
+        if parado > 45 and agora - self.ultimo_aviso > 45:
             self.ultimo_aviso = agora
             self.log("? tela desconhecida ha mais de 45 s (carregando, ou uma tela que o bot ainda nao conhece).")
             if self.reg:
-                self.reg.evento("desconhecida", [self.reg.frame(self.ultimo_quadro, "desconhecida")], desde_s=round(agora - self.perdido_desde))
+                self.reg.evento("desconhecida", [self.reg.frame(self.ultimo_quadro, "desconhecida")], desde_s=round(parado))
 
 
 # ---------------------------------------------------------------------------

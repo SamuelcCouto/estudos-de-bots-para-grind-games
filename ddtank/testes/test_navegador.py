@@ -269,27 +269,53 @@ assert all(a != b for a, b in zip(ordem, ordem[1:])), f"repetiu a mesma instanci
 assert sim.jogar_cliques == 1
 print("ordem OK mesmo quando a sala continua mostrando a ultima instancia (nao repete o Minhocao)")
 
-# ---------------------------------------------------------------- 10) o jogo perde o foco no meio da batalha: pop-up "Clique no jogo"
+# ---------------------------------------------------------------- 10) o jogo perde o foco: pop-up "Clique no jogo"
 class SimFoco(Sim2):
-    def __init__(self):
-        super().__init__(); self.popup = False; self.clicou_no_popup = False
+    """Qualquer clique dentro do jogo fecha o pop-up, MAS o clique tambem vale para o que esta por baixo
+    (no mapa, o centro do pop-up cobre a Sala de Casamento)."""
+    def __init__(self, tela):
+        super().__init__(); self.popup = True; self.tela = tela; self.atravessou = 0; self.fechou_com = None
     def capturar(self):
         f = super().capturar()
         if self.popup:
-            f = f.copy(); caixa_popup = img("CLIQUE_JOGO")[316:410, 596:696]; f[316:410, 596:696] = caixa_popup
+            f = f.copy(); x0, y0, x1, y1 = N.POPUP_FOCO_CAIXA; f[y0:y1, x0:x1] = img("CLIQUE_JOGO")[y0:y1, x0:x1]
         return f
     def clicar(self, x, y, modo):
         if self.popup:
-            if dentro((x, y), (596, 316, 696, 410)): self.popup = False; self.clicou_no_popup = True
+            x0, y0, x1, y1 = N.POPUP_FOCO_CAIXA
+            if 305 <= x <= 985 and 155 <= y <= 580:          # dentro do jogo: fecha o pop-up
+                self.popup = False; self.fechou_com = (x, y)
+                if x0 <= x <= x1 and y0 <= y <= y1: self.atravessou += 1     # ...e atravessa para o que esta por baixo
             return
         super().clicar(x, y, modo)
-sim = SimFoco(); sim.tela = "BATALHA"; sim.sala_inst = 0; relogio = [0.0]; falso = AtiradorFalso()
-nav = N.Navegador(sim, det, atirador=falso, dormir=lambda s: relogio.__setitem__(0, relogio[0] + s), agora=lambda: relogio[0], log=lambda m: None)
-nav.em_batalha = True
-sim.desde = sim.cap + 100          # batalha "longa"
-sim.popup = True
-f, achadas = nav.ver()
-assert achadas and achadas[0] == "CLIQUE_JOGO", achadas            # tem prioridade sobre a batalha
-nav.agir("CLIQUE_JOGO")
-assert sim.clicou_no_popup and not sim.popup, "nao clicou no pop-up de foco"
-print("pop-up de foco durante a batalha OK (reconhecido por cima da batalha e clicado)")
+for tela, quadro in (("MAPA", "MAPA"), ("CENTRAL", "CENTRAL"), ("BATALHA", "BATALHA"), ("CARTAS", "CARTAS"), ("SALA_VAZIA", "SALA_VAZIA")):
+    sim = SimFoco(tela); relogio = [0.0]
+    nav = N.Navegador(sim, det, dormir=lambda s: relogio.__setitem__(0, relogio[0] + s), agora=lambda: relogio[0], log=lambda m: None)
+    f, achadas = nav.ver()
+    assert achadas[0] == "CLIQUE_JOGO" and achadas[1] == tela, (tela, achadas)
+    nav.agir("CLIQUE_JOGO")
+    assert not sim.popup and sim.atravessou == 0, f"{tela}: clicou {sim.fechou_com} (atravessou={sim.atravessou})"
+    print(f"pop-up de foco sobre {tela:10s}: fechado clicando em {sim.fechou_com} (area neutra, sem atravessar)")
+
+# ---------------------------------------------------------------- 11) entrou numa tela de cidade desconhecida (Sala de Casamento): volta pela porta
+class SimCasamento(Sim2):
+    def capturar(self):
+        if self.tela == "CASAMENTO": self.cap += 1; return img("DESCONHECIDA")
+        return super().capturar()
+    def clicar(self, x, y, modo):
+        self.cliques.append((self.tela, (x, y)))
+        if self.tela == "CASAMENTO":
+            if dentro((x, y), caixa(N.SALA_PORTA, 40)): self.trocar("MAPA")
+        elif self.tela == "MAPA" and dentro((x, y), caixa(N.MAPA_CENTRAL)): self.trocar("CASAMENTO")   # clicou na construcao errada
+        else: super().clicar(x, y, modo)
+sim = SimCasamento(); relogio = [0.0]; logs = []
+nav = N.Navegador(sim, det, dormir=lambda s: relogio.__setitem__(0, relogio[0] + s), agora=lambda: relogio[0], log=logs.append)
+nav.agir("MAPA")                                   # o bot clica e cai na tela desconhecida
+assert sim.tela == "CASAMENTO"
+for _ in range(60):
+    e = nav.estado_estavel()
+    if e is None: nav.desconhecido(); nav.dormir(0.6)
+    else: break
+assert sim.tela == "MAPA", (sim.tela, logs[-3:])
+assert any("voltando pela porta" in l for l in logs)
+print("recuperacao de tela de cidade desconhecida OK (voltou pela porta)")
