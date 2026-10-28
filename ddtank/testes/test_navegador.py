@@ -56,7 +56,7 @@ class Sim:
     """Jogo falso: cada tela tem um quadro real e regioes clicaveis que levam a outra tela.
     Cartas: o 1o clique numa carta so a "seleciona" (defeito real visto em jogo) se ignorar_1o=True."""
     def __init__(self, ignorar_1o=False):
-        self.tela = "MAPA"; self.cap = 0; self.desde = 0; self.inst = 0
+        self.tela = "MAPA"; self.cap = 0; self.desde = 0; self.inst = 0; self.aba = "normal"
         self.instancias_clicadas = []; self.cliques = []; self.tarefas_ok = False; self.voltas = 0
         self.viradas = []; self.ignorar_1o = ignorar_1o; self.ja_ignorou = False
         self.slots = [True, True, True]          # True = aberto
@@ -78,6 +78,7 @@ class Sim:
         if t == "BATALHA" and self.cap - self.desde > 6: self.trocar("CARTAS"); t = "CARTAS"
         if t == "CARTAS" and len(self.viradas) >= 3 and self.cap - self.desde > 10: self.fim_cartas(); t = self.tela
         if t == "CARTAS": return self.quadro_cartas()
+        if t == "CONFIG_VAZIA" and self.aba == "evento": return img("CFG_EVENTO_VAZIA")
         if t == "CONFIG_SEL": return img("CFG_SEL_" + self.instancias_clicadas[-1])
         if t == "PRONTA": return self.quadro_sala(["PRONTA_FANTASMA", "PRONTA_PROFUNDEZAS", "PRONTA_MINHOCAO"][self.inst])
         if t == "SALA_VAZIA" and self.inst >= 3: return img("SALA_FINAL")
@@ -98,8 +99,11 @@ class Sim:
         elif t == "SALA_VAZIA" and self.inst >= 3 and self.tarefas_ok and dentro(p, caixa(N.SALA_TROCAR_INSTANCIA)):
             self.voltas += 1; self.tarefas_ok = False; self.inst = 0; self.trocar("CONFIG_VAZIA")   # mesma sala, nova volta
         elif t == "CONFIG_VAZIA":
-            for nome, c in N.INSTANCIA_NA_CONFIG.items():
-                if dentro(p, caixa(c, 30)): self.instancias_clicadas.append(nome); self.trocar("CONFIG_SEL")
+            for aba, c in N.ABAS_CONFIG.items():
+                if dentro(p, (c[0] - 30, c[1] - 12, c[0] + 30, c[1] + 12)): self.aba = aba; return
+            for nome, c in N.INSTANCIA_NA_CONFIG.items():       # so os quadros da aba aberta
+                if N.ABA_DA_INSTANCIA.get(nome, "normal") == self.aba and dentro(p, caixa(c, 30)):
+                    self.instancias_clicadas.append(nome); self.trocar("CONFIG_SEL"); break
         elif t == "CONFIG_SEL" and dentro(p, caixa(N.CONFIG_SIM, 60)): self.trocar("PRONTA")
         elif t == "PRONTA":
             self.clique_slot(p)
@@ -224,6 +228,7 @@ class Sim2(Sim):
         if t == "BATALHA" and self.cap - self.desde > 6: self.trocar("CARTAS"); t = "CARTAS"
         if t == "CARTAS" and len(self.viradas) >= 3 and self.cap - self.desde > 10: self.fim_cartas(); t = self.tela
         if t == "CARTAS": return self.quadro_cartas()
+        if t == "CONFIG_VAZIA" and self.aba == "evento": return img("CFG_EVENTO_VAZIA")
         if t == "CONFIG_SEL": return img("CFG_SEL_" + self.instancias_clicadas[-1])
         if t == "PRONTA": return self.quadro_pronta()
         if t == "SALA_VAZIA": return img("SALA_FINAL") if self.sala_inst is None and len(self.lutas) % 3 == 0 and self.lutas else self.quadro_sala("SALA_VAZIA")
@@ -241,6 +246,7 @@ class Sim2(Sim):
         elif t in ("SALA_VAZIA", "PRONTA") and dentro(p, caixa(N.SALA_ICONE_TAREFAS)): self.volta_para = t; self.trocar("TAREFA")
         elif t == "CONFIG_VAZIA":
             for nome, c in N.INSTANCIA_NA_CONFIG.items():
+                if N.ABA_DA_INSTANCIA.get(nome, "normal") != "normal": continue   # (aba do evento: outro teste)
                 if dentro(p, caixa(c, 30)): self.escolhida = ROTA.index(nome); self.instancias_clicadas.append(nome); self.trocar("CONFIG_SEL")
         elif t == "CONFIG_SEL" and dentro(p, caixa(N.CONFIG_SIM, 60)): self.sala_inst = self.escolhida; self.trocar("PRONTA")
         elif t == "PRONTA" and dentro(p, caixa(N.SALA_INICIO, 40)):
@@ -521,3 +527,138 @@ assert [r[i]["lutas"] for i in ROTA] == [2, 2, 2] and all(r[i]["vitorias"] == 2 
 assert all(r[i]["instancia_media"] and r[i]["instancia_media"] > r[i]["luta_media"] for i in ROTA)
 assert len(metr.voltas) == 2 and all(V["lutas"] == 3 for V in metr.voltas)
 print("cronometro de lutas/instancias/voltas OK")
+
+# ---------------------------------------------------------------- CHEFAO GLOBAL (Pericao, aba "Instancia do evento")
+# Gravacao do usuario 20261028_121648: a configuracao pode abrir na ultima aba usada; o Pericao fica no 1o quadro da aba
+# do evento; a sala mostra a arte "PERICAO ATE QUE DUROU"; a luta so acaba (cartas) quando o servidor derruba o chefao.
+import datetime
+assert N.aba_ativa(img("CFG_NORMAL_VAZIA")) == "normal" and N.aba_ativa(img("CFG_EVENTO_VAZIA")) == "evento"
+assert N.aba_ativa(img("CFG_SEL_PERICAO")) == "evento" and N.aba_ativa(img("CFG_SEL_ESCORPIAO")) == "normal"
+assert det.detectar(E.normalizar(img("CFG_SEL_PERICAO")))[0] == "CONFIG", "config do evento (sem a aba 'Iniciar Batalha do Chefe')"
+assert det.detectar(E.normalizar(img("CFG_EVENTO_VAZIA")))[0] == "CONFIG_VAZIA"
+assert N.instancia_selecionada(img("CFG_SEL_PERICAO")) == "PERICAO" and N.instancia_na_sala(img("SALA_PERICAO")) == "PERICAO"
+assert N.instancia_selecionada(img("CFG_SEL_ESCORPIAO")) == "ESCORPIAO_REI" and N.instancia_na_sala(img("SALA_ESCORPIAO")) == "ESCORPIAO_REI"
+H = N.HORARIOS_CHEFE
+d = lambda h, m: datetime.datetime(2026, 10, 28, h, m)
+assert N.janela_do_chefe(d(12, 30), H) == (d(12, 0), d(13, 0)) and N.janela_do_chefe(d(13, 0), H) is None
+assert N.janela_do_chefe(d(21, 59), H) == (d(21, 0), d(22, 0)) and N.janela_do_chefe(d(11, 59), H) is None
+assert N.proximo_chefe(d(13, 5), H) == d(21, 0) and N.proximo_chefe(d(22, 30), H) == d(12, 0) + datetime.timedelta(days=1)
+assert N.ler_horarios("12:00-13:00, 21:30-22") == [((12, 0), (13, 0)), ((21, 30), (22, 0))]
+assert N.rota_dos_argumentos("C")[1] == ["PERICAO"]
+respostas = iter(["c"])
+assert N.perguntar_rota(entrada=lambda p: next(respostas), saida=lambda m: None) == "C"
+assert N.perguntar_chefe(entrada=lambda p: "", saida=lambda m: None) is True
+assert N.perguntar_chefe(entrada=lambda p: "n", saida=lambda m: None) is False
+
+class SimChefe:
+    """Sala que guarda a instancia escolhida; configuracao com ABAS (reabre na ultima aba usada); Pericao na aba do
+    evento; tarefas no fim da rota."""
+    BASE = {"FANTASMA": "PRONTA_FANTASMA", "PROFUNDEZAS": "PRONTA_PROFUNDEZAS", "MINHOCAO": "PRONTA_MINHOCAO",
+            "PERICAO": "SALA_PERICAO", None: "SALA_VAZIA"}
+    def __init__(self):
+        self.tela = "SALA"; self.cap = 0; self.desde = 0; self.sala_inst = None; self.sel = None; self.aba = "normal"
+        self.slots = [True, True, True]; self.viradas = []; self.lutas = []; self.abas_clicadas = []
+        self.tarefas_ok = False; self.tarefas_abertas = 0; self.batalha_dura = 6
+    def trocar(self, t): self.tela, self.desde = t, self.cap
+    def quadro_sala(self):
+        f = img(self.BASE[self.sala_inst]).copy(); aberto = img("SLOTS_ABERTOS"); fechado = img("SALA_FINAL")
+        for ab, c in zip(self.slots, N.SLOTS_SALA):
+            x0, y0, x1, y1 = c[0] - 58, c[1] - 52, c[0] + 58, c[1] + 52
+            f[y0:y1, x0:x1] = (aberto if ab else fechado)[y0:y1, x0:x1]
+        return f
+    def quadro_cartas(self):
+        f = img("CARTAS_COSTAS").copy(); rev = img("CARTAS_REVELADAS")
+        for c in self.viradas:
+            x0, y0, x1, y1 = caixa_carta(c); f[y0:y1, x0:x1] = rev[y0:y1, x0:x1]
+        return f
+    def capturar(self):
+        self.cap += 1; t = self.tela
+        if t == "BATALHA" and self.cap - self.desde > self.batalha_dura: self.trocar("CARTAS"); t = "CARTAS"
+        if t == "CARTAS" and len(self.viradas) >= 3 and self.cap - self.desde > 10:
+            self.viradas = []; self.lutas.append(self.sala_inst); self.trocar("SALA"); t = "SALA"
+        if t == "CARTAS": return self.quadro_cartas()
+        if t == "SALA": return self.quadro_sala()
+        if t == "CONFIG":
+            aba_sel = N.ABA_DA_INSTANCIA.get(self.sel, "normal")
+            if self.sel and aba_sel == self.aba:
+                return img({"PERICAO": "CFG_SEL_PERICAO", "FANTASMA": "CFG_SEL_FANTASMA", "PROFUNDEZAS": "CFG_SEL_PROFUNDEZAS",
+                            "MINHOCAO": "CFG_SEL_MINHOCAO"}[self.sel])
+            return img("CFG_EVENTO_VAZIA" if self.aba == "evento" else "CFG_NORMAL_VAZIA")
+        if t == "TAREFA": return img("TAREFA_SEM_OK" if self.tarefas_ok else "TAREFA_COM_OK")
+        return img(t)
+    def clicar(self, x, y, modo):
+        p = (x, y); t = self.tela
+        if t == "SALA":
+            for k, c in enumerate(N.SLOTS_SALA):
+                if dentro(p, (c[0] - 55, c[1] - 50, c[0] + 55, c[1] + 50)): self.slots[k] = not self.slots[k]
+            if dentro(p, caixa(N.SALA_TROCAR_INSTANCIA)): self.sel = self.sala_inst; self.trocar("CONFIG")
+            elif dentro(p, caixa(N.SALA_ICONE_TAREFAS)): self.tarefas_abertas += 1; self.trocar("TAREFA")
+            elif self.sala_inst and dentro(p, caixa(N.SALA_INICIO, 40)): self.trocar("POPUP_SOZINHO")
+        elif t == "CONFIG":
+            for aba, c in N.ABAS_CONFIG.items():
+                if dentro(p, (c[0] - 30, c[1] - 12, c[0] + 30, c[1] + 12)): self.aba = aba; self.abas_clicadas.append(aba); return
+            for nome, c in N.INSTANCIA_NA_CONFIG.items():
+                if N.ABA_DA_INSTANCIA.get(nome, "normal") == self.aba and dentro(p, caixa(c, 30)): self.sel = nome; return
+            if self.sel and dentro(p, caixa(N.CONFIG_SIM, 60)): self.sala_inst = self.sel; self.trocar("SALA")
+        elif t == "POPUP_SOZINHO" and dentro(p, caixa(N.POPUP_SOZINHO_SIM, 40)): self.trocar("BATALHA")
+        elif t == "CARTAS":
+            for c in [(x, y) for y in N.CARTAS_LINHAS for x in N.CARTAS_COLUNAS]:
+                if dentro(p, caixa_carta(c)) and c not in self.viradas and len(self.viradas) < 3: self.viradas.append(c)
+        elif t == "TAREFA" and not self.tarefas_ok and dentro(p, caixa(N.TAREFA_BOTAO, 50)): self.tarefas_ok = True
+        elif t == "TAREFA" and self.tarefas_ok and dentro(p, caixa(N.TAREFA_FECHAR, 30)): self.tarefas_ok = False; self.trocar("SALA")
+    def tecla_apertada(self, vk): return False
+
+def rodar_chefe(sim, nav, ate, max_passos=3000):
+    for _ in range(max_passos):
+        e = nav.estado_estavel()
+        if e: nav.agir(e)
+        if ate(): break
+
+# (a) Rota Norte + Chefao nos horarios: o bot comeca 11:59:45 (o simulador e rapido: ~15 s por instancia); ao meio-dia termina a instancia em andamento, vai para o
+#     Pericao (troca de aba), luta ate as cartas e depois volta para a rota DE ONDE PAROU (troca de aba de novo)
+sim = SimChefe(); relogio = [0.0]; logs = []
+inicio = datetime.datetime(2026, 10, 28, 11, 59, 45)
+nav = N.Navegador(sim, det, ["FANTASMA", "PROFUNDEZAS", "MINHOCAO"], dormir=lambda s: relogio.__setitem__(0, relogio[0] + s),
+                  agora=lambda: relogio[0], log=logs.append, chefe="horarios",
+                  relogio=lambda: inicio + datetime.timedelta(seconds=relogio[0]))
+rodar_chefe(sim, nav, lambda: len(sim.lutas) >= 6)
+print("Chefao nos horarios - lutas:", sim.lutas, "| abas clicadas:", sim.abas_clicadas,
+      f"| relogio {(inicio + datetime.timedelta(seconds=relogio[0])):%H:%M:%S}")
+print("\n".join(l for l in logs if "CHEFAO" in l))
+assert sim.lutas.count("PERICAO") == 1, sim.lutas
+rota_sem_chefe = [l for l in sim.lutas if l != "PERICAO"]
+assert rota_sem_chefe == ["FANTASMA", "PROFUNDEZAS", "MINHOCAO", "FANTASMA", "PROFUNDEZAS"][:len(rota_sem_chefe)], sim.lutas
+assert sim.lutas.index("PERICAO") >= 1, "comecou antes do meio-dia: a 1a instancia e da rota"
+assert sim.abas_clicadas[:2] == ["evento", "normal"], sim.abas_clicadas
+assert not nav.no_chefe and nav.chefe_feito_em is not None
+print("Chefao Global nos horarios: entra na hora, volta para a rota de onde parou OK")
+
+# (b) opcao C (so o Chefao): comeca ja; depois da vitoria espera o proximo horario e volta (horarios curtos no teste)
+sim = SimChefe(); relogio = [0.0]; logs = []
+inicio = datetime.datetime(2026, 10, 28, 12, 10, 0)
+horarios = [((12, 0), (12, 30)), ((12, 40), (13, 0))]
+nav = N.Navegador(sim, det, ["PERICAO"], dormir=lambda s: relogio.__setitem__(0, relogio[0] + s), agora=lambda: relogio[0],
+                  log=logs.append, chefe="so", horarios_chefe=horarios,
+                  relogio=lambda: inicio + datetime.timedelta(seconds=relogio[0]))
+rodar_chefe(sim, nav, lambda: len(sim.lutas) >= 2)
+hora = lambda: inicio + datetime.timedelta(seconds=relogio[0])
+print("so o Chefao - lutas:", sim.lutas, f"| relogio {hora():%H:%M:%S}")
+assert sim.lutas == ["PERICAO", "PERICAO"] and hora() >= datetime.datetime(2026, 10, 28, 12, 40), (sim.lutas, hora())
+assert any("esperando o proximo Chefao Global" in l for l in logs) and sim.tarefas_abertas == 0
+print("opcao C: luta, espera o proximo horario e luta de novo OK")
+
+# (c) evento fechado: o quadro do Pericao nao fica marcado -> desiste ate o proximo horario e segue a rota
+class SimSemEvento(SimChefe):
+    def clicar(self, x, y, modo):
+        if self.tela == "CONFIG" and self.aba == "evento" and dentro((x, y), caixa(N.INSTANCIA_NA_CONFIG["PERICAO"], 30)):
+            return                                            # quadro bloqueado
+        super().clicar(x, y, modo)
+sim = SimSemEvento(); relogio = [0.0]; logs = []
+inicio = datetime.datetime(2026, 10, 28, 12, 5, 0)
+nav = N.Navegador(sim, det, ["FANTASMA", "PROFUNDEZAS", "MINHOCAO"], dormir=lambda s: relogio.__setitem__(0, relogio[0] + s),
+                  agora=lambda: relogio[0], log=logs.append, chefe="horarios",
+                  relogio=lambda: inicio + datetime.timedelta(seconds=relogio[0]))
+rodar_chefe(sim, nav, lambda: len(sim.lutas) >= 2)
+print("evento fechado - lutas:", sim.lutas)
+assert sim.lutas[:2] == ["FANTASMA", "PROFUNDEZAS"] and any("desisto do Chefao Global" in l for l in logs), (sim.lutas, logs[-5:])
+print("evento fechado: desiste e segue a rota OK")

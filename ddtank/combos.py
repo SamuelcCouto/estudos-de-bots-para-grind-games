@@ -24,6 +24,7 @@ import math
 import os
 
 import config
+import estrategias
 
 ARQ = os.path.join(config.PASTA, "dados", "combos.json")
 BUFFS = [4, 4, 4, 4, 5, 6, 7, 8]
@@ -90,6 +91,9 @@ class Combos:
         """(nome, ordem de itens, motivo)."""
         if self.fixo:
             return "personalizado", list(self.fixo), "ordem definida por voce (--itens)"
+        fixo_inst = estrategias.estrategia(inst).get("combo")
+        if fixo_inst:
+            return fixo_inst, list(COMBOS[fixo_inst]), "chefao global: sempre dano maximo (2, 3 e o maximo de 4; sem stamina para o 4, os 5-8)"
         nf, mf, _dpf, mataf, danof = self.resumo(inst, TESTE_DE_FOGO)
         if nf < FOGO_PARA_CONCLUIR:
             return TESTE_DE_FOGO, list(COMBOS[TESTE_DE_FOGO]), f"teste de fogo (dano maximo), luta {nf + 1}/{FOGO_PARA_CONCLUIR}"
@@ -124,8 +128,8 @@ class Combos:
     # ---------------------------------------------------------------- registro
     def registrar_luta(self, inst, nome, duracao, mata1, dano1=None, venceu=True):
         """Uma luta terminada com o combo `nome`: duracao (s), matou no 1o ataque?, dano do 1o ataque (%)."""
-        if nome not in COMBOS or duracao is None:
-            return
+        if nome not in COMBOS or duracao is None or estrategias.estrategia(inst).get("combo"):
+            return                     # (instancia de combo fixo, como o Chefao Global: nada a aprender)
         reg = {"t": round(float(duracao), 1), "mata1": bool(mata1), "venceu": bool(venceu)}
         if dano1 is not None:
             reg["dano1"] = round(min(100.0, float(dano1)), 1)

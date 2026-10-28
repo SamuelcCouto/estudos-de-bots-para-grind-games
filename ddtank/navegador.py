@@ -5,6 +5,10 @@ passa pelas cartas, coleta as tarefas no fim e recomeca. Sem usar o seu mouse.
 
   Fantasma -> Profundezas -> O Minhocao -> (tarefas) -> Central -> de novo
 
+CHEFAO GLOBAL (Pericao, aba "Instancia do evento"): opcao C ao abrir (so ele), ou junto com a rota nos horarios
+(HORARIOS_CHEFE): na hora, o bot termina a instancia em andamento, vai para o Pericao e luta ate o servidor derrubar o
+chefao (vitoria = cartas); depois volta para a rota de onde parou.
+
 A BATALHA ainda e sua (fase 3 = tiro automatico): o bot espera a luta terminar.
 
   python navegador.py --so-ver        so mostra a tela detectada (nao clica) - teste primeiro!
@@ -76,6 +80,12 @@ INSTANCIA_NA_CONFIG = {
     "FANTASMA": (509, 313), "PROFUNDEZAS": (591, 313), "MINHOCAO": (675, 318), "ESCORPIAO_REI": (765, 316),
     "DRAGAO_GELADO": (505, 357), "RAINHA_LIRIS": (591, 357), "ULTIMA_LUTA": (675, 357), "GATO_PRETO": (765, 357),
 }
+# o Chefao Global fica na aba "Instancia do evento" (1o quadro). A janela pode abrir na ultima aba usada: o bot confere
+# a aba ativa (a clara) e clica na certa antes do quadro.
+INSTANCIA_NA_CONFIG["PERICAO"] = (500, 320)
+ABAS_CONFIG = {"normal": (495, 284), "especial": (562, 284), "evento": (630, 284), "avancada": (698, 284)}
+ABA_DA_INSTANCIA = {"PERICAO": "evento"}         # as outras: "normal"
+BRILHO_ABA_ATIVA = 135                           # aba ativa ~161-163 (creme); as outras ~100 (marrom)
 DIFICULDADE_BOTAO = {"NORMAL": (513, 495), "DIFICIL": (646, 495), "HEROI": (770, 495)}
 # rotas: letra -> (nome, instancias em ordem). T = as duas, uma volta so (coleta as tarefas no fim de tudo).
 ROTAS = {
@@ -83,7 +93,15 @@ ROTAS = {
     "S": ("Rota Sul", ["ESCORPIAO_REI", "DRAGAO_GELADO", "RAINHA_LIRIS"]),
 }
 ROTAS["T"] = ("Norte + Sul", ROTAS["N"][1] + ROTAS["S"][1])
-APELIDOS_ROTA = {"1": "N", "2": "S", "NORTE": "N", "SUL": "S", "TODAS": "T", "TUDO": "T", "AMBAS": "T"}
+CHEFE = "PERICAO"
+ROTAS["C"] = ("Chefao Global", [CHEFE])
+APELIDOS_ROTA = {"1": "N", "2": "S", "NORTE": "N", "SUL": "S", "TODAS": "T", "TUDO": "T", "AMBAS": "T",
+                 "CHEFE": "C", "CHEFAO": "C", "PERICAO": "C"}
+# horarios do Chefao Global (relogio do PC): (inicio, fim). Mude aqui ou com --horarios-chefe 12:00-13:00,21:00-22:00
+HORARIOS_CHEFE = [((12, 0), (13, 0)), ((21, 0), (22, 0))]
+CHEFE_DERROTAS_FORA_DO_HORARIO = 3   # opcao C aberta fora do horario: tenta assim mesmo; depois disso, espera o horario
+CHEFE_TENTATIVAS_MARCAR = 8          # cliques no quadro do Pericao sem ele ficar marcado: evento fechado -> desiste
+CHEFE_AVISO_ESPERA = 300.0           # s entre os avisos "esperando o Chefao Global"
 ROTA_PADRAO = ROTAS["N"][1]
 # dificuldade clicada antes de confirmar, por instancia. As das rotas Norte e Sul NAO tem escolha (o quadro
 # "Dificuldade" fica vazio quando uma delas esta marcada); fica para rotas futuras (ou --dificuldade).
@@ -393,12 +411,64 @@ def proxima_acao_tarefa(f, vezes, ignorar_botao=False):
     return "fim", None
 
 
+def aba_ativa(f):
+    """Aba da janela de configuracao que esta aberta ('normal', 'evento'...) - a mais clara - ou None."""
+    brilho = {n: float(f[y - 8:y + 8, x - 25:x + 25].mean()) for n, (x, y) in ABAS_CONFIG.items()}
+    melhor = max(brilho, key=brilho.get)
+    return melhor if brilho[melhor] >= BRILHO_ABA_ATIVA else None
+
+
+def janela_do_chefe(agora, horarios=HORARIOS_CHEFE):
+    """(inicio, fim) do horario do Chefao Global em que `agora` (datetime) esta, ou None."""
+    for (h0, m0), (h1, m1) in horarios:
+        ini = agora.replace(hour=h0, minute=m0, second=0, microsecond=0)
+        fim = agora.replace(hour=h1, minute=m1, second=0, microsecond=0)
+        if ini <= agora < fim:
+            return ini, fim
+    return None
+
+
+def proximo_chefe(agora, horarios=HORARIOS_CHEFE):
+    """Inicio (datetime) do proximo horario do Chefao Global depois de `agora`."""
+    out = []
+    for (h0, m0), _fim in horarios:
+        ini = agora.replace(hour=h0, minute=m0, second=0, microsecond=0)
+        out.append(ini if ini > agora else ini + datetime.timedelta(days=1))
+    return min(out)
+
+
+def ler_horarios(texto):
+    """'12:00-13:00,21:00-22:00' -> [((12, 0), (13, 0)), ((21, 0), (22, 0))]."""
+    out = []
+    for parte in texto.split(","):
+        ini, fim = parte.strip().split("-")
+        hm = lambda t: tuple(int(x) for x in (t.strip().split(":") + ["0"])[:2])
+        out.append((hm(ini), hm(fim)))
+    return out
+
+
+def texto_horarios(horarios):
+    return " e ".join(f"{h0}h{m0:02d}-{h1}h{m1:02d}" for (h0, m0), (h1, m1) in horarios)
+
+
 # ---------------------------------------------------------------------------
 class Navegador:
     def __init__(self, io, detector, rota=None, usar_tarefas=True, uma_vez=False, simular=False,
                  dormir=time.sleep, agora=time.time, log=print, atirador=None, reg=None, dificuldade=None,
-                 metricas=None):
+                 metricas=None, chefe=None, horarios_chefe=None, relogio=datetime.datetime.now):
+        """chefe: None (sem Chefao Global) | "horarios" (rota + Chefao nos horarios) | "so" (opcao C: so o Chefao,
+        comecando agora; depois espera os horarios)."""
         self.io, self.det = io, detector
+        self.chefe_modo = chefe
+        self.horarios = horarios_chefe or HORARIOS_CHEFE
+        self.relogio = relogio            # relogio de parede (datetime) para os horarios
+        self.no_chefe = chefe == "so"     # lutando o Chefao Global agora (a rota fica pausada onde estava)
+        self.chefe_forcado = chefe == "so"   # opcao C: tenta ja, mesmo fora do horario
+        self.chefe_feito_em = None        # quando o servidor derrubou o chefao (nao volta no mesmo horario)
+        self.chefe_derrotas = 0
+        self.chefe_tentativas_marcar = 0
+        self.chefe_aviso = -1e9
+        self.tentativas_aba = 0
         self.metr = metricas              # metricas.Metricas (cronometro de lutas/instancias/voltas) ou None
         self.luta_ativa = False
         self.rng = random.Random()
@@ -451,7 +521,75 @@ class Navegador:
 
     @property
     def instancia(self):
+        if self.no_chefe:
+            return CHEFE
         return self.rota[min(self.idx, len(self.rota) - 1)]
+
+    # ---------- Chefao Global ----------
+    def chefe_pendente(self, agora=None):
+        """Estamos num horario do Chefao Global em que o servidor ainda nao o derrubou?"""
+        agora = agora or self.relogio()
+        jan = janela_do_chefe(agora, self.horarios)
+        return jan is not None and (self.chefe_feito_em is None or self.chefe_feito_em < jan[0])
+
+    def atualizar_chefe(self, estado):
+        """Fora da batalha: entra/sai do Chefao Global conforme o horario. Devolve True se o bot deve so ESPERAR
+        (opcao C fora do horario)."""
+        if not self.chefe_modo:
+            return False
+        agora = self.relogio()
+        pendente = self.chefe_pendente(agora)
+        if self.no_chefe:
+            if pendente or self.chefe_forcado:
+                return False
+            self.no_chefe = False
+            if self.chefe_modo == "horarios":
+                self.log(f"[CHEFAO] fim do horario do Chefao Global: voltando para a rota ({self.instancia})")
+                return False
+        if pendente:
+            if estado == "POPUP_SOZINHO" or (self.chefe_modo == "horarios" and estado not in (
+                    "SALA_VAZIA", "SALA", "CONFIG_VAZIA", "CONFIG_SEL", "CONFIG", "CENTRAL", "MAPA")
+                    and not estado.startswith("PRONTA_")):
+                return False              # no meio de outra coisa (tarefas, comecando a luta): troca na proxima tela
+            self.no_chefe = True
+            self.chefe_derrotas = self.chefe_tentativas_marcar = 0
+            self.log("[CHEFAO] hora do Chefao Global (" + texto_horarios(self.horarios) + "): indo para o Pericao" +
+                     (f" (a rota fica pausada; depois volto para {self.rota[min(self.idx, len(self.rota) - 1)]})"
+                      if self.chefe_modo == "horarios" else ""))
+            return False
+        if self.chefe_modo == "so":
+            t = self.agora()
+            if t - self.chefe_aviso >= CHEFE_AVISO_ESPERA:
+                self.chefe_aviso = t
+                self.log(f"[CHEFAO] esperando o proximo Chefao Global: {proximo_chefe(agora, self.horarios):%d/%m %H:%M} "
+                         f"(horarios: {texto_horarios(self.horarios)}). F10 sai.")
+            for _ in range(10):
+                self.dormir(1.0)
+                self.teclas()
+                if self.parar:
+                    break
+            return True
+        return False
+
+    def desistir_do_chefe(self, motivo):
+        self.log(f"[CHEFAO] ! {motivo}: desisto do Chefao Global ate o proximo horario" +
+                 (f"; voltando para a rota ({self.rota[min(self.idx, len(self.rota) - 1)]})" if self.chefe_modo == "horarios" else ""))
+        self.no_chefe = self.chefe_forcado = False
+        self.chefe_feito_em = self.relogio()
+
+    def abrir_aba(self, f):
+        """Na configuracao: a aba da instancia desejada (normal / do evento) esta aberta? Se nao, clica nela e devolve
+        True (o quadro so aparece depois que a aba troca)."""
+        quer = ABA_DA_INSTANCIA.get(self.instancia, "normal")
+        ativa = aba_ativa(f) if f is not None else None
+        if ativa is None or ativa == quer or self.tentativas_aba >= 3:
+            self.tentativas_aba = 0
+            return False
+        self.tentativas_aba += 1
+        self.log(f"[CONFIG] aba aberta: {ativa}; {self.instancia} fica na aba '{quer}' -> clicando nela")
+        self.clicar(ABAS_CONFIG[quer])
+        self.dormir(0.8)
+        return True
 
     # ---------- visao ----------
     def ver(self):
@@ -532,6 +670,13 @@ class Navegador:
     def finalizar_instancia(self):
         """Chamado ao sair das cartas/batalha: a instancia atual acabou."""
         if not self.cartas_vistas:
+            if self.lutou and self.no_chefe:
+                self.lutou = False
+                self.chefe_derrotas += 1
+                self.log(f"   [CHEFAO] a luta acabou sem cartas (rodada 200? o boneco morreu?) - {self.chefe_derrotas}a derrota; entro de novo.")
+                if self.chefe_forcado and not self.chefe_pendente() and self.chefe_derrotas >= CHEFE_DERROTAS_FORA_DO_HORARIO:
+                    self.desistir_do_chefe(f"{self.chefe_derrotas} derrotas fora do horario ({texto_horarios(self.horarios)})")
+                return
             if self.lutou:
                 self.lutou = False
                 self.log(f"   [ORDEM] ! a luta de {self.instancia} acabou SEM passar pelas cartas; repito {self.instancia}.")
@@ -548,6 +693,18 @@ class Navegador:
                 self.reg.evento("cartas_incompletas", [self.reg.frame(self.quadro_cartas, "cartas_incompletas")],
                                 instancia=self.instancia, viradas=self.cartas_max_viradas)
         self.cartas_escolhidas, self.cartas_rodadas, self.cartas_max_viradas = None, 0, 0
+        if self.no_chefe:
+            # vitoria no Chefao Global = o servidor inteiro derrubou o chefao (a luta individual so acaba assim)
+            if self.metr:
+                self.metr.instancia_fim(CHEFE)
+            self.no_chefe = self.chefe_forcado = False
+            self.chefe_feito_em = self.relogio()
+            self.log("*** [CHEFAO] Chefao Global derrotado pelo servidor! Recompensas pelo dano total de cada um. " +
+                     (f"Voltando para a rota: {self.instancia} ***" if self.chefe_modo == "horarios" else
+                      f"Proximo: {proximo_chefe(self.chefe_feito_em, self.horarios):%d/%m %H:%M} ***"))
+            if self.reg:
+                self.reg.evento("chefe_derrotado", [], proxima=self.instancia)
+            return
         antes = self.instancia
         self.idx += 1
         if self.metr:
@@ -574,13 +731,15 @@ class Navegador:
                 self.metr.batalha_fim(venceu=estado in ("CARTAS", "POPUP_CARTA"))
         if estado not in ("CARTAS", "POPUP_CARTA", "BATALHA", "CLIQUE_JOGO"):
             self.finalizar_instancia()
+            if self.atualizar_chefe(estado):
+                return                    # opcao C fora do horario: esperando
         if estado != "BATALHA":
             self.batalha_desde = None
 
         sala = estado in ("SALA_VAZIA", "SALA") or estado.startswith("PRONTA_")
-        if self.metr and not self.run_completa and (sala or estado.startswith("CONFIG")):
+        if self.metr and (not self.run_completa or self.no_chefe) and (sala or estado.startswith("CONFIG")):
             self.metr.instancia_inicio(self.instancia, self.voltas)
-        if sala and self.run_completa:
+        if sala and self.run_completa and not self.no_chefe:
             # a rota acabou: coleta as tarefas e so entao comeca outra volta (a sala pode continuar mostrando a
             # ultima instancia - antes o bot "aceitava" essa sala e repetia o Minhocao sem parar)
             if self.usar_tarefas and not self.tarefas_ok:
@@ -632,6 +791,13 @@ class Navegador:
         elif estado == "CONFIG_VAZIA":
             self.adotar_primeira = False
             self.dificuldade_clicada = False
+            if self.abrir_aba(self.ultimo_quadro):
+                return
+            if self.no_chefe:
+                self.chefe_tentativas_marcar += 1
+                if self.chefe_tentativas_marcar > CHEFE_TENTATIVAS_MARCAR:
+                    self.desistir_do_chefe("o quadro do Pericao nao responde na configuracao (evento fechado?)")
+                    return
             self.clicou_cfg = self.instancia
             self.clicar_e_verificar(estado, INSTANCIA_NA_CONFIG[self.instancia], descricao=f"selecionar {self.instancia}")
         elif estado in ("CONFIG_SEL", "CONFIG"):
@@ -648,6 +814,7 @@ class Navegador:
                 sel = self.instancia
             if sel == self.instancia:
                 self.tentativas_cfg = 0
+                self.chefe_tentativas_marcar = 0
                 dif = self.dificuldade or DIFICULDADE_DA_INSTANCIA.get(self.instancia)
                 if dif and not self.dificuldade_clicada:
                     self.dificuldade_clicada = True
@@ -663,6 +830,13 @@ class Navegador:
                 if sel is None and self.tentativas_cfg <= 3:
                     self.dormir(0.7)                       # a arte pode ainda estar carregando
                     return
+                if self.abrir_aba(f):
+                    return
+                if self.no_chefe:
+                    self.chefe_tentativas_marcar += 1
+                    if self.chefe_tentativas_marcar > CHEFE_TENTATIVAS_MARCAR:
+                        self.desistir_do_chefe("o Pericao nao fica marcado na configuracao (evento fechado?)")
+                        return
                 self.log(f"[CONFIG_SEL] marcada: {sel or 'nenhuma/desconhecida'}; quero {self.instancia} -> clicando nela")
                 self.clicou_cfg = self.instancia
                 self.dificuldade_clicada = False
@@ -752,11 +926,17 @@ class Navegador:
     def sala_pronta(self, estado, nome):
         """Sala com a instancia `nome` escolhida: confere a ordem, fecha as vagas e da Inicio."""
         if nome != self.instancia:
-            if self.adotar_primeira and nome in self.rota:
+            if self.adotar_primeira and nome in self.rota and not self.no_chefe:
                 self.log(f"   sala ja esta em {nome}; sigo a partir dela (so na 1a vez).")
                 self.idx = self.rota.index(nome)
             else:
+                if self.adotar_primeira and nome in self.rota:
+                    self.idx = self.rota.index(nome)      # depois do Chefao Global, a rota segue daqui
+                    self.adotar_primeira = False
                 self.trocas_pronta += 1
+                if self.trocas_pronta > 3 and self.no_chefe:
+                    self.desistir_do_chefe(f"nao consegui trocar a sala de {nome} para o Pericao")
+                    return
                 if self.trocas_pronta > 3 and nome in self.rota:
                     self.log(f"   ! nao consegui trocar a sala de {nome} para {self.instancia}; sigo com {nome}.")
                     self.idx = self.rota.index(nome)
@@ -916,17 +1096,36 @@ def perguntar_rota(entrada=input, saida=print):
     """Pergunta no console qual rota fazer. Enter sem nada (ou console sem teclado) = Norte."""
     saida("Qual rota?  [N] Norte (Fantasma, Profundezas, Minhocao)   [S] Sul (Escorpiao Rei, Dragao Gelado, Rainha Liris)")
     saida("            [T] Todas, na ordem: Norte e depois Sul; coleta as tarefas so no fim e recomeca")
+    saida(f"            [C] Chefao Global (Pericao) - so ele: comeca agora e depois espera os horarios "
+          f"({texto_horarios(HORARIOS_CHEFE)})")
     for _ in range(5):
         try:
-            r = entrada("Rota (N/S/T): ").strip().upper()
+            r = entrada("Rota (N/S/T/C): ").strip().upper()
         except EOFError:
             return "N"
         if r == "":
             return "N"
-        if r[0] in ("N", "S", "T"):
+        if r[0] in ("N", "S", "T", "C"):
             return r[0]
-        saida("   responda N, S ou T")
+        saida("   responda N, S, T ou C")
     return "N"
+
+
+def perguntar_chefe(horarios=HORARIOS_CHEFE, entrada=input, saida=print):
+    """Fazer o Chefao Global nos horarios, no meio da rota? Enter = sim."""
+    saida(f"Fazer o CHEFAO GLOBAL (Pericao) nos horarios ({texto_horarios(horarios)})? Na hora, o bot termina a instancia "
+          f"em andamento, luta contra o chefao ate ele cair e depois volta para a rota.")
+    for _ in range(5):
+        try:
+            r = entrada("Chefao Global nos horarios? (S/n): ").strip().upper()
+        except EOFError:
+            return True
+        if r == "" or r[0] == "S":
+            return True
+        if r[0] == "N":
+            return False
+        saida("   responda S ou N")
+    return True
 
 
 def main():
@@ -934,10 +1133,13 @@ def main():
     ap = argparse.ArgumentParser(description="DDTank - navegador da rota de instancias")
     ap.add_argument("--titulo", default="")
     ap.add_argument("--exe", default="")
-    ap.add_argument("--rota", default=None, help="N (Norte), S (Sul) ou T (as duas); ou instancias em ordem, ex.: "
+    ap.add_argument("--rota", default=None, help="N (Norte), S (Sul), T (as duas) ou C (so o Chefao Global); ou instancias em ordem, ex.: "
                     "ESCORPIAO_REI,DRAGAO_GELADO (instancias: " + ", ".join(INSTANCIA_NA_CONFIG) + "). Sem isso, pergunta ao abrir.")
     ap.add_argument("--dificuldade", default=None, choices=sorted(DIFICULDADE_BOTAO),
                     help="clica nessa dificuldade antes de confirmar (as rotas Norte e Sul nao tem escolha)")
+    ap.add_argument("--chefe", choices=("s", "n"), default=None,
+                    help="Chefao Global nos horarios, no meio da rota (s/n). Sem isso: pergunta ao abrir (com --rota: nao)")
+    ap.add_argument("--horarios-chefe", default="", help="horarios do Chefao Global, ex.: 12:00-13:00,21:00-22:00")
     ap.add_argument("--comecar-em", type=int, default=1, help="numero da instancia (1, 2, 3...) em que a rota comeca")
     ap.add_argument("--sem-tarefas", action="store_true")
     ap.add_argument("--uma-vez", action="store_true")
@@ -995,7 +1197,15 @@ def main():
         arq.write(linha + "\n")
         arq.flush()
 
-    nome_rota, rota, dificuldade = rota_dos_argumentos(args.rota or perguntar_rota(), args.dificuldade)
+    escolha = args.rota or perguntar_rota()
+    nome_rota, rota, dificuldade = rota_dos_argumentos(escolha, args.dificuldade)
+    horarios = ler_horarios(args.horarios_chefe) if args.horarios_chefe else HORARIOS_CHEFE
+    if rota == [CHEFE]:
+        chefe = "so"
+    elif args.chefe:
+        chefe = "horarios" if args.chefe == "s" else None
+    else:
+        chefe = "horarios" if (not args.rota and perguntar_chefe(horarios)) else None
     reg = None
     if not args.sem_gravar:
         import registro
@@ -1008,8 +1218,14 @@ def main():
     metr = metricas_mod.Metricas(nome_rota, log=log, combos=combos)
     log(f"Cronometro: logs\\relatorio.txt (resumo, atualizado a cada luta), logs\\lutas.csv e logs\\voltas.csv")
     nav = Navegador(io, det, rota, not args.sem_tarefas, args.uma_vez, args.simular, log=log, reg=reg,
-                    dificuldade=dificuldade, metricas=metr)
+                    dificuldade=dificuldade, metricas=metr, chefe=chefe, horarios_chefe=horarios)
     log(f"{nome_rota}: {' -> '.join(rota)}" + (f" (dificuldade {dificuldade} em todas)" if dificuldade else ""))
+    if chefe == "so":
+        log(f"Chefao Global: comeco agora; depois de cada vitoria, espero o proximo horario ({texto_horarios(horarios)}).")
+    elif chefe:
+        log(f"Chefao Global nos horarios {texto_horarios(horarios)}: a rota pausa e volta depois.")
+    if chefe and not (args.atirar or args.sombra):
+        log("(sem --atirar: no Chefao Global e voce quem atira - use ATIRAR.bat / CHEFAO_GLOBAL.bat para o bot lutar)")
     if args.atirar or args.sombra:
         import atirador as atirador_mod
         import memoria as memoria_mod

@@ -8,6 +8,7 @@ Fluxo de cada turno (o botao PASS so aparece na SUA vez; dura ~8 s):
   3. aperta os itens na ordem ORDEM_ITENS, so os que estao coloridos (ha stamina)
   4. segura ESPACO olhando a barra de forca e solta no alvo
   5. depois que o tiro cai, compara a vida do boss e APRENDE (acertou/errou)
+     (no Chefao Global a vida e a do servidor: o acerto e pelos numeros de dano que sobem no boss; ver estrategias.py)
 
 Modo sombra (sombra=True): faz tudo menos apertar teclas; so registra o que faria.
 """
@@ -36,6 +37,7 @@ ANTECIPACAO_INICIAL = 4.0     # % de folga: solta um pouco antes (atraso da capt
 FOCO_CLICK_BATALHA = (560, 230)   # clique na cena de batalha (nunca no chat/log)
 MAX_SEGURANDO = 7.0           # s: trava de seguranca (a carga pode andar na METADE da velocidade; ver NOTAS.md)
 MARGEM_TEMPO_MINIMO = 0.35    # s: tolerancia da trava de tempo minimo
+ESPERA_NUMEROS_DANO = 4.0     # s depois do tiro olhando os numeros de dano (Chefao Global): eles sobem ~1-3 s depois
 
 
 class LeitorReal:
@@ -49,6 +51,8 @@ class LeitorReal:
     candidatos = staticmethod(L.candidatos_minimapa)
     itens = staticmethod(L.itens_ativos)
     vida = staticmethod(L.vida_boss)
+    numeros_dano = staticmethod(L.numeros_de_dano)
+    pow_cheio = staticmethod(L.pow_cheio)
 
 
 class Atirador:
@@ -138,6 +142,8 @@ class Atirador:
             self.inst_rastreada = inst
             self.avioes_na_luta, self.aviao_pendente = 0, None
         self.observar_minimapa(f)
+        if self.pendente and "numeros" in self.pendente and hasattr(self.lei, "numeros_dano"):
+            self.pendente["numeros"] = max(self.pendente["numeros"], self.lei.numeros_dano(f))
         if self.reg and agora - self.ultima_leitura >= (INTERVALO_LEITURA_LEVE if getattr(self.reg, "leve", False) else INTERVALO_LEITURA):
             self.ultima_leitura = agora
             self.reg.evento("leitura", [self.reg.frame(f, "leitura")], vez=bool(vez), agiu=self.agiu,
@@ -166,13 +172,16 @@ class Atirador:
         self.turno(f)
 
     def agiu_recentemente(self):
-        return self.pendente is not None and self.agora() - self.pendente["t"] < 2.0
+        espera = ESPERA_NUMEROS_DANO if self.pendente and "numeros" in self.pendente else 2.0
+        return self.pendente is not None and self.agora() - self.pendente["t"] < espera
 
     def fim_da_batalha(self, venceu=True, duracao=None):
         """O navegador avisa que saimos da batalha. venceu=True (apareceram as cartas): um tiro pendente matou o boss.
         venceu=False (o boneco morreu / saiu): o resultado do tiro pendente e desconhecido -> descarta.
         duracao (s): tempo da luta, para o combo de itens aprender qual deixa a luta mais curta."""
-        if self.pendente and venceu:
+        if self.pendente and "numeros" in self.pendente:
+            self.concluir_tiro(None)          # Chefao Global: quem derrubou foi o servidor; o acerto e pelos numeros
+        elif self.pendente and venceu:
             p = self.pendente
             self.log(f"   [tiro] boss derrotado -> ACERTOU ({p['angulo']:.0f} graus, {p['forca']:.0f}%)")
             self.mem.registrar(p["inst"], p["azul"], p["boss"], p["angulo"], p["forca"], True, origem="bot", dano=p["hp0"])
@@ -237,7 +246,8 @@ class Atirador:
             self.io.preparar_teclas()            # o Chromium so entrega teclado a pagina em foco
         if azul and boss and abs(boss[0] - azul[0]) >= 1.5:
             self.virar_para(1 if boss[0] > azul[0] else -1)
-        ok_ang = self.ajustar_angulo(pred["angulo"])
+        est = estrategias.estrategia(inst)
+        ok_ang = self.ajustar_angulo(pred["angulo"], est.get("tolerancia_angulo", TOLERANCIA_ANGULO))
         t_ang = self.agora() - inicio
         if self.reg:
             fr.append(self.reg.frame(self.ver(), "apos_angulo"))
@@ -265,6 +275,7 @@ class Atirador:
                 self.combo_luta = (nome_c, ordem_c)
             else:
                 self.combo_luta = (None, self.ordem)
+        especial = est.get("usar_pow") and self.usar_pow()
         apertados = self.aplicar_itens(self.combo_luta[1])
         t_itens = self.agora() - inicio
         if self.reg:
@@ -290,16 +301,18 @@ class Atirador:
         self.agiu = True
         self.pendente = {"t": self.agora(), "inst": inst, "azul": azul, "boss": boss, "angulo": angulo_real,
                          "forca": forca_real, "hp0": hp0, "combo": self.combo_luta[0], "primeiro": primeiro}
+        if est.get("chefe_global"):
+            self.pendente.update(numeros=0, especial=bool(especial))
         self.ataques_na_luta += 1
         if self.metricas:
-            self.metricas.turno("ataque", itens=apertados, combo=self.combo_luta[0])
+            self.metricas.turno("ataque", itens=apertados, combo=self.combo_luta[0], especial=bool(especial))
         self.log(f"   tiro dado: {angulo_real:.0f} graus, forca {forca_real:.0f}% (queria {alvo_forca:.0f}%); "
                  f"[{metodo_usado}, soltou por '{soltou}'] tempo: angulo {t_ang:.1f}s, itens {t_itens - t_ang:.1f}s, carga {t_tiro - t_itens:.1f}s (total {t_tiro:.1f}s)")
         if self.reg:
             fr.append(self.reg.frame(self.ver(), "tiro_dado"))
             self.reg.evento("turno", fr, inst=inst, azul=azul, boss=boss, confianca_jogador=round(conf, 2), previsto=pred, angulo_real=round(angulo_real, 1),
                             forca_real=round(forca_real), alvo_forca=round(alvo_forca), itens=apertados, itens_coloridos_inicio=itens0,
-                            soltou=soltou, metodo_forca=metodo_usado, segurou_s=round(segurou, 2), trace_barra=trace[-40:],
+                            soltou=soltou, metodo_forca=metodo_usado, especial=bool(especial), segurou_s=round(segurou, 2), trace_barra=trace[-40:],
                             taxa_forca=round(self.taxa_forca, 1), jogo_em_foco=(self.io.em_foco() if hasattr(self.io, "em_foco") else None),
                             nivel_foco=getattr(self.io, "foco_nivel", None),
                             tempos={"angulo": round(t_ang, 2), "itens": round(t_itens - t_ang, 2), "carga": round(t_tiro - t_itens, 2)})
@@ -330,7 +343,7 @@ class Atirador:
     def plano_aviao(self, inst, azul, vida):
         """Destino (x, y) do voo com F, ou None para atacar normalmente (ver estrategias.py)."""
         est = estrategias.estrategia(inst)
-        if not est or not azul or self.aviao_indisponivel or self.avioes_na_luta >= est.get("aviao_max_por_luta", 1):
+        if "arena" not in est or not azul or self.aviao_indisponivel or self.avioes_na_luta >= est.get("aviao_max_por_luta", 1):
             return None
         a0, a1 = est["arena"]
         borda = min(azul[0] - a0, a1 - azul[0])
@@ -403,7 +416,7 @@ class Atirador:
                             soltou=soltou, trace_barra=trace[-40:])
 
     # ------------------------------------------------------------------ angulo
-    def ajustar_angulo(self, alvo):
+    def ajustar_angulo(self, alvo, tol=TOLERANCIA_ANGULO):
         sem_efeito = 0
         for _ in range(12):
             f = self.ver()
@@ -411,7 +424,7 @@ class Atirador:
                 return False
             a = self.lei.angulo(f)
             erro = alvo - a
-            if abs(erro) <= TOLERANCIA_ANGULO:
+            if abs(erro) <= tol:
                 return True
             dur = float(np.clip(abs(erro) / self.taxa_angulo * 0.85, 0.05, 0.6))
             tecla = "cima" if erro > 0 else "baixo"
@@ -441,7 +454,7 @@ class Atirador:
                 taxa = abs(mudou) / dur
                 if 5 < taxa < 120 and mudou * erro > 0:       # aprende a velocidade do angulo
                     self.taxa_angulo = 0.6 * self.taxa_angulo + 0.4 * taxa
-        return abs(alvo - self.lei.angulo(self.ver())) <= TOLERANCIA_ANGULO * 2
+        return abs(alvo - self.lei.angulo(self.ver())) <= max(tol, TOLERANCIA_ANGULO) * 2
 
     def _no_limite(self, tecla, a):
         """A seta nao mexeu o ponteiro: teclado sem foco, ou o angulo ja esta no LIMITE da arma (no terreno inclinado o
@@ -461,6 +474,16 @@ class Atirador:
         return True
 
     # ------------------------------------------------------------------ itens
+    def usar_pow(self):
+        """POW cheio (botao vermelho pulsando) -> aperta B (especial) antes dos itens. True se usou."""
+        f = self.ver()
+        if f is None or not hasattr(self.lei, "pow_cheio") or not self.lei.minha_vez(f) or not self.lei.pow_cheio(f):
+            return False
+        self.io.tecla("b", 0.08)
+        self.dormir(0.3)
+        self.log("   [POW] medidor do especial cheio: apertei B")
+        return True
+
     def aplicar_itens(self, ordem=None):
         usados = {}
         apertados = []
@@ -574,12 +597,28 @@ class Atirador:
     # ------------------------------------------------------------------ resultado
     def concluir_tiro(self, f):
         p, self.pendente = self.pendente, None
+        if "numeros" in p:
+            return self._concluir_pelos_numeros(p)
         hp1 = self.lei.vida(f)
         acertou = hp1 < p["hp0"] - 3
         self.log(f"   [tiro] vida do boss {p['hp0']:.0f}% -> {hp1:.0f}%: {'ACERTOU' if acertou else 'ERROU'}")
         self.mem.registrar(p["inst"], p["azul"], p["boss"], p["angulo"], p["forca"], acertou, origem="bot",
                            dano=max(0.0, p["hp0"] - hp1))
         self._resultado(p, max(0.0, p["hp0"] - hp1), acertou)
+
+    def _concluir_pelos_numeros(self, p):
+        """Chefao Global: a barra e a vida do SERVIDOR (cai com o dano de todos); vale ver os numeros de dano no boss."""
+        acertou = p["numeros"] >= L.NUMEROS_DANO_ACERTO
+        if p.get("especial"):
+            # o especial anda com a camera: os numeros sobem fora da caixa olhada -> nao da para conferir nem aprender
+            self.log(f"   [tiro] especial (POW): resultado nao conferido (a camera acompanha o especial)")
+            if self.metricas:
+                self.metricas.resultado_tiro(0.0, None)
+            return
+        self.log(f"   [tiro] numeros de dano no boss: {p['numeros']} px -> {'ACERTOU' if acertou else 'NAO VI DANO (errou?)'}")
+        self.mem.registrar(p["inst"], p["azul"], p["boss"], p["angulo"], p["forca"], acertou, origem="bot")
+        if self.metricas:
+            self.metricas.resultado_tiro(0.0, acertou)
 
     def _resultado(self, p, dano, acertou):
         """Placar (metricas) e aprendizado do combo: so o 1o ataque com o boss cheio que ACERTOU diz algo do combo."""

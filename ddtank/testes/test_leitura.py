@@ -116,4 +116,27 @@ assert perto(r.jogador()[0], (40, 57)), r.jogador()
 r.reiniciar()
 assert r.jogador() == (None, 0.0) and r.boss is None
 print("rastreador OK")
+
+# Chefao Global: a barra de vida e a do servidor (nao diz se o SEU tiro pegou) -> numeros de dano em cima do boss.
+# Recortes da gravacao do usuario (20261028_121648): o acerto mais fraco dos 40 tiros normais deu 908 px; fora dos
+# tiros (turno do boss, efeitos) o maximo foi 702.
+def colar(nome, x0, y0):
+    f = np.zeros((720, 1280, 3), np.uint8)
+    c = cv2.imread(os.path.join(AQUI, "frames", nome + ".png"))
+    f[y0:y0 + c.shape[0], x0:x0 + c.shape[1]] = c
+    return f
+for nome, acerto in [("DANO_ACERTO_4828", True), ("DANO_ACERTO_1076", True), ("DANO_ACERTO_908", True),
+                     ("DANO_NADA_BOSS", False), ("DANO_NADA", False)]:
+    n = L.numeros_de_dano(colar(nome, 780, 310))
+    print(f"numeros de dano {nome}: {n} px")
+    assert (n >= L.NUMEROS_DANO_ACERTO) == acerto, (nome, n)
+# POW (especial, tecla B): cheio = botao vermelho pulsando (inclusive no pulso mais fraco)
+for nome, cheio in [("POW_CHEIO", True), ("POW_CHEIO_FRACO", True), ("POW_VAZIO", False), ("POW_USADO", False)]:
+    assert L.pow_cheio(colar(nome, 915, 495)) == cheio, nome
+assert not any(L.pow_cheio(img(f"VEZ_SIM_{i}")) for i in (21, 74, 214, 415, 602)), "instancias normais: POW vazio"
+f = img("BATALHA_PERICAO")                      # 1o turno do usuario no Pericao (antes dos itens)
+j, b = L.pontos_minimapa(f)
+assert perto(j, (10.5, 58.4)) and perto(b, (76.3, 61.4)) and L.minha_vez(f), (j, b)
+assert L.mira(f) == (4.5, 1) and 40 <= L.vida_boss(f) <= 46, (L.mira(f), L.vida_boss(f))   # vida do servidor: 43%
+print("chefao global (numeros de dano, POW) OK")
 print("\nleituras OK")

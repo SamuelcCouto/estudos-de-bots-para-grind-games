@@ -1,5 +1,5 @@
 {
- "_nota": "Tiros do usuario (todos acertaram). angulo = leitura do ponteiro; forca = % da barra no momento de soltar; azul/boss = pontos do minimapa em px (y para baixo). leitura 2 = posicoes relidas com o leitor novo do minimapa (a versao 1 confundia a agua da Profundezas com o jogador).",
+ "_nota": "Tiros do usuario (todos acertaram). angulo = leitura do ponteiro; forca = % da barra no momento de soltar; azul/boss = pontos do minimapa em px (y para baixo). leitura 2 = posicoes relidas com o leitor novo do minimapa (a versao 1 confundia a agua da Profundezas com o jogador). PERICAO (Chefao Global): 34 tiros normais do usuario, todos com numeros de dano no boss (acertou); mira quase reta (ponteiro 7), forca 78-89%, com vento de 4.5 contra a 4.0 a favor - o vento nao mudou o acerto.",
  "tiros": [
   {
    "inst": "FANTASMA",
@@ -271,6 +271,550 @@
    "forca": 54,
    "acertou": true,
    "origem": "gravacao 20261028_021750",
+   "leitura": 2
+  },
+  {
+   "inst": "PERICAO",
+   "azul": [
+    11.0,
+    58.5
+   ],
+   "boss": [
+    76.3,
+    61.4
+   ],
+   "angulo": 4.5,
+   "forca": 80,
+   "acertou": true,
+   "origem": "gravacao 20261028_121648",
+   "leitura": 2
+  },
+  {
+   "inst": "PERICAO",
+   "azul": [
+    10.5,
+    58.0
+   ],
+   "boss": [
+    76.3,
+    61.4
+   ],
+   "angulo": 7.0,
+   "forca": 78,
+   "acertou": true,
+   "origem": "gravacao 20261028_121648",
+   "leitura": 2
+  },
+  {
+   "inst": "PERICAO",
+   "azul": [
+    10.5,
+    58.5
+   ],
+   "boss": [
+    76.2,
+    61.4
+   ],
+   "angulo": 7.0,
+   "forca": 78,
+   "acertou": true,
+   "origem": "gravacao 20261028_121648",
+   "leitura": 2
+  },
+  {
+   "inst": "PERICAO",
+   "azul": [
+    11.0,
+    58.0
+   ],
+   "boss": [
+    76.3,
+    61.4
+   ],
+   "angulo": 7.0,
+   "forca": 82,
+   "acertou": true,
+   "origem": "gravacao 20261028_121648",
+   "leitura": 2
+  },
+  {
+   "inst": "PERICAO",
+   "azul": [
+    11.0,
+    58.3
+   ],
+   "boss": [
+    76.3,
+    61.4
+   ],
+   "angulo": 7.0,
+   "forca": 83,
+   "acertou": true,
+   "origem": "gravacao 20261028_121648",
+   "leitura": 2
+  },
+  {
+   "inst": "PERICAO",
+   "azul": [
+    10.5,
+    58.5
+   ],
+   "boss": [
+    76.2,
+    61.4
+   ],
+   "angulo": 7.0,
+   "forca": 86,
+   "acertou": true,
+   "origem": "gravacao 20261028_121648",
+   "leitura": 2
+  },
+  {
+   "inst": "PERICAO",
+   "azul": [
+    11.0,
+    58.0
+   ],
+   "boss": [
+    76.3,
+    61.4
+   ],
+   "angulo": 7.0,
+   "forca": 86,
+   "acertou": true,
+   "origem": "gravacao 20261028_121648",
+   "leitura": 2
+  },
+  {
+   "inst": "PERICAO",
+   "azul": [
+    10.8,
+    58.4
+   ],
+   "boss": [
+    76.0,
+    61.2
+   ],
+   "angulo": 7.0,
+   "forca": 87,
+   "acertou": true,
+   "origem": "gravacao 20261028_121648",
+   "leitura": 2
+  },
+  {
+   "inst": "PERICAO",
+   "azul": [
+    11.0,
+    58.5
+   ],
+   "boss": [
+    76.3,
+    61.4
+   ],
+   "angulo": 7.0,
+   "forca": 89,
+   "acertou": true,
+   "origem": "gravacao 20261028_121648",
+   "leitura": 2
+  },
+  {
+   "inst": "PERICAO",
+   "azul": [
+    10.5,
+    58.5
+   ],
+   "boss": [
+    76.5,
+    61.3
+   ],
+   "angulo": 7.0,
+   "forca": 87,
+   "acertou": true,
+   "origem": "gravacao 20261028_121648",
+   "leitura": 2
+  },
+  {
+   "inst": "PERICAO",
+   "azul": [
+    11.0,
+    58.5
+   ],
+   "boss": [
+    76.3,
+    61.4
+   ],
+   "angulo": 7.0,
+   "forca": 86,
+   "acertou": true,
+   "origem": "gravacao 20261028_121648",
+   "leitura": 2
+  },
+  {
+   "inst": "PERICAO",
+   "azul": [
+    10.5,
+    58.5
+   ],
+   "boss": [
+    76.3,
+    61.4
+   ],
+   "angulo": 7.0,
+   "forca": 82,
+   "acertou": true,
+   "origem": "gravacao 20261028_121648",
+   "leitura": 2
+  },
+  {
+   "inst": "PERICAO",
+   "azul": [
+    10.3,
+    58.3
+   ],
+   "boss": [
+    76.3,
+    61.4
+   ],
+   "angulo": 7.0,
+   "forca": 84,
+   "acertou": true,
+   "origem": "gravacao 20261028_121648",
+   "leitura": 2
+  },
+  {
+   "inst": "PERICAO",
+   "azul": [
+    10.7,
+    58.3
+   ],
+   "boss": [
+    76.3,
+    61.4
+   ],
+   "angulo": 7.0,
+   "forca": 83,
+   "acertou": true,
+   "origem": "gravacao 20261028_121648",
+   "leitura": 2
+  },
+  {
+   "inst": "PERICAO",
+   "azul": [
+    10.8,
+    58.4
+   ],
+   "boss": [
+    76.3,
+    61.4
+   ],
+   "angulo": 7.0,
+   "forca": 86,
+   "acertou": true,
+   "origem": "gravacao 20261028_121648",
+   "leitura": 2
+  },
+  {
+   "inst": "PERICAO",
+   "azul": [
+    11.0,
+    58.5
+   ],
+   "boss": [
+    76.3,
+    61.4
+   ],
+   "angulo": 7.0,
+   "forca": 86,
+   "acertou": true,
+   "origem": "gravacao 20261028_121648",
+   "leitura": 2
+  },
+  {
+   "inst": "PERICAO",
+   "azul": [
+    10.5,
+    58.5
+   ],
+   "boss": [
+    76.2,
+    61.4
+   ],
+   "angulo": 7.0,
+   "forca": 87,
+   "acertou": true,
+   "origem": "gravacao 20261028_121648",
+   "leitura": 2
+  },
+  {
+   "inst": "PERICAO",
+   "azul": [
+    10.7,
+    58.7
+   ],
+   "boss": [
+    76.5,
+    61.3
+   ],
+   "angulo": 7.0,
+   "forca": 85,
+   "acertou": true,
+   "origem": "gravacao 20261028_121648",
+   "leitura": 2
+  },
+  {
+   "inst": "PERICAO",
+   "azul": [
+    10.5,
+    58.5
+   ],
+   "boss": [
+    76.2,
+    61.4
+   ],
+   "angulo": 7.0,
+   "forca": 87,
+   "acertou": true,
+   "origem": "gravacao 20261028_121648",
+   "leitura": 2
+  },
+  {
+   "inst": "PERICAO",
+   "azul": [
+    11.0,
+    58.0
+   ],
+   "boss": [
+    76.3,
+    61.4
+   ],
+   "angulo": 7.0,
+   "forca": 87,
+   "acertou": true,
+   "origem": "gravacao 20261028_121648",
+   "leitura": 2
+  },
+  {
+   "inst": "PERICAO",
+   "azul": [
+    10.5,
+    58.5
+   ],
+   "boss": [
+    76.5,
+    61.3
+   ],
+   "angulo": 7.0,
+   "forca": 86,
+   "acertou": true,
+   "origem": "gravacao 20261028_121648",
+   "leitura": 2
+  },
+  {
+   "inst": "PERICAO",
+   "azul": [
+    11.0,
+    58.0
+   ],
+   "boss": [
+    76.0,
+    61.2
+   ],
+   "angulo": 7.0,
+   "forca": 84,
+   "acertou": true,
+   "origem": "gravacao 20261028_121648",
+   "leitura": 2
+  },
+  {
+   "inst": "PERICAO",
+   "azul": [
+    11.0,
+    58.5
+   ],
+   "boss": [
+    76.3,
+    61.4
+   ],
+   "angulo": 7.0,
+   "forca": 82,
+   "acertou": true,
+   "origem": "gravacao 20261028_121648",
+   "leitura": 2
+  },
+  {
+   "inst": "PERICAO",
+   "azul": [
+    11.0,
+    58.5
+   ],
+   "boss": [
+    76.3,
+    61.4
+   ],
+   "angulo": 7.0,
+   "forca": 85,
+   "acertou": true,
+   "origem": "gravacao 20261028_121648",
+   "leitura": 2
+  },
+  {
+   "inst": "PERICAO",
+   "azul": [
+    10.2,
+    58.4
+   ],
+   "boss": [
+    76.3,
+    61.4
+   ],
+   "angulo": 7.0,
+   "forca": 85,
+   "acertou": true,
+   "origem": "gravacao 20261028_121648",
+   "leitura": 2
+  },
+  {
+   "inst": "PERICAO",
+   "azul": [
+    10.3,
+    58.3
+   ],
+   "boss": [
+    76.3,
+    61.4
+   ],
+   "angulo": 7.0,
+   "forca": 85,
+   "acertou": true,
+   "origem": "gravacao 20261028_121648",
+   "leitura": 2
+  },
+  {
+   "inst": "PERICAO",
+   "azul": [
+    10.3,
+    58.7
+   ],
+   "boss": [
+    76.2,
+    61.4
+   ],
+   "angulo": 7.0,
+   "forca": 84,
+   "acertou": true,
+   "origem": "gravacao 20261028_121648",
+   "leitura": 2
+  },
+  {
+   "inst": "PERICAO",
+   "azul": [
+    10.5,
+    58.5
+   ],
+   "boss": [
+    76.3,
+    61.4
+   ],
+   "angulo": 7.0,
+   "forca": 85,
+   "acertou": true,
+   "origem": "gravacao 20261028_121648",
+   "leitura": 2
+  },
+  {
+   "inst": "PERICAO",
+   "azul": [
+    10.8,
+    58.4
+   ],
+   "boss": [
+    76.3,
+    61.4
+   ],
+   "angulo": 7.0,
+   "forca": 84,
+   "acertou": true,
+   "origem": "gravacao 20261028_121648",
+   "leitura": 2
+  },
+  {
+   "inst": "PERICAO",
+   "azul": [
+    11.0,
+    58.5
+   ],
+   "boss": [
+    76.3,
+    61.4
+   ],
+   "angulo": 7.0,
+   "forca": 87,
+   "acertou": true,
+   "origem": "gravacao 20261028_121648",
+   "leitura": 2
+  },
+  {
+   "inst": "PERICAO",
+   "azul": [
+    11.0,
+    58.5
+   ],
+   "boss": [
+    76.0,
+    61.2
+   ],
+   "angulo": 7.0,
+   "forca": 86,
+   "acertou": true,
+   "origem": "gravacao 20261028_121648",
+   "leitura": 2
+  },
+  {
+   "inst": "PERICAO",
+   "azul": [
+    10.5,
+    58.5
+   ],
+   "boss": [
+    76.2,
+    61.4
+   ],
+   "angulo": 7.0,
+   "forca": 86,
+   "acertou": true,
+   "origem": "gravacao 20261028_121648",
+   "leitura": 2
+  },
+  {
+   "inst": "PERICAO",
+   "azul": [
+    11.0,
+    58.5
+   ],
+   "boss": [
+    76.3,
+    61.4
+   ],
+   "angulo": 7.0,
+   "forca": 86,
+   "acertou": true,
+   "origem": "gravacao 20261028_121648",
+   "leitura": 2
+  },
+  {
+   "inst": "PERICAO",
+   "azul": [
+    11.0,
+    58.5
+   ],
+   "boss": [
+    76.3,
+    61.4
+   ],
+   "angulo": 7.0,
+   "forca": 88,
+   "acertou": true,
+   "origem": "gravacao 20261028_121648",
    "leitura": 2
   }
  ]

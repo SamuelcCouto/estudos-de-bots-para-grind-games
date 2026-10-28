@@ -26,6 +26,12 @@ LEITURAS_MUDOU = 5                  # leituras seguidas sem o ponto antigo (e co
 VIDA_BOSS = (725, 812, 185, 191)     # barra de vida do boss (topo): cheia termina em ~811, comeca em ~725
 RETRATO_BOSS = (692, 176, 720, 200)  # x0, y0, x1, y1: retrato do boss a esquerda da barra (cinza = morto)
 SATURACAO_RETRATO_MORTO = 35
+# Chefao Global (Pericao): a barra de vida e a do SERVIDOR (todos batendo) e quase nao mexe com o seu tiro. O acerto se
+# ve pelos NUMEROS DE DANO (laranja/amarelo com contorno vermelho) que sobem em cima do boss logo depois do tiro.
+NUMEROS_DANO_CAIXA = (800, 330, 1010, 480)   # x0, y0, x1, y1: em volta do Pericao (a camera fica parada nos tiros normais)
+NUMEROS_DANO_ACERTO = 800      # px laranja na caixa: tiros normais 908-5674; sem tiro/turno do boss ate ~700
+POW_CENTRO = (933, 512, 957, 534)  # x0, y0, x1, y1: o "POW" do botao do especial (canto de baixo, a direita)
+SATURACAO_POW_CHEIO = 60       # cheio: o POW fica vermelho e pulsa (saturacao 70-190); vazio: prata (14-48)
 ITENS_X = (951, 975)
 ITENS_Y0, ITENS_PASSO, ITENS_ALTURA = 247, 25.7, 22
 SATURACAO_ITEM_ATIVO = 75      # colorido ~87-127, cinza ~23-63
@@ -247,3 +253,16 @@ def vida_boss(f):
     if len(xs) == 0:
         return 0.0 if boss_morto(f) else 1.0
     return float(min(100.0, max(1.0, (xs.max() + 1) / (x1 - x0) * 100)))
+
+
+def numeros_de_dano(f):
+    """Quantos px com a cor dos numeros de dano ha em volta do Chefao Global (0 = nenhum numero)."""
+    x0, y0, x1, y1 = NUMEROS_DANO_CAIXA
+    hsv = cv2.cvtColor(f[y0:y1, x0:x1], cv2.COLOR_BGR2HSV)
+    return int(((hsv[..., 0] <= 32) & (hsv[..., 1] > 170) & (hsv[..., 2] > 190)).sum())
+
+
+def pow_cheio(f):
+    """O medidor do especial (POW, tecla B) encheu? O botao fica vermelho e pulsa."""
+    x0, y0, x1, y1 = POW_CENTRO
+    return float(cv2.cvtColor(f[y0:y1, x0:x1], cv2.COLOR_BGR2HSV)[..., 1].mean()) >= SATURACAO_POW_CHEIO

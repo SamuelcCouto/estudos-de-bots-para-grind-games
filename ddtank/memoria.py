@@ -22,6 +22,7 @@ import os
 import numpy as np
 
 import config
+import estrategias
 
 ARQ_SEMENTE = os.path.join(config.PASTA, "dados", "tiros_semente.json")
 ARQ_APRENDIZADO = os.path.join(config.PASTA, "dados", "aprendizado.json")
@@ -43,6 +44,11 @@ FORCAS_GRADE = np.arange(FORCA_MIN, FORCA_MAX + 0.01, 0.5)
 FORCA_CONFORTO = (18.0, 88.0)   # fora disso a barra e mais imprecisa (muito fraca) ou nao ha margem (quase cheia)
 DX_MINIMO = 1.0                 # px de minimapa: mais perto que isso o boss esta "em cima" (sem direcao)
 CHANCE_MEMORIA_OK = 0.6         # repetir um acerto antigo se a fisica der pelo menos essa chance para a mesma forca
+
+
+def angulo_min(inst):
+    """Menor angulo que o bot mira na instancia (o Chefao Global e com a mira quase reta: ver estrategias.py)."""
+    return estrategias.estrategia(inst).get("angulo_min", ANGULO_MIN)
 
 
 def fator_balistico(dx, dy_up, ang):
@@ -131,7 +137,7 @@ class Memoria:
         else:
             hist = [t["angulo"] for t in self._da(inst) if t["acertou"]]
             base = float(np.median(hist)) if hist else 35.0
-            angs = sorted({float(np.clip(base + d, ANGULO_MIN, ANGULO_MAX)) for d in (0, 8, -8, 16, -16, 24, -24)})
+            angs = sorted({float(np.clip(base + d, angulo_min(inst), ANGULO_MAX)) for d in (0, 8, -8, 16, -16, 24, -24)})
         melhor = None
         for ang in angs:
             ch = self._chance_por_forca(inst, dx, dy, ang, post)
@@ -170,43 +176,43 @@ class Memoria:
                     chance_mem = float(np.interp(forca, FORCAS_GRADE, ch))
                     if chance_mem >= CHANCE_MEMORIA_OK:
                         # a fisica concorda com o que ja acertou (inclui os erros registrados nessa faixa): repete
-                        return self._limites(ang, forca, "memoria", f"{len(perto)} acerto(s) na mesma situacao "
+                        return self._limites(inst, ang, forca, "memoria", f"{len(perto)} acerto(s) na mesma situacao "
                                              f"(dist {melhor:.1f}); a fisica concorda (chance ~{chance_mem:.0%})")
                     mt = self.melhor_tiro(inst, abs(dx_), dy_, angulo=ang)
                     if mt and inc < INCERTEZA_CONFIAVEL and mt[2] > chance_mem:
                         # o acerto antigo foi marginal (borda da tolerancia) ou ja errou nessa forca: mantem o angulo que
                         # funcionou e usa a forca com mais chance pela constante da instancia, que ja e confiavel
-                        return self._limites(ang, mt[1], "memoria+fisica",
+                        return self._limites(inst, ang, mt[1], "memoria+fisica",
                                              f"{len(perto)} acerto(s) na mesma situacao, mas a forca {forca:.0f}% tem so "
                                              f"~{chance_mem:.0%} de chance; pela fisica (R~{r:.0f}, x{inc:.1f}) ~{mt[2]:.0%}")
                 # erro recente nesta mesma situacao com valores parecidos: tenta mais forte, e alterna
                 for e in erros:
                     if dist(e) <= DIST_MESMA_SITUACAO and abs(e["forca"] - forca) < 6 and abs(e["angulo"] - ang) < 5:
                         forca += 8 if (len(erros) % 2) else -8
-                return self._limites(ang, forca, "memoria", f"{len(perto)} acerto(s) na mesma situacao (dist {melhor:.1f})")
+                return self._limites(inst, ang, forca, "memoria", f"{len(perto)} acerto(s) na mesma situacao (dist {melhor:.1f})")
             dx, dy = boss[0] - azul[0], azul[1] - boss[1]
             if abs(dx) >= DX_MINIMO:
                 return self._pela_fisica(inst, abs(dx), dy, f"{len(acertos)} acerto(s) e {len(erros)} erro(s) na instancia"
                                          + ("; boss a ESQUERDA" if dx < 0 else ""))
             t = ordem[0]
-            return self._limites(t["angulo"], t["forca"], "vizinho", f"boss em cima de voce (dx={dx:.0f}): "
+            return self._limites(inst, t["angulo"], t["forca"], "vizinho", f"boss em cima de voce (dx={dx:.0f}): "
                                  f"acerto mais parecido (dist {melhor:.1f})")
         if acertos:
-            return self._limites(float(np.median([t["angulo"] for t in acertos])), float(np.median([t["forca"] for t in acertos])),
+            return self._limites(inst, float(np.median([t["angulo"] for t in acertos])), float(np.median([t["forca"] for t in acertos])),
                                  "vizinho", "sem leitura do minimapa: mediana dos acertos")
         if azul and boss and abs(boss[0] - azul[0]) >= DX_MINIMO:
             dx, dy = boss[0] - azul[0], azul[1] - boss[1]
             return self._pela_fisica(inst, abs(dx), dy, f"instancia nova, {len(erros)} erro(s) ja registrados"
                                      + ("; boss a ESQUERDA" if dx < 0 else ""))
-        return self._limites(ANGULO_PADRAO, 50.0, "padrao", "sem dados nem minimapa")
+        return self._limites(inst, ANGULO_PADRAO, 50.0, "padrao", "sem dados nem minimapa")
 
     def _pela_fisica(self, inst, dx, dy, contexto):
         r, inc = self.r_estimado(inst)
         mt = self.melhor_tiro(inst, dx, dy)
         if not mt:
-            return self._limites(ANGULO_PADRAO, 50.0, "padrao", f"nenhum angulo alcanca o alvo (dx={dx:.0f}, dy={dy:.0f})")
+            return self._limites(inst, ANGULO_PADRAO, 50.0, "padrao", f"nenhum angulo alcanca o alvo (dx={dx:.0f}, dy={dy:.0f})")
         ang, p, chance = mt
-        return self._limites(ang, p, "fisica", f"{contexto}; R~{r:.0f} (incerteza x{inc:.1f}), dx={dx:.0f}, dy={dy:.0f}, "
+        return self._limites(inst, ang, p, "fisica", f"{contexto}; R~{r:.0f} (incerteza x{inc:.1f}), dx={dx:.0f}, dy={dy:.0f}, "
                                                f"chance de acerto ~{chance:.0%}")
 
     def forca_para(self, inst, azul, boss, angulo):
@@ -217,8 +223,8 @@ class Memoria:
         return float(np.clip(mt[1], FORCA_MIN, FORCA_MAX)) if mt else None
 
     @staticmethod
-    def _limites(ang, forca, origem, detalhe):
-        return {"angulo": float(np.clip(ang, ANGULO_MIN, ANGULO_MAX)), "forca": float(np.clip(forca, FORCA_MIN, FORCA_MAX)),
+    def _limites(inst, ang, forca, origem, detalhe):
+        return {"angulo": float(np.clip(ang, angulo_min(inst), ANGULO_MAX)), "forca": float(np.clip(forca, FORCA_MIN, FORCA_MAX)),
                 "origem": origem, "detalhe": detalhe}
 
     # ---------- aprendizado ----------

@@ -183,6 +183,30 @@ ROTA SUL - ESCORPIAO, RAINHA E O TRIDENTE (28/10, noite)
 * TRIDENTE (item 2): os 3 projeteis caem espalhados; no Escorpiao (so o pe tem colisao) as vezes so 2 pegam. Agora o bot
   guarda quanto de vida cada tiro tirou e, ao repetir um tiro, puxa a forca para a que tirou MAIS vida (3 acertos).
 
+CHEFAO GLOBAL - PERICAO (28/10, almoco)
+=======================================
+Ao abrir ATIRAR / NAVEGAR agora tem a opcao C:
+   C = so o Chefao Global: o bot vai para a sala, aba "Instancia do evento", marca o PERICAO, fecha as vagas, Inicio,
+       "sozinho? Sim" e luta. A luta so acaba (cartas) quando o servidor inteiro derruba o chefao. Depois ele ESPERA o
+       proximo horario (12h-13h e 21h-22h) e entra de novo. Atalho: CHEFAO_GLOBAL.bat.
+Escolhendo N, S ou T ele pergunta tambem:  "Chefao Global nos horarios? (S/n)"  (Enter = sim).
+   Sim: o bot faz a rota normalmente; quando der 12h (ou 21h) ele termina a instancia em andamento, vai para o Pericao,
+   luta ate o chefao cair e VOLTA PARA A ROTA de onde parou. Fora do horario nao muda nada.
+   Horarios diferentes?  python navegador.py --atirar --horarios-chefe 12:00-13:00,21:00-22:00
+Na luta (aprendido da sua gravacao 20261028_121648):
+ * mira quase reta (ponteiro em 7) e forca ~85%: 39 de 39 tiros seus pegaram, com o vento de 4,5 CONTRA ate 4,0 A FAVOR.
+   Ou seja, nessa distancia o vento quase nao muda o acerto - o bot nao corrige vento aqui (se comecar a errar, aparece
+   no log e eu ajusto).
+ * itens: sempre 2, 3 e o maximo de 4; quando a stamina nao der mais 4, os 5, 6, 7, 8 (sem testar combos).
+ * POW: quando o medidor do especial enche (o botao POW fica vermelho), aperta B antes dos itens (o especial tirou ~30 mil
+   de uma vez na sua gravacao; um tiro normal ~3 mil por bala).
+ * a barra de vida do topo e a do SERVIDOR (todo mundo batendo) - nao diz se o SEU tiro pegou. O bot confere pelos
+   NUMEROS DE DANO que sobem no boss. Log: "[tiro] numeros de dano no boss: 2500 px -> ACERTOU".
+ * se a luta acabar sem cartas (rodada 200? morte?), ele entra de novo enquanto for horario. Se o quadro do Pericao nao
+   marcar (evento fechado), desiste ate o proximo horario.
+ * a configuracao da sala abre na ultima aba usada: o bot confere a aba clara e clica na certa (normal ou do evento).
+ * relatorio: "Pericao (Chefao Global): CHEFAO GLOBAL - N lutas, turnos, tiros normais acertando X%, especiais (POW)".
+
 QUALIDADE DE VIDA - noites inteiras (28/10)
 ===========================================
 * DISCO D: - o bot nao aponta para o C: em lugar nenhum (tudo fica dentro da pasta do bot). O que enchia o C: era a

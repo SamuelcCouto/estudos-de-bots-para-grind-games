@@ -177,7 +177,7 @@ w = Mundo(setas_funcionam_em=("top", "filha")); at, mem, logs, arq = novo(w)
 at.mem.prever = lambda inst, a, b: {"angulo": 45.0, "forca": 10.0, "origem": "teste", "detalhe": ""}   # previsao incoerente
 w.angulo = 15.0
 orig = at.ajustar_angulo
-at.ajustar_angulo = lambda alvo: (setattr(w, "angulo", 30.0) or True)    # o ajuste "parou" em 30 graus
+at.ajustar_angulo = lambda alvo, tol=3.0: (setattr(w, "angulo", 30.0) or True)    # o ajuste "parou" em 30 graus
 rodar(at, w)
 assert any("recalculada" in l for l in logs), logs
 print("forca recalculada quando o angulo nao chega no previsto OK")
@@ -368,3 +368,69 @@ n_tiros = len(w.tiros)
 rodar(at, w, ate=w.t + 12)
 assert len(w.tiros) == n_tiros + 1, "com o boss a 1% o bot tem que atacar"
 print("boss com 1% de vida: ataca OK")
+
+# ------------------------------------------------------------ 23) CHEFAO GLOBAL (Pericao): vida do servidor, acerto pelos numeros
+# A barra do topo e a vida de TODOS (fica em 43% aqui, nao muda com o seu tiro); o acerto e pelos numeros de dano que
+# sobem no boss ~1-3 s depois. Mira quase reta (ponteiro em 7; comeca em 4.5) e POW (tecla B) quando encher.
+import metricas as MT
+
+class MundoPericao(MundoComThread):
+    def __init__(self, **kw):
+        super().__init__(angulo=4.5, **kw)
+        self.azul, self.boss = (10.5, 58.4), (76.3, 61.4)
+        self.pow = False; self.especiais = 0
+    def novo_turno(self, ini, fim):
+        super().novo_turno(ini, fim); self.vida = 43.0
+    def capturar(self):
+        f = super().capturar()
+        f["vida"] = 43.0                                            # vida do servidor: nao cai com o seu tiro
+        a = self.atirou_em
+        f["numeros"] = 2500 if (a and self.boss_hit and a + 1.5 <= self.t <= a + 3.5) else 250
+        f["pow"] = self.pow
+        return f
+    def tecla(self, nome, dur=0.05):
+        if nome == "b" and self.pow:
+            self.pow = False; self.especiais += 1
+        super().tecla(nome, dur)
+
+class LeitorPericao(Leitor):
+    numeros_dano = staticmethod(lambda f: f["numeros"])
+    pow_cheio = staticmethod(lambda f: f["pow"])
+
+w = MundoPericao(); w.vida = 43.0
+tmp = tempfile.NamedTemporaryFile("w", suffix=".json", delete=False); tmp.close(); os.unlink(tmp.name)
+mem = M.Memoria(arq_aprendizado=tmp.name); logs = []
+met = MT.Metricas("Chefao Global", salvar=False, agora=lambda: w.t, log=logs.append)
+cb = CB.Combos(arq=None)
+at = A.Atirador(w, mem, lambda: "PERICAO", leitor=LeitorPericao(), dormir=w.dormir, agora=lambda: w.t, log=logs.append,
+                combos=cb, metricas=met)
+met.batalha_inicio("PERICAO")
+rodar(at, w, ate=16)
+print("\n".join(logs))
+assert 5.9 <= w.angulo <= 8.0, f"mira do Pericao: {w.angulo:.1f} (memoria: ponteiro ~7; comecou em 4.5)"
+assert len(w.tiros) == 1 and 76 <= w.tiros[0] <= 92, w.tiros
+assert w.itens_apertados[:2] == [2, 3], w.itens_apertados
+novos = [t for t in mem.tiros if t.get("origem") == "bot"]
+assert len(novos) == 1 and novos[0]["acertou"], novos
+assert any("numeros de dano no boss" in l and "ACERTOU" in l for l in logs)
+# 2o turno: o POW encheu -> B antes dos itens; o resultado do especial nao e conferido (a camera anda)
+w.novo_turno(w.t + 1.0, w.t + 9.0); w.pow = True
+n_teclas = len(w.teclas)
+rodar(at, w, ate=w.t + 14)
+seq = [t[0] for t in w.teclas[n_teclas:]]
+assert w.especiais == 1 and seq.index("b") < seq.index("3"), seq
+assert len([t for t in mem.tiros if t.get("origem") == "bot"]) == 1, "o especial nao entra na memoria"
+# 3o turno: o tiro nao pega (sem numeros) -> registra o erro
+w.novo_turno(w.t + 1.0, w.t + 9.0); w.boss_hit = False
+rodar(at, w, ate=w.t + 14)
+bot = [t for t in mem.tiros if t.get("origem") == "bot"]
+assert len(bot) == 2 and not bot[-1]["acertou"], bot
+met.batalha_fim(venceu=True)
+at.fim_da_batalha(venceu=True, duracao=60.0)
+r = met.por_instancia()["PERICAO"]
+diag = MT.Metricas.diagnostico("PERICAO", r)
+print(diag)
+assert r["acertos"] == 1 and r["erros"] == 1 and r["especiais"] == 1 and diag.startswith("CHEFAO GLOBAL"), r
+assert "PERICAO" not in cb.dados, "Chefao Global: combo fixo, nada a aprender"
+assert cb.escolher("PERICAO")[0] == "2,3,4"
+print("\nChefao Global (mira reta, numeros de dano, POW) OK")

@@ -15,10 +15,11 @@ import os
 import time
 
 import config
+import estrategias
 
 NOMES = {"FANTASMA": "Fantasma", "PROFUNDEZAS": "Profundezas", "MINHOCAO": "Minhocao", "ESCORPIAO_REI": "Escorpiao Rei",
          "DRAGAO_GELADO": "Dragao Gelado", "RAINHA_LIRIS": "Rainha Liris", "ULTIMA_LUTA": "A Ultima Luta",
-         "GATO_PRETO": "Gato Preto"}
+         "GATO_PRETO": "Gato Preto", "PERICAO": "Pericao (Chefao Global)"}
 TESTE_DE_FOGO = "2,3,4"      # combo de dano maximo (ver combos.py): a prova de que precisa upar
 FOGO_PARA_CONCLUIR = 5
 LUTAS_PARA_CONFIAR = 20      # menos lutas que isso: um "matou no 1o turno" pode ter sido CRITICO
@@ -69,10 +70,10 @@ class Metricas:
     def batalha_inicio(self, inst, volta=0):
         self.instancia_inicio(inst, volta)
         self.luta = {"inst": inst, "volta": volta, "t0": self.agora(), "turnos": 0, "ataques": 0, "avioes": 0,
-                     "pulados": 0, "danos": [], "acertos": 0, "erros": 0, "combo": None, "itens": None}
+                     "pulados": 0, "danos": [], "acertos": 0, "erros": 0, "especiais": 0, "combo": None, "itens": None}
 
-    def turno(self, tipo, itens=None, combo=None):
-        """tipo: 'ataque' | 'aviao' | 'pulado'."""
+    def turno(self, tipo, itens=None, combo=None, especial=False):
+        """tipo: 'ataque' | 'aviao' | 'pulado'. especial = usou o POW (tecla B) neste ataque."""
         if not self.luta:
             return
         L = self.luta
@@ -84,14 +85,17 @@ class Metricas:
             L["avioes"] += 1
             return
         L["ataques"] += 1
+        L["especiais"] += bool(especial)
         if L["combo"] is None:
             L["combo"], L["itens"] = combo, itens
 
     def resultado_tiro(self, dano, acertou):
+        """acertou None = nao deu para conferir (especial do Chefao Global: a camera anda)."""
         if not self.luta:
             return
         self.luta["danos"].append(round(float(dano), 1))
-        self.luta["acertos" if acertou else "erros"] += 1
+        if acertou is not None:
+            self.luta["acertos" if acertou else "erros"] += 1
 
     def batalha_fim(self, venceu):
         L, self.luta = self.luta, None
@@ -164,12 +168,20 @@ class Metricas:
                 "acerta_o_1o": len(acertou) / len(com_1o) if com_1o else None,
                 "dano_1o_medio": sum(L["dano_1o"] for L in acertou) / len(acertou) if acertou else None,
                 "avioes": sum(L["avioes"] for L in ls), "pulados": sum(L["pulados"] for L in ls),
+                "acertos": sum(L["acertos"] for L in ls), "erros": sum(L["erros"] for L in ls),
+                "especiais": sum(L.get("especiais", 0) for L in ls), "turnos_total": sum(L["turnos"] for L in ls),
             }
         return out
 
     @staticmethod
     def diagnostico(inst, r):
         n = r["lutas"]
+        if estrategias.estrategia(inst).get("chefe_global"):
+            tiros = r["acertos"] + r["erros"]
+            pont = (f"tiros normais acertando {r['acertos'] / tiros:.0%} ({r['acertos']} de {tiros}, pelos numeros de dano)"
+                    if tiros else "nenhum tiro normal conferido ainda")
+            return (f"CHEFAO GLOBAL - {n} luta(s), {r['turnos_total']} turno(s) do bot; {pont}; {r['especiais']} especial(is) "
+                    f"(POW). Vitoria = o servidor inteiro derrubou o chefao; derrota = rodada 200, morte ou fim do horario.")
         poucas = f" (so {n} lutas: pode ter sido critico - confirmo com {LUTAS_PARA_CONFIAR}+)" if n < LUTAS_PARA_CONFIAR else ""
         if r["mata_no_1o"] >= MATA_NO_1O_OK:
             return f"OK - mata no 1o turno ({r['mata_no_1o']:.0%} das {n} lutas){poucas}."

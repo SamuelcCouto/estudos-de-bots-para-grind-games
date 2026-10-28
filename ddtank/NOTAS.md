@@ -217,3 +217,29 @@ colorido), C=[1,4], D=[2,4,7] / [2,4,8]. 1o ataque no Escorpiao: A ~58%, B 58-85
 B 33-58%, C 2-14%, D 14-31%. Tridente (2) perde dano no Escorpiao (so o pe tem colisao).
 Combos agora: mesmo com PRECISA UPAR, explora os outros combos e fica com a luta mais curta (o diagnostico continua sendo
 o teste de fogo). Confirmacao de tela 0,45 -> 0,3 s. DURACAO_MAX_DA_VEZ 11 -> 14 s (o PASS fica na tela com o tiro voando).
+
+## Chefao Global - Pericao (gravacao do usuario 20261028_121648, 12h16)
+Entrada: mapa -> Central "Jogar" -> sala -> trocar instancia (697,301) -> aba "Instancia do evento" (630,284) -> quadro
+PERICAO (500,320; a aba tem tambem Super Mago e Macaco de Fogo) -> "Sim" (640,529; o quadro de dificuldade fica vazio)
+-> fecha as 3 vagas -> Inicio -> "sozinho? Sim" -> batalha ~5 s depois. A configuracao abriu na aba normal (que tem a 5a
+aba "Iniciar Batalha do Chefe"): o patch CONFIG_1 (estado generico CONFIG) ficava em cima dessa aba e nao reconhecia a
+janela na aba do evento -> trocado pelo rotulo "Dificuldade" (452,465), que existe em todas as abas. Aba ativa = a mais
+clara (brilho ~162 x ~100). Artes: templates/cfg_PERICAO.png e sala_PERICAO.png ("PERICAO ATE QUE DUROU").
+Batalha: mesmo HUD. Minimapa: jogador (10.5, 58.4), boss parado (76.3, 61.4). INFO "Rodadas x/200". A barra de vida e
+a GLOBAL (43% -> 1% em 11 min; 913 milhoes de vida; o chat mostra "Vida restante: 55% (506412524/912999995)").
+Tiros do usuario: ponteiro 7 (o 1o em 4.5, depois 5 toques de "cima"), espaco 2.9-3.2 s, forca lida 78-89%, itens
+2,3,4,4,4 (as vezes 7). Vento (Forca Vento, 2 digitos coloridos + seta): 0 -> 4.5 contra (ate 380 s), depois 1.0-4.0 a
+favor; a forca do usuario ficou em 84-87% nos dois casos e TODOS os 39 tiros normais deram numeros de dano -> o vento
+nao importa aqui. POW: botao (945,523) vermelho/pulsando quando cheio (saturacao 70-190; vazio 14-48). Usado 4x (221,
+378, 552, 741 s), sempre B antes dos itens (sem o item 2 nesses turnos); o especial anda com a camera e tirou ~30 mil.
+Acerto: numeros de dano (laranja/amarelo, contorno vermelho) na caixa (800,330)-(1010,480): tiros normais 908-5674 px,
+fora dos tiros <= 702 -> limiar 800 (leitura.numeros_de_dano). O especial nao e conferido (camera anda).
+Fim: o chefao caiu aos ~760 s (rodada 89/200) -> tela de resultado -> CARTAS normais (15 s, VIP na 3a) -> sala com o
+Pericao. Chat: "Chefao Global (Novo Corsario) derrotado! Vida: 0% - modo global encerrado. Voces tem X minutos para
+coletar o bau no..." (as recompensas sao pelo dano total, nao precisa fazer nada).
+Implementado: estrategias.ESTRATEGIAS["PERICAO"] (chefe_global, angulo_min 0, tolerancia_angulo 1, usar_pow, combo
+fixo 2,3,4), memoria aceita angulo minimo por instancia, 34 tiros do usuario em dados/tiros_semente.json, atirador
+(B no POW cheio, acerto pelos numeros, espera 4 s), navegador (opcao C, --chefe, --horarios-chefe, abas, volta para a
+rota onde parou, desiste se o quadro nao marcar), metricas (diagnostico CHEFAO GLOBAL), CHEFAO_GLOBAL.bat.
+Duvidas abertas: o que acontece na rodada 200 (derrota?) e no fim do horario com o chefao vivo; se o Pericao continua
+entravel fora do horario ("modo global encerrado" sugere que vira instancia normal).
