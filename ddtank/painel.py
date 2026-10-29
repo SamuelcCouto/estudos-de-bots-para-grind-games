@@ -14,6 +14,8 @@ import tkinter as tk
 from tkinter import messagebox, ttk
 
 import config
+import drops
+import estatisticas
 import painel_logica as P
 import navegador as N
 
@@ -29,16 +31,19 @@ RELATORIO = os.path.join(config.PASTA_LOGS, "relatorio.txt")
 class Painel:
     def __init__(self, raiz):
         self.raiz = raiz
+        self.amigo = P.modo_amigo()
         self.cfg = P.carregar()
+        if self.amigo:
+            self.cfg.update(gravar=False, enviar_ao_parar=False, reiniciar_se_cair=True)
         self.proc = None
         self.fila = queue.Queue()
         self.inicio = None
-        raiz.title("DDTank Bot - Painel")
+        raiz.title("DDTank Bot" + ("" if P.modo_amigo() else " - Painel (desenvolvedor)"))
         raiz.configure(bg=COR["fundo"])
         raiz.geometry("1040x660")
         raiz.minsize(900, 520)
         self.estilo()
-        self.v_rota = tk.StringVar(value=self.cfg["rota"])
+        self.v_alvo = tk.StringVar(value=self.cfg["alvo"])
         self.v_chefe = tk.BooleanVar(value=self.cfg["chefe_nos_horarios"])
         self.v_horarios = tk.StringVar(value=self.cfg["horarios"])
         self.v_gravar = tk.BooleanVar(value=self.cfg["gravar"])
@@ -46,12 +51,12 @@ class Painel:
         self.v_enviar = tk.BooleanVar(value=self.cfg["enviar_ao_parar"])
         self.v_reiniciar = tk.BooleanVar(value=self.cfg["reiniciar_se_cair"])
         self.pediu_parar = False
+        self.aviso = ""
         self.quedas = []
         self.v_tarefas = tk.BooleanVar(value=self.cfg["tarefas"])
-        self.v_avancado = tk.BooleanVar(value=self.cfg["avancado"])
         self.v_cartas = {}
         self.montar()
-        self.atualizar_rota()
+        self.atualizar_alvo()
         self.raiz.protocol("WM_DELETE_WINDOW", self.fechar)
         self.raiz.after(100, self.tic)
 
@@ -118,50 +123,68 @@ class Painel:
         tela.create_window((0, 0), window=esq, anchor="nw")
         esq.bind("<Configure>", lambda e: tela.configure(scrollregion=tela.bbox("all")))
         tela.bind_all("<MouseWheel>", lambda e: tela.yview_scroll(int(-e.delta / 120), "units"))
-        # rota
-        self.c_rota = self.cartao(esq, "O que fazer")
-        self.c_rota.pack(fill="x", pady=(0, 10))
-        self.f_rotas = ttk.Frame(self.c_rota, style="Cartao.TFrame")
-        self.f_rotas.pack(fill="x")
-        ttk.Checkbutton(self.c_rota, text="mostrar Rota Norte e Norte + Sul", variable=self.v_avancado,
-                        command=self.desenhar_rotas).pack(anchor="w", pady=(8, 0))
+        # rotas
+        c = self.cartao(esq, "Rotas")
+        c.pack(fill="x", pady=(0, 8))
+        for chave, nome, desc, ativa in P.ROTAS_PAINEL:
+            r = ttk.Radiobutton(c, text=nome, value=chave, variable=self.v_alvo, command=self.atualizar_alvo)
+            r.pack(anchor="w")
+            if not ativa:
+                r.state(["disabled"])
+            ttk.Label(c, text="     " + desc, style="Fraco.TLabel").pack(anchor="w", pady=(0, 3))
+        # chefes (repete um chefe so)
+        c = self.cartao(esq, "Chefes (o bot luta so nele, sem parar)")
+        c.pack(fill="x", pady=(0, 8))
+        grade = ttk.Frame(c, style="Cartao.TFrame")
+        grade.pack(fill="x")
+        for n, (chave, nome) in enumerate(P.CHEFES_PAINEL):
+            ttk.Radiobutton(grade, text=nome, value=chave, variable=self.v_alvo, command=self.atualizar_alvo).grid(
+                row=n // 2, column=n % 2, sticky="w", padx=(0, 14))
+        self.k_chefe = ttk.Checkbutton(c, text="Chefao Global nos horarios (pausa e volta depois)", variable=self.v_chefe)
+        self.k_chefe.pack(anchor="w", pady=(8, 0))
         # cartas
-        self.c_cartas = self.cartao(esq, "Abrir as cartas de")
-        self.c_cartas.pack(fill="x", pady=(0, 10))
+        self.c_cartas = self.cartao(esq, "Abrir cartas")
+        self.c_cartas.pack(fill="x", pady=(0, 8))
+        bs = ttk.Frame(self.c_cartas, style="Cartao.TFrame")
+        bs.pack(fill="x", pady=(0, 4))
+        ttk.Button(bs, text="Todas", command=lambda: self.marcar_cartas(True)).pack(side="left")
+        ttk.Button(bs, text="Nenhuma", command=lambda: self.marcar_cartas(False)).pack(side="left", padx=6)
         self.f_cartas = ttk.Frame(self.c_cartas, style="Cartao.TFrame")
         self.f_cartas.pack(fill="x")
-        # chefao
-        c = self.cartao(esq, "Chefao Global")
-        c.pack(fill="x", pady=(0, 10))
-        self.k_chefe = ttk.Checkbutton(c, text="lutar nos horarios (para a rota e volta depois)", variable=self.v_chefe)
-        self.k_chefe.pack(anchor="w")
-        linha = ttk.Frame(c, style="Cartao.TFrame")
-        linha.pack(fill="x", pady=(6, 0))
-        ttk.Label(linha, text="Horarios", style="Fraco.TLabel").pack(side="left")
-        ttk.Entry(linha, textvariable=self.v_horarios, width=26).pack(side="left", padx=8)
         # opcoes
         c = self.cartao(esq, "Opcoes")
-        c.pack(fill="x", pady=(0, 10))
+        c.pack(fill="x", pady=(0, 8))
         ttk.Checkbutton(c, text="coletar as tarefas no fim de cada volta", variable=self.v_tarefas).pack(anchor="w")
-        ttk.Checkbutton(c, text="gravar a sessao (para me mandar depois)", variable=self.v_gravar).pack(anchor="w")
-        ttk.Checkbutton(c, text="gravacao leve (disco pequeno)", variable=self.v_leve).pack(anchor="w")
-        ttk.Checkbutton(c, text="enviar a gravacao ao GitHub quando o bot parar", variable=self.v_enviar).pack(anchor="w")
-        ttk.Checkbutton(c, text="religar sozinho se o bot cair", variable=self.v_reiniciar).pack(anchor="w")
-        # ferramentas
-        ttk.Button(esq, text="Enviar gravacao para o GitHub", command=self.enviar).pack(fill="x", pady=(0, 6))
-        ttk.Button(esq, text="Testar a minha tela (o bot enxerga o jogo?)", command=self.testar_tela).pack(fill="x", pady=(0, 6))
-        ttk.Button(esq, text="Atualizar o bot (baixar novidades)", command=self.atualizar).pack(fill="x", pady=(0, 6))
-        ttk.Button(esq, text="Gravar a MINHA jogada (para mapear algo novo)", command=self.gravar_jogada).pack(fill="x")
+        if not self.amigo:
+            # versao do desenvolvedor: gravacao, GitHub, ferramentas
+            c = self.cartao(esq, "Desenvolvedor")
+            c.pack(fill="x", pady=(0, 8))
+            ttk.Checkbutton(c, text="gravar a sessao (para me mandar depois)", variable=self.v_gravar).pack(anchor="w")
+            ttk.Checkbutton(c, text="gravacao leve (disco pequeno)", variable=self.v_leve).pack(anchor="w")
+            ttk.Checkbutton(c, text="enviar a gravacao ao GitHub quando o bot parar", variable=self.v_enviar).pack(anchor="w")
+            ttk.Checkbutton(c, text="religar sozinho se o bot cair", variable=self.v_reiniciar).pack(anchor="w")
+            linha = ttk.Frame(c, style="Cartao.TFrame")
+            linha.pack(fill="x", pady=(6, 0))
+            ttk.Label(linha, text="Horarios do chefao", style="Fraco.TLabel").pack(side="left")
+            ttk.Entry(linha, textvariable=self.v_horarios, width=24).pack(side="left", padx=8)
+            ttk.Button(esq, text="Enviar gravacao para o GitHub", command=self.enviar).pack(fill="x", pady=(0, 6))
+            ttk.Button(esq, text="Testar a minha tela (o bot enxerga o jogo?)", command=self.testar_tela).pack(fill="x", pady=(0, 6))
+            ttk.Button(esq, text="Atualizar o bot (baixar novidades)", command=self.atualizar).pack(fill="x", pady=(0, 6))
+            ttk.Button(esq, text="Gravar a MINHA jogada (para mapear algo novo)", command=self.gravar_jogada).pack(fill="x")
         # direita: abas
         dir_ = ttk.Frame(corpo)
         dir_.pack(side="left", fill="both", expand=True)
         nb = ttk.Notebook(dir_)
         nb.pack(fill="both", expand=True)
-        self.t_log = self.texto(nb, "Log ao vivo")
-        self.t_rel = self.texto(nb, "Relatorio")
-        for tag, cor in (("chefe", COR["amarelo"]), ("erro", COR["vermelho"]), ("tempo", COR["azul"]), ("ok", COR["verde"])):
-            self.t_log.tag_configure(tag, foreground=cor)
-        self.desenhar_rotas()
+        self.t_resumo = self.texto(nb, "Relatorio" if self.amigo else "Resumo")
+        if not self.amigo:
+            self.t_log = self.texto(nb, "Log ao vivo")
+            self.t_rel = self.texto(nb, "Relatorio tecnico")
+            for tag, cor in (("chefe", COR["amarelo"]), ("erro", COR["vermelho"]), ("tempo", COR["azul"]), ("ok", COR["verde"])):
+                self.t_log.tag_configure(tag, foreground=cor)
+        else:
+            self.t_log = self.t_rel = None
+        self.atualizar_alvo()
         self.atualizar_relatorio()
 
     def texto(self, nb, titulo):
@@ -176,39 +199,30 @@ class Painel:
         return t
 
     # ------------------------------------------------------------ escolhas
-    def desenhar_rotas(self):
-        for w in self.f_rotas.winfo_children():
-            w.destroy()
-        rotas = P.ROTAS_PAINEL + (P.ROTAS_AVANCADAS if self.v_avancado.get() else [])
-        for chave, nome, desc in rotas:
-            ttk.Radiobutton(self.f_rotas, text=nome, value=chave, variable=self.v_rota_var(), command=self.atualizar_rota).pack(anchor="w")
-            ttk.Label(self.f_rotas, text="     " + desc, style="Fraco.TLabel").pack(anchor="w", pady=(0, 4))
-
-    def v_rota_var(self):
-        return self.v_rota
-
-    def atualizar_rota(self):
-        chave = self.v_rota.get()
+    def atualizar_alvo(self):
+        """Mudou a rota/chefe: refaz as caixinhas das cartas (uma por chefe do alvo)."""
+        alvo = self.v_alvo.get()
         for w in self.f_cartas.winfo_children():
             w.destroy()
-        inst = P.instancias_da_rota(chave)
+        inst = P.instancias_do_alvo(alvo)
         self.v_cartas = {}
-        if len(inst) < 2:
-            ttk.Label(self.f_cartas, text="(esta rota tem uma instancia so: abre as cartas)", style="Fraco.TLabel").pack(anchor="w")
-        else:
-            padrao = self.cfg["cartas"] if self.cfg.get("rota") == chave else N.cartas_padrao(chave, inst)
-            for i in inst:
-                v = tk.BooleanVar(value=i in padrao)
-                self.v_cartas[i] = v
-                ttk.Checkbutton(self.f_cartas, text=i.replace("_", " ").title(), variable=v).pack(anchor="w")
-            ttk.Label(self.f_cartas, text="As desmarcadas so completam a missao.", style="Fraco.TLabel").pack(anchor="w", pady=(4, 0))
-        self.k_chefe.state(["disabled"] if chave == "C" else ["!disabled"])
+        padrao = self.cfg["cartas"] if self.cfg.get("alvo") == alvo else (N.cartas_padrao("S", inst) if alvo == "S" else inst)
+        for i in inst:
+            v = tk.BooleanVar(value=i in padrao)
+            self.v_cartas[i] = v
+            ttk.Checkbutton(self.f_cartas, text=P.NOMES_CHEFES.get(i, i.replace("_", " ").title()), variable=v).pack(anchor="w")
+        ttk.Label(self.f_cartas, text="As desmarcadas so completam a missao (o jogo da 2 cartas sozinho).",
+                  style="Fraco.TLabel").pack(anchor="w", pady=(4, 0))
+        self.k_chefe.state(["disabled"] if alvo == "C" else ["!disabled"])
+
+    def marcar_cartas(self, valor):
+        for v in self.v_cartas.values():
+            v.set(valor)
 
     def config_atual(self):
-        return {"rota": self.v_rota.get(), "cartas": [i for i, v in self.v_cartas.items() if v.get()],
+        return {"alvo": self.v_alvo.get(), "cartas": [i for i, v in self.v_cartas.items() if v.get()],
                 "chefe_nos_horarios": self.v_chefe.get(), "horarios": self.v_horarios.get().strip(),
-                "gravar": self.v_gravar.get(), "gravacao_leve": self.v_leve.get(), "enviar_ao_parar": self.v_enviar.get(), "reiniciar_se_cair": self.v_reiniciar.get(), "tarefas": self.v_tarefas.get(),
-                "avancado": self.v_avancado.get()}
+                "gravar": self.v_gravar.get(), "gravacao_leve": self.v_leve.get(), "enviar_ao_parar": self.v_enviar.get(), "reiniciar_se_cair": self.v_reiniciar.get(), "tarefas": self.v_tarefas.get()}
 
     # ------------------------------------------------------------ rodar
     def iniciar(self):
@@ -216,9 +230,9 @@ class Painel:
             return
         cfg = self.config_atual()
         try:
-            cmd = P.montar_comando(cfg, sys.executable)
-        except ValueError:
-            messagebox.showerror("Horarios", "Use o formato 12:00-13:00,21:00-22:00")
+            cmd = P.montar_comando(cfg, sys.executable, amigo=self.amigo)
+        except ValueError as e:
+            messagebox.showerror("Nao deu para iniciar", str(e) if "Leste" in str(e) else "Use o formato de horarios 12:00-13:00,21:00-22:00")
             return
         P.salvar(cfg)
         self.cfg = cfg
@@ -364,6 +378,10 @@ class Painel:
 
     # ------------------------------------------------------------ atualizacao da tela
     def escrever(self, t, texto, tag=None):
+        if t is None:                                   # versao dos amigos: sem log; so guarda o ultimo aviso para o status
+            if tag in ("erro", "chefe") and texto.strip():
+                self.aviso = texto.strip("- \n")
+            return
         t.configure(state="normal")
         t.insert("end", texto, tag) if tag else t.insert("end", texto)
         if int(t.index("end-1c").split(".")[0]) > 4000:
@@ -385,15 +403,26 @@ class Painel:
             return "ok"
         return None
 
+    def mostrar(self, t, texto):
+        t.configure(state="normal")
+        t.delete("1.0", "end")
+        t.insert("end", texto)
+        t.configure(state="disabled")
+
     def atualizar_relatorio(self):
+        """Resumo da execucao (voltas, tempo, missoes, drops); na versao do desenvolvedor, tambem o relatorio tecnico."""
         try:
-            texto = open(RELATORIO, encoding="utf-8").read()
-        except OSError:
-            texto = "(o relatorio aparece depois da 1a luta)"
-        self.t_rel.configure(state="normal")
-        self.t_rel.delete("1.0", "end")
-        self.t_rel.insert("end", texto)
-        self.t_rel.configure(state="disabled")
+            nomes = dict(drops.Catalogo().nomes)
+        except Exception:
+            nomes = {}
+        nomes.update(P.NOMES_CHEFES)
+        self.mostrar(self.t_resumo, estatisticas.texto_resumo(estatisticas.ler(), nomes))
+        if self.t_rel is not None:
+            try:
+                texto = open(RELATORIO, encoding="utf-8").read()
+            except OSError:
+                texto = "(o relatorio aparece depois da 1a luta)"
+            self.mostrar(self.t_rel, texto)
 
     def tic(self):
         try:
@@ -422,7 +451,9 @@ class Painel:
         elif self.inicio:
             s = int(time.time() - self.inicio)
             self.l_status.configure(text=f"Rodando ha {s // 3600}h{s % 3600 // 60:02d}min{s % 60:02d}s", foreground=COR["verde"])
-            if s % 10 == 0:
+            if self.amigo and self.aviso:
+                self.l_status.configure(text=self.l_status.cget("text") + "  |  " + self.aviso[:60])
+            if s % 2 == 0:
                 self.atualizar_relatorio()
         else:
             self.l_status.configure(text="Parado", foreground=COR["fraco"])

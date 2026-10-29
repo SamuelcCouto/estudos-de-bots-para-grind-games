@@ -577,3 +577,8 @@ for esticado sem manter a proporcao, falha); zoom < 0.75 perde o minimapa; refs 
   conhecidas + print "preso" na gravacao; repete a cada 60 s.
 - PC nao entra em suspensao enquanto o bot roda (SetThreadExecutionState). Painel: "religar sozinho se o bot cair" (5x/hora).
 - testes/test_sintaxe.py compila todos os .py. dados/painel.json, aprendizado, combos e artes aprendidas fora do git (.gitignore).
+
+## Sessoes 29/10 tarde (133642, 134102, 135013, 135059) e painel novo
+- 135059: Rota Sul 2h50, 55 voltas, 19,4/h (cartas so da Rainha), Escorpiao 97% no 1o turno (2 derrotas em 58), Dragao 89%, Rainha 96%.
+  As outras 3 eram testes curtos. Painel reformulado (cards Rotas / Chefes / Abrir cartas / Opcoes; modo desenvolvedor x amigos),
+  estatisticas.py + drops.py (resumo da execucao). A gravacao do Gato Preto NAO estava no GitHub (so sessoes _bot): pedir de novo.

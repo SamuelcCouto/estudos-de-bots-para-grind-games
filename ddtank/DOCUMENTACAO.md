@@ -14,10 +14,14 @@ Objetivo atual: farmar **cupons** (moeda do jogo) com as instancias; as rotas an
 O usuario fala **portugues**, quer explicacoes intuitivas, decide o rumo; eu (Claude) implemento, testo e documento.
 
 ## 2. Como o usuario usa
-`BotDDT.bat` (baixa novidades com `git pull` e abre o painel `painel.py`, tkinter, tema escuro). No painel: rota (Sul / Pericao
-comum / Chefao Global; N e T escondidas em "mostrar Rota Norte..."), cartas por instancia, Chefao nos horarios, tarefas,
-gravacao, INICIAR / PAUSAR / PARAR (no topo), "Enviar gravacao" (empacotar + git push), "Testar a minha tela",
-"Atualizar o bot", "Gravar a MINHA jogada". Tudo vira argumentos de `navegador.py --atirar ...` (nada de perguntas no terminal).
+`BotDDT.bat` (baixa novidades com `git pull` e abre o painel `painel.py`, tkinter, tema escuro). Cards: **Rotas** (Norte, Sul, Leste =
+em desenvolvimento/desabilitada), **Chefes** (repete UM chefe: Fantasma ... Gato Preto, Pericao comum, Chefao Global; tarefas a cada 10
+voltas), **Abrir cartas** (Todas / Nenhuma / uma caixinha por chefe), **Opcoes** (coletar tarefas) e, so na versao do desenvolvedor,
+**Desenvolvedor** (gravacao, leve, enviar ao parar, religar, horarios) + botoes "Enviar gravacao", "Testar a minha tela", "Atualizar",
+"Gravar a MINHA jogada". INICIAR / PAUSAR / PARAR no topo. **Versao dos amigos** (`painel.py --amigo` ou arquivo `amigo.flag` ao lado do
+exe): sem gravacao/log/GitHub; so a aba **Relatorio** (tempo, voltas, lutas, missoes, cartas abertas e o que veio nelas -
+`estatisticas.py` grava `logs/estatisticas.json`; `drops.py` reconhece o icone de cada carta virada: itens conhecidos em
+`templates/drops/<nome>.png`, novos viram `item_NNN` em `dados/drops_vistos/` e podem ser nomeados em `dados/drops_nomes.json`). Tudo vira argumentos de `navegador.py --atirar ...` (nada de perguntas no terminal).
 Fluxo de feedback: o usuario roda, o painel envia `envio/<sessao>_parteN.zip` ao GitHub, **eu analiso** (relatorio, log, frames)
 e depois `git rm` os zips ja analisados. Teclas do bot: F8 pausa, F10 sai.
 
@@ -91,7 +95,14 @@ Dados do usuario (fora do git): `logs/`, `sessoes/` (guarda as 3 ultimas), `dado
 - O usuario so quer ser perguntado o necessario; resumir bem, sem jargao.
 
 ## 7. Backlog / proximos passos (ordem de prioridade do usuario)
-1. **Gato Preto** (instancia late game, melhores drops; boss mais demorado; "item E"): mapear (secao 8) e criar rota `G`.
+1. **Gato Preto** (instancia late game, melhores drops; boss generico que so se cura): o usuario gravou a run (29/10 tarde) mas as zips AINDA
+   NAO chegaram ao GitHub (so ha sessoes `_bot`). Mecanicas informadas por ele: (a) na tela inicial/sala pegar os **perks POW Z, X, C** (acabam
+   apos o uso; so repoe na tela inicial; enchem a barra do especial B mais rapido); (b) **item E = item do PET**, so liberado apos algumas
+   rodadas; depois de usado o boneco fica **imovel** e aparece uma **arma envolvendo o boneco** = buff que aumenta muito o dano e dura a run
+   toda (se nao mexer: so angulo e tiro); (c) usar o **especial B sempre apos o E ativo**; (d) drops principais = **aboboras** (o grind) -> contador
+   de aboboras por execucao no painel (usar `drops.py`: criar `templates/drops/abobora.png` a partir da gravacao; o usuario marcou com F9);
+   (e) bot deve extrair o MAXIMO de dano nessa instancia (usar perks, pet e especial). Falta implementar: reposicao dos perks, uso de E/B,
+   deteccao do buff, estrategia `GATO_PRETO` em `estrategias.py`.
 2. **Empacotamento facil** (BotDDT.exe sem Python): scaffold pronto, **falta gerar/testar no Windows** (secao 9).
 3. **Cupons por minuto**: cada rota/instancia da X cupons; objetivo = descobrir qual rende mais cupons por minuto corrido (rota mais
    rapida repetida pode ganhar da mais cara e lenta). Falta: usuario informar os cupons de cada instancia/rota; o `metricas.py` ja da

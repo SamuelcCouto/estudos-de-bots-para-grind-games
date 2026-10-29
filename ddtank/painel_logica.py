@@ -9,17 +9,28 @@ import config
 import navegador as N
 
 ARQ_CONFIG = os.path.join(config.PASTA, "dados", "painel.json")
-ROTAS_PAINEL = [("S", "Rota Sul", "Escorpiao Rei > Dragao Gelado > Rainha Liris"),
-                ("P", "Pericao comum", "o chefe fora do horario do Chefao Global"),
-                ("C", "Chefao Global", "so ele: luta e espera o proximo horario")]
-ROTAS_AVANCADAS = [("N", "Rota Norte", "Fantasma > Profundezas > Minhocao (desabilitada no dia a dia)"),
-                   ("T", "Norte + Sul", "as seis, em sequencia")]
-PADRAO = {"rota": "S", "cartas": ["RAINHA_LIRIS"], "chefe_nos_horarios": True, "horarios": "12:00-13:00,21:00-22:00",
-          "gravar": True, "gravacao_leve": False, "enviar_ao_parar": False, "reiniciar_se_cair": True, "tarefas": True, "avancado": False}
+# alvo = o que o bot faz: "N" (Rota Norte), "S" (Rota Sul), "L" (Rota Leste - em desenvolvimento), "C" (Chefao Global) ou o nome
+# de UM chefe (o bot luta so nele, repetidamente)
+ROTAS_PAINEL = [("N", "Rota Norte", "Fantasma > Profundezas > Minhocao", True),
+                ("S", "Rota Sul", "Escorpiao Rei > Dragao Gelado > Rainha Liris", True),
+                ("L", "Rota Leste", "em desenvolvimento", False)]
+CHEFES_PAINEL = [("FANTASMA", "Fantasma"), ("PROFUNDEZAS", "Profundezas"), ("MINHOCAO", "Minhocao"),
+                 ("ESCORPIAO_REI", "Escorpiao Rei"), ("DRAGAO_GELADO", "Dragao Gelado"), ("RAINHA_LIRIS", "Rainha Liris"),
+                 ("GATO_PRETO", "Gato Preto"), ("PERICAO", "Pericao (comum)"), ("C", "Chefao Global")]
+NOMES_CHEFES = dict(CHEFES_PAINEL)
+PADRAO = {"alvo": "S", "cartas": ["RAINHA_LIRIS"], "chefe_nos_horarios": True, "horarios": "12:00-13:00,21:00-22:00",
+          "gravar": True, "gravacao_leve": False, "enviar_ao_parar": False, "reiniciar_se_cair": True, "tarefas": True}
 
 
-def instancias_da_rota(chave):
-    return list(N.ROTAS[chave][1])
+def modo_amigo():
+    """Versao dos amigos: so o essencial (sem gravacao, git, log, ferramentas). --amigo, ou um arquivo amigo.flag ao lado."""
+    return "--amigo" in sys.argv or os.path.exists(os.path.join(config.PASTA, "amigo.flag"))
+
+
+def instancias_do_alvo(alvo):
+    if alvo in N.ROTAS and alvo in ("N", "S"):
+        return list(N.ROTAS[alvo][1])
+    return [N.CHEFE if alvo == "C" else alvo]
 
 
 def comando_base(modulo, python="python"):
@@ -29,24 +40,25 @@ def comando_base(modulo, python="python"):
     return [python, "-u", modulo + ".py"]
 
 
-def montar_comando(cfg, python="python"):
+def montar_comando(cfg, python="python", amigo=False):
     """Lista de argumentos para subprocess. Tudo vai por argumento: o navegador nao pergunta nada."""
-    rota = cfg["rota"]
-    cmd = comando_base("navegador", python) + ["--atirar", "--rota", rota]
-    inst = instancias_da_rota(rota)
-    if len(inst) > 1:
-        marcadas = [i for i in cfg.get("cartas", []) if i in inst]
-        if len(marcadas) == len(inst):
-            cmd += ["--cartas", "TODAS"]
-        else:
-            cmd += ["--cartas", ",".join(marcadas) if marcadas else "NENHUMA"]
-    if rota != "C":
+    alvo = cfg["alvo"]
+    if alvo == "L":
+        raise ValueError("a Rota Leste ainda esta em desenvolvimento")
+    cmd = comando_base("navegador", python) + ["--atirar", "--rota", "P" if alvo == "PERICAO" else alvo]
+    inst = instancias_do_alvo(alvo)
+    marcadas = [i for i in cfg.get("cartas", []) if i in inst]
+    if len(marcadas) == len(inst):
+        cmd += ["--cartas", "TODAS"]
+    else:
+        cmd += ["--cartas", ",".join(marcadas) if marcadas else "NENHUMA"]
+    if alvo != "C":
         cmd += ["--chefe", "s" if cfg.get("chefe_nos_horarios") else "n"]
     if cfg.get("horarios"):
         N.ler_horarios(cfg["horarios"])                 # valida (ValueError se estiver errado)
         cmd += ["--horarios-chefe", cfg["horarios"]]
-    if not cfg.get("gravar", True):
-        cmd.append("--sem-gravar")
+    if amigo or not cfg.get("gravar", True):
+        cmd.append("--sem-gravar")                      # amigos: nada de gravacao
     elif cfg.get("gravacao_leve"):
         cmd.append("--gravacao-leve")
     if not cfg.get("tarefas", True):
@@ -75,7 +87,12 @@ PASSO_ATUALIZAR = ["git", "pull", "--autostash"]
 def carregar():
     cfg = dict(PADRAO)
     try:
-        cfg.update(json.load(open(ARQ_CONFIG, encoding="utf-8")))
+        velho = json.load(open(ARQ_CONFIG, encoding="utf-8"))
+        if "rota" in velho and "alvo" not in velho:
+            velho["alvo"] = velho.pop("rota") if velho["rota"] in ("N", "S", "C") else "S"
+            velho.pop("cartas", None)
+        velho.pop("rota", None)
+        cfg.update(velho)
     except (OSError, ValueError):
         pass
     return cfg

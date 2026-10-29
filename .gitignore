@@ -11,4 +11,4 @@ ddtank/dados/modelos_aprendidos/
 build/
 dist/
 *.spec
-BotDDT.zip
+BotDDT_*.zip

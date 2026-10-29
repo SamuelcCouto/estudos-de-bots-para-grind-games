@@ -785,3 +785,13 @@ nav.estado_estavel = sempre
 logs.clear(); nav.rodar()
 assert nav.parar and any("parando para nao fazer bobagem" in l for l in logs)
 print("falhas inesperadas: continua, e para se for demais OK")
+
+# ---------------------------------------------------------------- tarefas a cada N voltas (lutando um chefe so: nao abre as Tarefas a toda volta)
+for cada, esperado in ((1, 4), (2, 2), (10, 0)):
+    sim = SimChefe(); relogio = [0.0]
+    nav = N.Navegador(sim, det, ["FANTASMA"], dormir=lambda s: relogio.__setitem__(0, relogio[0] + s), agora=lambda: relogio[0],
+                      log=lambda m: None, tarefas_a_cada=cada)
+    nav.teclas = lambda: None
+    rodar_chefe(sim, nav, lambda: nav.voltas >= 4, max_passos=4000)
+    assert nav.voltas >= 4 and sim.tarefas_abertas == esperado, (cada, nav.voltas, sim.tarefas_abertas)
+print("tarefas a cada N voltas OK")

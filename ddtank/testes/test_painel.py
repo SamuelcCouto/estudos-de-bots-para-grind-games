@@ -17,16 +17,33 @@ assert c[c.index("--cartas") + 1] == "RAINHA_LIRIS" and c[c.index("--chefe") + 1
 assert "--sem-gravar" not in c and "--sem-tarefas" not in c
 c = P.montar_comando({**base, "cartas": ["ESCORPIAO_REI", "DRAGAO_GELADO", "RAINHA_LIRIS"], "chefe_nos_horarios": False, "gravar": False, "tarefas": False})
 assert c[c.index("--cartas") + 1] == "TODAS" and c[c.index("--chefe") + 1] == "n" and "--sem-gravar" in c and "--sem-tarefas" in c
-assert P.montar_comando({**base, "cartas": []})[P.montar_comando({**base, "cartas": []}).index("--cartas") + 1] == "NENHUMA"
-c = P.montar_comando({**base, "rota": "C"})
-assert "--cartas" not in c and "--chefe" not in c and c[c.index("--rota") + 1] == "C"
-c = P.montar_comando({**base, "rota": "P", "gravacao_leve": True})
-assert "--cartas" not in c and "--gravacao-leve" in c
-assert P.montar_comando({**base, "rota": "T"})[5] == "T"
+c = P.montar_comando({**base, "cartas": []}); assert c[c.index("--cartas") + 1] == "NENHUMA"
+c = P.montar_comando({**base, "alvo": "C", "cartas": ["PERICAO"]})
+assert "--chefe" not in c and c[c.index("--rota") + 1] == "C" and c[c.index("--cartas") + 1] == "TODAS"
+# chefe unico: o bot luta so nele
+c = P.montar_comando({**base, "alvo": "GATO_PRETO", "cartas": ["GATO_PRETO"]})
+assert c[c.index("--rota") + 1] == "GATO_PRETO" and c[c.index("--cartas") + 1] == "TODAS", c
+c = P.montar_comando({**base, "alvo": "ESCORPIAO_REI", "cartas": []})
+assert c[c.index("--rota") + 1] == "ESCORPIAO_REI" and c[c.index("--cartas") + 1] == "NENHUMA"
+c = P.montar_comando({**base, "alvo": "PERICAO", "cartas": ["PERICAO"], "gravacao_leve": True})
+assert c[c.index("--rota") + 1] == "P" and "--gravacao-leve" in c
+assert P.montar_comando({**base, "alvo": "N"})[5] == "N"
+try:
+    P.montar_comando({**base, "alvo": "L"}); raise SystemExit("Rota Leste nao existe ainda")
+except ValueError:
+    pass
 try:
     P.montar_comando({**base, "horarios": "banana"}); raise SystemExit("horario invalido passou")
 except ValueError:
     pass
+# versao dos amigos: nunca grava
+assert "--sem-gravar" in P.montar_comando({**base, "gravar": True}, amigo=True)
+assert P.instancias_do_alvo("S") == ["ESCORPIAO_REI", "DRAGAO_GELADO", "RAINHA_LIRIS"] and P.instancias_do_alvo("C") == ["PERICAO"]
+# config antiga do painel (rota/avancado) migra
+import json, tempfile
+arq = os.path.join(tempfile.mkdtemp(), "p.json"); json.dump({"rota": "P", "cartas": ["X"], "avancado": True}, open(arq, "w"))
+P.ARQ_CONFIG = arq
+assert P.carregar()["alvo"] == "S" and "rota" not in P.carregar()
 
 # os argumentos montados sao aceitos pelo navegador (nada de perguntas): rota/cartas/chefe
 import navegador as N
@@ -47,7 +64,7 @@ sys.modules["tkinter.messagebox"] = msg
 import painel
 p = painel.Painel(mock.MagicMock())
 cfg = p.config_atual()
-assert cfg["rota"] == "S" and cfg["horarios"] == "12:00-13:00,21:00-22:00", cfg
+assert cfg["alvo"] == "S" and cfg["horarios"] == "12:00-13:00,21:00-22:00", cfg
 assert painel.Painel.etiqueta("[CHEFAO] hora do Chefao") == "chefe" and painel.Painel.etiqueta("   ! erro x") == "erro"
 assert painel.Painel.etiqueta("[TEMPO] luta") == "tempo" and painel.Painel.etiqueta("banal") is None
 with mock.patch.object(painel.subprocess, "Popen") as po:
@@ -80,3 +97,19 @@ finally:
 src = open(os.path.join(os.path.dirname(AQUI), "config.py"), encoding="utf-8").read()
 assert "_MEIPASS" in src and "PASTA_RECURSOS" in src
 print("empacotamento (BotDDT.exe: entrada unica, comandos, caminhos) OK")
+
+# ---- versao dos amigos: sem log/gravacao; so o resumo
+sys.argv.append("--amigo")
+try:
+    pa = painel.Painel(mock.MagicMock())
+    assert pa.amigo and pa.t_log is None and pa.t_rel is None and pa.cfg["gravar"] is False
+    pa.escrever(None, "--- o bot caiu ---\n", "erro"); assert pa.aviso == "o bot caiu"
+    pa.atualizar_relatorio()
+    with mock.patch.object(painel.subprocess, "Popen") as po:
+        po.return_value.poll.return_value = None
+        po.return_value.stdout = iter([])
+        pa.iniciar()
+        assert "--sem-gravar" in po.call_args[0][0]
+finally:
+    sys.argv.remove("--amigo")
+print("painel dos amigos OK")

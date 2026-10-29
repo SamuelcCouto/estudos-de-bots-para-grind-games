@@ -10,9 +10,13 @@ python -m PyInstaller --noconfirm --onedir --windowed --name BotDDT ^
   --collect-all cv2 botddt.py
 if errorlevel 1 goto erro
 copy /y LEIA-ME_AMIGOS.txt dist\BotDDT\LEIA-ME.txt >nul
-powershell -NoProfile -Command "Compress-Archive -Path 'dist\BotDDT' -DestinationPath 'BotDDT.zip' -Force"
+rem versao do DESENVOLVEDOR (com gravacao, log, GitHub): BotDDT_Dev.zip
+powershell -NoProfile -Command "Compress-Archive -Path 'dist\BotDDT' -DestinationPath 'BotDDT_Dev.zip' -Force"
+rem versao dos AMIGOS (so o essencial: o arquivo amigo.flag liga o modo limpo)
+echo amigo> dist\BotDDT\amigo.flag
+powershell -NoProfile -Command "Compress-Archive -Path 'dist\BotDDT' -DestinationPath 'BotDDT_Amigos.zip' -Force"
 echo.
-echo Pronto: BotDDT.zip (e a pasta dist\BotDDT). Mande o zip para os amigos: descompactar e abrir BotDDT.exe.
+echo Pronto: BotDDT_Amigos.zip (para os amigos) e BotDDT_Dev.zip (para voce). Descompactar e abrir BotDDT.exe.
 goto fim
 :erro
 echo ERRO ao gerar o exe: me mande o texto acima.

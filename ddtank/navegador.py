@@ -538,11 +538,16 @@ def texto_horarios(horarios):
 class Navegador:
     def __init__(self, io, detector, rota=None, usar_tarefas=True, uma_vez=False, simular=False,
                  dormir=time.sleep, agora=time.time, log=print, atirador=None, reg=None, dificuldade=None,
-                 metricas=None, chefe=None, horarios_chefe=None, relogio=datetime.datetime.now, cartas_em=None):
+                 metricas=None, chefe=None, horarios_chefe=None, relogio=datetime.datetime.now, cartas_em=None,
+                 estat=None, catalogo=None, tarefas_a_cada=1):
         """chefe: None (sem Chefao Global) | "horarios" (rota + Chefao nos horarios) | "so" (opcao C: so o Chefao,
         comecando agora; depois espera os horarios)."""
         self.io, self.det = io, detector
         self.chefe_modo = chefe
+        self.estat = estat                # estatisticas.Estatisticas (contadores do painel) ou None
+        self.catalogo = catalogo          # drops.Catalogo (o que veio nas cartas) ou None
+        self.tarefas_a_cada = max(1, int(tarefas_a_cada))   # coleta as tarefas a cada N voltas (lutando um chefe so: 10)
+        self.drops_contados, self.cartas_3_em = False, None
         self.cartas_em = set(cartas_em) if cartas_em else None   # None = abre as cartas de todas as instancias
         self.cartas_puladas = False
         self.horarios = horarios_chefe or HORARIOS_CHEFE
@@ -731,6 +736,8 @@ class Navegador:
             self.batalha_desde += dur
         if self.metr:
             self.metr.descontar_pausa(dur)
+        if self.estat:
+            self.estat.pausa(dur)
         self.log(f"Continuando. Ficou pausado {fmt_tempo(dur)} (total pausado: {fmt_tempo(self.pausado_total)}); "
                  f"esse tempo nao entra nos cronometros.")
 
@@ -829,10 +836,13 @@ class Navegador:
                 self.reg.evento("cartas_incompletas", [self.reg.frame(self.quadro_cartas, "cartas_incompletas")],
                                 instancia=self.instancia, viradas=self.cartas_max_viradas)
         self.cartas_escolhidas, self.cartas_rodadas, self.cartas_max_viradas = None, 0, 0
+        self.drops_contados, self.cartas_3_em = False, None
         if self.no_chefe:
             # vitoria no Chefao Global = o servidor inteiro derrubou o chefao (a luta individual so acaba assim)
             if self.metr:
                 self.metr.instancia_fim(CHEFE)
+            if self.estat:
+                self.estat.chefao()
             self.no_chefe = self.chefe_forcado = False
             self.chefe_feito_em = self.relogio()
             self.log("*** [CHEFAO] Chefao Global derrotado pelo servidor! Recompensas pelo dano total de cada um. " +
@@ -869,6 +879,8 @@ class Navegador:
             self.luta_ativa = False
             if self.metr:
                 self.metr.batalha_fim(venceu=estado in ("CARTAS", "POPUP_CARTA"))
+            if self.estat:
+                self.estat.luta(self.instancia_batalha, estado in ("CARTAS", "POPUP_CARTA"))
         if estado not in ("CARTAS", "POPUP_CARTA", "BATALHA", "CLIQUE_JOGO"):
             self.finalizar_instancia()
             if self.atualizar_chefe(estado):
@@ -882,7 +894,7 @@ class Navegador:
         if sala and self.run_completa and not self.no_chefe:
             # a rota acabou: coleta as tarefas e so entao comeca outra volta (a sala pode continuar mostrando a
             # ultima instancia - antes o bot "aceitava" essa sala e repetia o Minhocao sem parar)
-            if self.usar_tarefas and not self.tarefas_ok:
+            if self.usar_tarefas and not self.tarefas_ok and (self.voltas + 1) % self.tarefas_a_cada == 0:
                 if not self.clicar_e_verificar(estado, SALA_ICONE_TAREFAS, descricao="abrir Tarefas"):
                     self.pontos_tarefa["abrir"] += 1
                     if self.pontos_tarefa["abrir"] >= 3:
@@ -890,6 +902,8 @@ class Navegador:
                         self.tarefas_ok = True
                 return
             self.voltas += 1
+            if self.estat:
+                self.estat.volta()
             self.log(f"=== Volta {self.voltas} concluida. Recomecando na mesma sala pela {self.rota[0]}. ===")
             if self.metr:
                 self.metr.volta_fim(self.voltas)
@@ -910,6 +924,8 @@ class Navegador:
         elif estado == "CENTRAL":
             if self.run_completa:
                 self.voltas += 1
+                if self.estat:
+                    self.estat.volta()
                 self.log(f"=== Volta {self.voltas} concluida (tarefas coletadas). ===")
                 if self.metr:
                     self.metr.volta_fim(self.voltas)
@@ -1018,6 +1034,7 @@ class Navegador:
             viradas = len(CARTAS_TODAS) - len(costas)
             self.cartas_max_viradas = max(self.cartas_max_viradas, viradas)
             if viradas >= CARTAS_VIRADAS_PARA_PAGAR:
+                self.contar_drops(f, costas)
                 self.dormir(1.0)       # ja viramos as 3 (ou a contagem acabou e tudo abriu)
                 return
             if self.cartas_escolhidas is None:
@@ -1068,6 +1085,29 @@ class Navegador:
                 self.dormir(1.5)
         else:
             self.dormir(1.0)
+
+    def contar_drops(self, f, costas):
+        """Cartas viradas: le o icone de cada uma das SUAS 3 cartas (esperando ~1 s a animacao) e conta no catalogo."""
+        if self.drops_contados or not self.catalogo or not self.cartas_escolhidas:
+            return
+        agora = self.agora()
+        if self.cartas_3_em is None:
+            self.cartas_3_em = agora
+            return
+        if agora - self.cartas_3_em < 1.0:
+            return
+        self.drops_contados = True
+        achados = []
+        for p in self.cartas_escolhidas:
+            if p in costas:
+                continue
+            chave = self.catalogo.reconhecer(f, p)
+            if chave:
+                achados.append(chave)
+                if self.estat:
+                    self.estat.drop(chave)
+        if achados:
+            self.log("[CARTAS] vieram: " + ", ".join(self.catalogo.nome_bonito(c) for c in achados))
 
     def sala_pronta(self, estado, nome):
         """Sala com a instancia `nome` escolhida: confere a ordem, fecha as vagas e da Inicio."""
@@ -1159,6 +1199,8 @@ class Navegador:
             vezes.clear()
             self.log(f"   rolando a lista de tarefas ({rolagens}x) para procurar mais")
         self.log(f"[TAREFA] {coletadas} recompensa(s) coletada(s)")
+        if self.estat and coletadas:
+            self.estat.missoes(coletadas)
         if self.reg:
             self.reg.evento("tarefas", [], coletadas=coletadas, rolagens=rolagens)
         self.tarefas_ok = True
@@ -1419,6 +1461,8 @@ def main():
     ap.add_argument("--horarios-chefe", default="", help="horarios do Chefao Global, ex.: 12:00-13:00,21:00-22:00")
     ap.add_argument("--cartas", default=None, help="instancias cujas cartas o bot abre, ex.: RAINHA_LIRIS (ou TODAS). "
                     "Sem isso, pergunta ao abrir (so se a rota tiver mais de uma instancia)")
+    ap.add_argument("--tarefas-a-cada", type=int, default=0,
+                    help="coleta as tarefas a cada N voltas (padrao: toda volta; lutando um chefe so: a cada 10)")
     ap.add_argument("--comecar-em", type=int, default=1, help="numero da instancia (1, 2, 3...) em que a rota comeca")
     ap.add_argument("--sem-tarefas", action="store_true")
     ap.add_argument("--uma-vez", action="store_true")
@@ -1509,10 +1553,15 @@ def main():
     ordem = [int(x) for x in args.itens.split(",") if x.strip()] or None
     combos = combos_mod.Combos(fixo=ordem)
     metr = metricas_mod.Metricas(nome_rota, log=log, combos=combos)
+    import drops as drops_mod
+    import estatisticas as estat_mod
+    estat = estat_mod.Estatisticas(nome_rota=nome_rota)
+    tarefas_a_cada = args.tarefas_a_cada or (10 if len(rota) == 1 and chave not in ("C",) else 1)
     log(f"Cronometro: logs\\relatorio.txt (resumo, atualizado a cada luta), logs\\lutas.csv e logs\\voltas.csv")
     io.log = log
     nav = Navegador(io, det, rota, not args.sem_tarefas, args.uma_vez, args.simular, log=log, reg=reg,
-                    dificuldade=dificuldade, metricas=metr, chefe=chefe, horarios_chefe=horarios, cartas_em=cartas_em)
+                    dificuldade=dificuldade, metricas=metr, chefe=chefe, horarios_chefe=horarios, cartas_em=cartas_em,
+                    estat=estat, catalogo=drops_mod.Catalogo(), tarefas_a_cada=tarefas_a_cada)
     log("Cartas: " + ("abre todas" if not cartas_em else "so de " + ", ".join(cartas_em) + " (as outras so completam a missao)"))
     log(f"{nome_rota}: {' -> '.join(rota)}" + (f" (dificuldade {dificuldade} em todas)" if dificuldade else ""))
     if chefe == "so":
