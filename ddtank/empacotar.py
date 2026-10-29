@@ -127,7 +127,7 @@ def main():
         os.startfile(saida)   # abre a pasta no Explorer
     except (AttributeError, OSError):
         pass
-    print("Para enviar: botao "Enviar gravacao" do BotDDT.")
+    print('Para enviar: botao "Enviar gravacao" do BotDDT.')
 
 
 if __name__ == "__main__":
