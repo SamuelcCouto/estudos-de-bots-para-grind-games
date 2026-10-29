@@ -188,8 +188,7 @@ Disco: 1 hora de gravacao completa ~870 MB -> gravacao leve por padrao (registro
 Metricas: metricas.py (logs/relatorio.txt, lutas.csv, voltas.csv). Combos: combos.py (dados/combos.json).
 
 ## PENDENCIAS - fazer SO quando o usuario pedir
-- Escorpiao Rei: REMOVER o aviao (F). Falta pouco upgrade para ele morrer no 1o turno do bot (antes do turno dele);
-  quando o usuario avisar, tirar ESCORPIAO_REI de estrategias.ESTRATEGIAS (ou desligar o aviao la).
+- (FEITO 28/10 noite) Escorpiao Rei: aviao (F) desligado - estrategias.ESTRATEGIAS["ESCORPIAO_REI"]["aviao"] = False.
 - ROTA LESTE: o boneco esta quase forte o suficiente. Quando o usuario conseguir faze-la na mao, ele grava e a gente
   implementa (mesmo caminho da Rota Sul: artes aprendidas, estrategias por boss). Ate la: refinar o bot atual.
 
@@ -251,3 +250,18 @@ Duvida aberta: se o Pericao continua entravel fora do horario ("modo global ence
 - O chefao NUNCA fica vivo no fim do horario (muitos jogadores juntos). Se um dia acontecer: voltar para a rota normal
   (atualizar_chefe: fim do horario -> no_chefe = False; a luta em andamento termina antes). [ja faz]
 - 21h: o usuario segue com o Chefao de novo (bot). 15h40: deixou a Rota Sul rodando; manda o log na volta.
+
+## Melhorias pedidas pelo usuario (28/10 noite)
+1. Aviao (F) do Escorpiao desligado (flag "aviao": False; o codigo continua e e testado).
+2. Chefao Global 12h/21h: ainda nao testado de verdade (esperando o horario).
+3. Rota Norte e "Todas" DESABILITADAS no menu (boneco completo com os drops): navegador.ROTAS_NO_MENU = S, P, C; Enter = Sul.
+   N e T continuam com --rota N / --rota T.
+4. Instancias especiais: mesma formula (artes aprendidas, estrategias por boss); Leste tem uma ressalva (ainda nao).
+5. Pericao COMUM fora do horario: rota P (menu) = instancia "PERICAO_COMUM" para o atirador/metricas (vida propria, sem
+   numeros de dano, combos testados); memoria compartilha os tiros do Pericao do chefao (mesmo mapa). Nos horarios, com
+   "Chefao Global nos horarios" = sim, a rota P troca sozinha para o modo Chefao Global.
+6. Cartas so das instancias que interessam: pergunta ao abrir (rota com 2+ instancias) ou --cartas RAINHA_LIRIS|TODAS.
+   Padrao da Rota Sul = so Rainha Liris. Nas outras o bot nao clica em carta e espera a tela passar (nao gasta cupons;
+   duvida: se o jogo entrega as 2 cartas gratis sozinho no fim do cronometro).
+7. (sem texto na mensagem do usuario)
+8. Painel com botoes (front): estudar - ver resposta na conversa (tkinter, sem instalar nada).

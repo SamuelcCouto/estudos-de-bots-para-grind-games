@@ -403,7 +403,7 @@ N.config.PASTA_TEMPLATES = MODELOS_TESTE
 # pergunta da rota ao abrir
 respostas = iter(["x", "s"])
 assert N.perguntar_rota(entrada=lambda _p: next(respostas), saida=lambda *_a: None) == "S"
-assert N.perguntar_rota(entrada=lambda _p: "", saida=lambda *_a: None) == "N"
+assert N.perguntar_rota(entrada=lambda _p: "", saida=lambda *_a: None) == "S", "Enter = Sul (Norte desabilitada no menu)"
 assert N.perguntar_rota(entrada=lambda _p: "t", saida=lambda *_a: None) == "T"
 nome_t, rota_t, _ = N.rota_dos_argumentos("T")
 assert rota_t == ["FANTASMA", "PROFUNDEZAS", "MINHOCAO", "ESCORPIAO_REI", "DRAGAO_GELADO", "RAINHA_LIRIS"], rota_t
@@ -664,3 +664,59 @@ rodar_chefe(sim, nav, lambda: len(sim.lutas) >= 2)
 print("evento fechado - lutas:", sim.lutas)
 assert sim.lutas[:2] == ["FANTASMA", "PROFUNDEZAS"] and any("desisto do Chefao Global" in l for l in logs), (sim.lutas, logs[-5:])
 print("evento fechado: desiste e segue a rota OK")
+
+# ---------------------------------------------------------------- 28/10 noite: Norte desabilitada, Pericao comum, cartas so de algumas
+saida_menu = []
+N.perguntar_rota(entrada=lambda p: "", saida=saida_menu.append)
+assert "Norte" not in " ".join(saida_menu) and "Todas" not in " ".join(saida_menu), "N e T saem do menu"
+assert N.rota_dos_argumentos("N")[1] == ["FANTASMA", "PROFUNDEZAS", "MINHOCAO"] and len(N.rota_dos_argumentos("T")[1]) == 6, "...mas continuam"
+assert N.perguntar_rota(entrada=lambda p: "p", saida=lambda m: None) == "P" and N.rota_dos_argumentos("P")[1] == ["PERICAO"]
+ROTA_S = N.ROTAS["S"][1]
+assert N.cartas_padrao("S", ROTA_S) == ["RAINHA_LIRIS"]
+assert N.perguntar_cartas("S", ROTA_S, entrada=lambda p: "", saida=lambda m: None) == ["RAINHA_LIRIS"]
+assert N.perguntar_cartas("S", ROTA_S, entrada=lambda p: "t", saida=lambda m: None) is None
+assert N.perguntar_cartas("S", ROTA_S, entrada=lambda p: "1, 3", saida=lambda m: None) == ["ESCORPIAO_REI", "RAINHA_LIRIS"]
+assert N.perguntar_cartas("P", ["PERICAO"], entrada=lambda p: "", saida=lambda m: None) is None, "rota de 1 instancia: nao pergunta"
+r = iter(["9", "2"])
+assert N.perguntar_cartas("S", ROTA_S, entrada=lambda p: next(r), saida=lambda m: None) == ["DRAGAO_GELADO"]
+
+# Pericao comum (rota P, sem horario): a luta e do chefe COMUM (nome de instancia proprio) e entra pela aba do evento
+sim = SimChefe(); relogio = [0.0]; logs = []
+inicio = datetime.datetime(2026, 10, 28, 15, 0, 0)
+metr = MET.Metricas("Pericao comum", agora=lambda: relogio[0], log=lambda m: None, salvar=False)
+nav = N.Navegador(sim, det, ["PERICAO"], dormir=lambda s: relogio.__setitem__(0, relogio[0] + s), agora=lambda: relogio[0],
+                  log=logs.append, chefe="horarios", metricas=metr, relogio=lambda: inicio + datetime.timedelta(seconds=relogio[0]))
+assert nav.instancia_batalha == "PERICAO_COMUM"
+rodar_chefe(sim, nav, lambda: len(sim.lutas) >= 2 or nav.voltas >= 1)
+print("Pericao comum - lutas:", sim.lutas, "| abas:", sim.abas_clicadas, "| metricas:", list(metr.por_instancia()))
+assert sim.lutas[:1] == ["PERICAO"] and sim.abas_clicadas[:1] == ["evento"] and "PERICAO_COMUM" in metr.por_instancia()
+assert not nav.no_chefe, "fora do horario: chefe comum"
+import estrategias as EST, memoria as MEM
+assert not EST.estrategia("PERICAO_COMUM").get("chefe_global") and MEM.angulo_min("PERICAO_COMUM") == 0.0
+m = MEM.Memoria(arq_aprendizado=None)
+assert m.prever("PERICAO_COMUM", (10.5, 58.4), (76.3, 61.4))["origem"] == "memoria", "usa os tiros do mesmo mapa (chefao)"
+
+# cartas puladas: so abre as da Rainha (o jogo nao recebe clique de carta nas outras)
+class SimCartasSul(SimChefe):
+    BASE = {**SimChefe.BASE, "ESCORPIAO_REI": "SALA_ESCORPIAO", "DRAGAO_GELADO": "SALA_ESCORPIAO", "RAINHA_LIRIS": "SALA_ESCORPIAO"}
+    def __init__(self):
+        super().__init__(); self.cliques_cartas = 0; self.rota = ROTA_S; self.k = 0
+    def clicar(self, x, y, modo):
+        if self.tela == "CARTAS": self.cliques_cartas += 1
+        super().clicar(x, y, modo)
+    def capturar(self):
+        if self.tela == "CARTAS" and not self.viradas and self.cap - self.desde > 25:      # a tela passa sozinha (cronometro)
+            self.lutas.append(self.sala_inst); self.trocar("SALA"); return self.quadro_sala()
+        return super().capturar()
+# (so o comportamento de pular as cartas: sem cliques na tela de cartas quando a instancia nao interessa)
+nav = N.Navegador(SimCartasSul(), det, ["ESCORPIAO_REI"], dormir=lambda s: None, agora=lambda: 0.0, log=logs.append,
+                  cartas_em=["RAINHA_LIRIS"])
+nav.io.trocar("CARTAS"); nav.cartas_vistas = False
+nav.agir("CARTAS")
+assert nav.cartas_puladas and nav.io.cliques_cartas == 0, "nao clica em carta de instancia que nao interessa"
+nav.cartas_em = {"ESCORPIAO_REI"}
+nav.cartas_puladas = False
+nav.agir("CARTAS")
+assert nav.io.cliques_cartas > 0, "instancia que interessa: abre"
+print("cartas so das instancias escolhidas OK")
+print("\nmelhorias 28/10 noite OK")

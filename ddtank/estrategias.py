@@ -19,6 +19,8 @@ Posicoes em pixels do MINIMAPA (o mesmo x que aparece no log: "voce (18, 61)").
 
 ESTRATEGIAS = {
     "ESCORPIAO_REI": {
+        # DESLIGADO a pedido do usuario (28/10): o boneco ja mata o Escorpiao no 1o turno. Para voltar: "aviao": True
+        "aviao": False,
         # chao da arena, da ponta esquerda a direita (medido na gravacao do bot 20261028_052531)
         "arena": (13.0, 93.0),
         # mais perto que isso de uma borda = perigo (nasceu em x=18 e x=23 e caiu nas duas)
@@ -29,6 +31,9 @@ ESTRATEGIAS = {
         "aviao_max_por_luta": 1,
         # boss com essa vida (%) ou menos: ataca em vez de voar (um turno com 2, 3, 4 tirou ~59%)
         "atacar_se_vida_ate": 55.0,
+    },
+    "PERICAO_COMUM": {                # o Pericao FORA do horario: chefe comum (vida propria, sem numeros de dano)
+        "angulo_min": 0.0, "tolerancia_angulo": 1.0, "usar_pow": True,
     },
     "PERICAO": {
         "chefe_global": True,         # vida do servidor; acerto pelos numeros de dano; vitoria = o chefao morreu para todos

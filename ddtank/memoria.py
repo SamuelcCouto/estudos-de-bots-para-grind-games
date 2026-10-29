@@ -46,6 +46,9 @@ DX_MINIMO = 1.0                 # px de minimapa: mais perto que isso o boss est
 CHANCE_MEMORIA_OK = 0.6         # repetir um acerto antigo se a fisica der pelo menos essa chance para a mesma forca
 
 
+GRUPOS = {"PERICAO": ("PERICAO", "PERICAO_COMUM"), "PERICAO_COMUM": ("PERICAO", "PERICAO_COMUM")}   # mesmo mapa
+
+
 def angulo_min(inst):
     """Menor angulo que o bot mira na instancia (o Chefao Global e com a mira quase reta: ver estrategias.py)."""
     return estrategias.estrategia(inst).get("angulo_min", ANGULO_MIN)
@@ -74,7 +77,8 @@ class Memoria:
 
     # ---------- consulta ----------
     def _da(self, inst):
-        return [t for t in self.tiros if t["inst"] == inst]
+        grupo = GRUPOS.get(inst, (inst,))
+        return [t for t in self.tiros if t["inst"] in grupo]
 
     @staticmethod
     def _geom(t):

@@ -19,7 +19,8 @@ import estrategias
 
 NOMES = {"FANTASMA": "Fantasma", "PROFUNDEZAS": "Profundezas", "MINHOCAO": "Minhocao", "ESCORPIAO_REI": "Escorpiao Rei",
          "DRAGAO_GELADO": "Dragao Gelado", "RAINHA_LIRIS": "Rainha Liris", "ULTIMA_LUTA": "A Ultima Luta",
-         "GATO_PRETO": "Gato Preto", "PERICAO": "Pericao (Chefao Global)"}
+         "GATO_PRETO": "Gato Preto", "PERICAO": "Pericao (Chefao Global)",
+         "PERICAO_COMUM": "Pericao (comum)"}
 TESTE_DE_FOGO = "2,3,4"      # combo de dano maximo (ver combos.py): a prova de que precisa upar
 FOGO_PARA_CONCLUIR = 5
 LUTAS_PARA_CONFIAR = 20      # menos lutas que isso: um "matou no 1o turno" pode ter sido CRITICO

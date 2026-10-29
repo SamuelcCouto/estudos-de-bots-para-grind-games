@@ -343,7 +343,7 @@ class Atirador:
     def plano_aviao(self, inst, azul, vida):
         """Destino (x, y) do voo com F, ou None para atacar normalmente (ver estrategias.py)."""
         est = estrategias.estrategia(inst)
-        if "arena" not in est or not azul or self.aviao_indisponivel or self.avioes_na_luta >= est.get("aviao_max_por_luta", 1):
+        if "arena" not in est or not est.get("aviao", True) or not azul or self.aviao_indisponivel or self.avioes_na_luta >= est.get("aviao_max_por_luta", 1):
             return None
         a0, a1 = est["arena"]
         borda = min(azul[0] - a0, a1 - azul[0])

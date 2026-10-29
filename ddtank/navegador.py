@@ -95,8 +95,15 @@ ROTAS = {
 ROTAS["T"] = ("Norte + Sul", ROTAS["N"][1] + ROTAS["S"][1])
 CHEFE = "PERICAO"
 ROTAS["C"] = ("Chefao Global", [CHEFE])
+ROTAS["P"] = ("Pericao (comum, fora do horario do Chefao Global)", [CHEFE])
+# 28/10: o boneco ja esta completo com os drops da Rota Norte -> N e T ficam DESABILITADAS no menu (nao apagadas:
+# continuam funcionando com --rota N / --rota T). O menu oferece so o que esta em uso:
+ROTAS_NO_MENU = ("S", "P", "C")
+ROTA_PADRAO_MENU = "S"
+# cartas que interessam por rota (as outras so completam a missao da rota: o bot nao abre as cartas delas)
+CARTAS_DE_INTERESSE = {"S": ["RAINHA_LIRIS"]}
 APELIDOS_ROTA = {"1": "N", "2": "S", "NORTE": "N", "SUL": "S", "TODAS": "T", "TUDO": "T", "AMBAS": "T",
-                 "CHEFE": "C", "CHEFAO": "C", "PERICAO": "C"}
+                 "CHEFE": "C", "CHEFAO": "C", "PERICAO": "C", "COMUM": "P"}
 # horarios do Chefao Global (relogio do PC): (inicio, fim). Mude aqui ou com --horarios-chefe 12:00-13:00,21:00-22:00
 HORARIOS_CHEFE = [((12, 0), (13, 0)), ((21, 0), (22, 0))]
 CHEFE_DERROTAS_FORA_DO_HORARIO = 3   # opcao C aberta fora do horario: tenta assim mesmo; depois disso, espera o horario
@@ -455,11 +462,13 @@ def texto_horarios(horarios):
 class Navegador:
     def __init__(self, io, detector, rota=None, usar_tarefas=True, uma_vez=False, simular=False,
                  dormir=time.sleep, agora=time.time, log=print, atirador=None, reg=None, dificuldade=None,
-                 metricas=None, chefe=None, horarios_chefe=None, relogio=datetime.datetime.now):
+                 metricas=None, chefe=None, horarios_chefe=None, relogio=datetime.datetime.now, cartas_em=None):
         """chefe: None (sem Chefao Global) | "horarios" (rota + Chefao nos horarios) | "so" (opcao C: so o Chefao,
         comecando agora; depois espera os horarios)."""
         self.io, self.det = io, detector
         self.chefe_modo = chefe
+        self.cartas_em = set(cartas_em) if cartas_em else None   # None = abre as cartas de todas as instancias
+        self.cartas_puladas = False
         self.horarios = horarios_chefe or HORARIOS_CHEFE
         self.relogio = relogio            # relogio de parede (datetime) para os horarios
         self.no_chefe = chefe == "so"     # lutando o Chefao Global agora (a rota fica pausada onde estava)
@@ -524,6 +533,11 @@ class Navegador:
         if self.no_chefe:
             return CHEFE
         return self.rota[min(self.idx, len(self.rota) - 1)]
+
+    @property
+    def instancia_batalha(self):
+        """Nome da instancia para o atirador/metricas: o Pericao fora do horario e um chefe COMUM (vida propria)."""
+        return "PERICAO_COMUM" if self.instancia == CHEFE and not self.no_chefe else self.instancia
 
     # ---------- Chefao Global ----------
     def chefe_pendente(self, agora=None):
@@ -687,7 +701,8 @@ class Navegador:
         self.lutou = False
         self.confirmada = None
         self.tentativas_carta = Counter()
-        if self.cartas_max_viradas < CARTAS_VIRADAS_PARA_PAGAR:
+        pulou, self.cartas_puladas = self.cartas_puladas, False
+        if self.cartas_max_viradas < CARTAS_VIRADAS_PARA_PAGAR and not pulou:
             self.log(f"   ! [CARTAS] so {self.cartas_max_viradas} carta(s) abriram em {self.instancia} (o tempo da tela acabou?)")
             if self.reg:
                 self.reg.evento("cartas_incompletas", [self.reg.frame(self.quadro_cartas, "cartas_incompletas")],
@@ -708,7 +723,7 @@ class Navegador:
         antes = self.instancia
         self.idx += 1
         if self.metr:
-            self.metr.instancia_fim(antes)
+            self.metr.instancia_fim("PERICAO_COMUM" if antes == CHEFE else antes)
         if self.idx >= len(self.rota):
             self.run_completa = True
             self.log(f"*** {antes} concluida: rota completa ({self.voltas + 1}a volta). Falta coletar as tarefas. ***")
@@ -738,7 +753,7 @@ class Navegador:
 
         sala = estado in ("SALA_VAZIA", "SALA") or estado.startswith("PRONTA_")
         if self.metr and (not self.run_completa or self.no_chefe) and (sala or estado.startswith("CONFIG")):
-            self.metr.instancia_inicio(self.instancia, self.voltas)
+            self.metr.instancia_inicio(self.instancia_batalha, self.voltas)
         if sala and self.run_completa and not self.no_chefe:
             # a rota acabou: coleta as tarefas e so entao comeca outra volta (a sala pode continuar mostrando a
             # ultima instancia - antes o bot "aceitava" essa sala e repetia o Minhocao sem parar)
@@ -864,6 +879,12 @@ class Navegador:
             self.sala_pronta(estado, estado.split("_", 1)[1])
         elif estado == "CARTAS":
             self.cartas_vistas = True
+            if self.cartas_em is not None and self.instancia not in self.cartas_em and not self.no_chefe:
+                if not self.cartas_puladas:
+                    self.cartas_puladas = True
+                    self.log(f"[CARTAS] nao abro as cartas de {self.instancia} (so completa a missao); espero a tela passar")
+                self.dormir(1.0)
+                return
             f, _e = self.ver()
             if f is None:
                 return
@@ -912,7 +933,7 @@ class Navegador:
                 if not self.luta_ativa:
                     self.luta_ativa = True
                     if self.metr:
-                        self.metr.batalha_inicio(self.instancia, self.voltas)
+                        self.metr.batalha_inicio(self.instancia_batalha, self.voltas)
                 self.log("[BATALHA] " + ("o bot joga os turnos." if self.atirador else
                                          "em luta - o tiro automatico e opcional (--atirar); jogue voce mesmo."))
             if self.atirador:
@@ -1093,22 +1114,54 @@ def rota_dos_argumentos(texto, dificuldade=None):
 
 
 def perguntar_rota(entrada=input, saida=print):
-    """Pergunta no console qual rota fazer. Enter sem nada (ou console sem teclado) = Norte."""
-    saida("Qual rota?  [N] Norte (Fantasma, Profundezas, Minhocao)   [S] Sul (Escorpiao Rei, Dragao Gelado, Rainha Liris)")
-    saida("            [T] Todas, na ordem: Norte e depois Sul; coleta as tarefas so no fim e recomeca")
+    """Pergunta no console qual rota fazer. Enter sem nada (ou console sem teclado) = Sul. Norte (N) e Todas (T) estao
+    desabilitadas no menu (o boneco ja esta completo com os drops do Norte) mas ainda funcionam se digitadas."""
+    saida("Qual rota?  [S] Sul (Escorpiao Rei, Dragao Gelado, Rainha Liris)")
+    saida("            [P] Pericao comum (fora do horario do Chefao Global)")
     saida(f"            [C] Chefao Global (Pericao) - so ele: comeca agora e depois espera os horarios "
           f"({texto_horarios(HORARIOS_CHEFE)})")
     for _ in range(5):
         try:
-            r = entrada("Rota (N/S/T/C): ").strip().upper()
+            r = entrada("Rota (S/P/C, Enter = S): ").strip().upper()
         except EOFError:
-            return "N"
+            return ROTA_PADRAO_MENU
         if r == "":
-            return "N"
-        if r[0] in ("N", "S", "T", "C"):
+            return ROTA_PADRAO_MENU
+        if r[0] in ("S", "P", "C", "N", "T"):
             return r[0]
-        saida("   responda N, S, T ou C")
-    return "N"
+        saida("   responda S, P ou C")
+    return ROTA_PADRAO_MENU
+
+
+def cartas_padrao(chave, rota):
+    return [i for i in CARTAS_DE_INTERESSE.get(chave, rota) if i in rota]
+
+
+def perguntar_cartas(chave, rota, entrada=input, saida=print):
+    """Em quais instancias abrir as cartas? Devolve a lista (todas = None). As outras so completam a missao."""
+    if len(rota) < 2:
+        return None
+    padrao = cartas_padrao(chave, rota)
+    saida("Abrir as cartas de quais instancias? As outras o bot so joga a luta e espera a tela passar.")
+    for n, i in enumerate(rota, 1):
+        saida(f"   [{n}] {i}" + ("   (padrao)" if i in padrao else ""))
+    for _ in range(5):
+        try:
+            r = entrada(f"Cartas (numeros separados por virgula, T = todas, Enter = padrao): ").strip().upper()
+        except EOFError:
+            r = ""
+        if r == "":
+            return None if set(padrao) == set(rota) else padrao
+        if r[0] == "T":
+            return None
+        try:
+            escolhidas = [rota[int(x) - 1] for x in r.replace(" ", "").split(",") if x]
+            if escolhidas and all(int(x) >= 1 for x in r.replace(" ", "").split(",") if x):
+                return escolhidas
+        except (ValueError, IndexError):
+            pass
+        saida("   responda numeros da lista (ex.: 3 ou 1,3), T ou Enter")
+    return None if set(padrao) == set(rota) else padrao
 
 
 def perguntar_chefe(horarios=HORARIOS_CHEFE, entrada=input, saida=print):
@@ -1140,6 +1193,8 @@ def main():
     ap.add_argument("--chefe", choices=("s", "n"), default=None,
                     help="Chefao Global nos horarios, no meio da rota (s/n). Sem isso: pergunta ao abrir (com --rota: nao)")
     ap.add_argument("--horarios-chefe", default="", help="horarios do Chefao Global, ex.: 12:00-13:00,21:00-22:00")
+    ap.add_argument("--cartas", default=None, help="instancias cujas cartas o bot abre, ex.: RAINHA_LIRIS (ou TODAS). "
+                    "Sem isso, pergunta ao abrir (so se a rota tiver mais de uma instancia)")
     ap.add_argument("--comecar-em", type=int, default=1, help="numero da instancia (1, 2, 3...) em que a rota comeca")
     ap.add_argument("--sem-tarefas", action="store_true")
     ap.add_argument("--uma-vez", action="store_true")
@@ -1200,12 +1255,20 @@ def main():
     escolha = args.rota or perguntar_rota()
     nome_rota, rota, dificuldade = rota_dos_argumentos(escolha, args.dificuldade)
     horarios = ler_horarios(args.horarios_chefe) if args.horarios_chefe else HORARIOS_CHEFE
-    if rota == [CHEFE]:
+    chave = APELIDOS_ROTA.get(escolha.strip().upper(), escolha.strip().upper())
+    if chave == "C":
         chefe = "so"
     elif args.chefe:
         chefe = "horarios" if args.chefe == "s" else None
     else:
         chefe = "horarios" if (not args.rota and perguntar_chefe(horarios)) else None
+    if args.cartas:
+        cartas_em = None if args.cartas.strip().upper() in ("TODAS", "T") else [c.strip().upper() for c in args.cartas.split(",") if c.strip()]
+    elif args.rota:
+        cartas_em = cartas_padrao(chave, rota) if chave in CARTAS_DE_INTERESSE else None
+        cartas_em = None if cartas_em and set(cartas_em) == set(rota) else cartas_em
+    else:
+        cartas_em = perguntar_cartas(chave, rota)
     reg = None
     if not args.sem_gravar:
         import registro
@@ -1218,7 +1281,8 @@ def main():
     metr = metricas_mod.Metricas(nome_rota, log=log, combos=combos)
     log(f"Cronometro: logs\\relatorio.txt (resumo, atualizado a cada luta), logs\\lutas.csv e logs\\voltas.csv")
     nav = Navegador(io, det, rota, not args.sem_tarefas, args.uma_vez, args.simular, log=log, reg=reg,
-                    dificuldade=dificuldade, metricas=metr, chefe=chefe, horarios_chefe=horarios)
+                    dificuldade=dificuldade, metricas=metr, chefe=chefe, horarios_chefe=horarios, cartas_em=cartas_em)
+    log("Cartas: " + ("abre todas" if not cartas_em else "so de " + ", ".join(cartas_em) + " (as outras so completam a missao)"))
     log(f"{nome_rota}: {' -> '.join(rota)}" + (f" (dificuldade {dificuldade} em todas)" if dificuldade else ""))
     if chefe == "so":
         log(f"Chefao Global: comeco agora; depois de cada vitoria, espero o proximo horario ({texto_horarios(horarios)}).")
@@ -1229,7 +1293,7 @@ def main():
     if args.atirar or args.sombra:
         import atirador as atirador_mod
         import memoria as memoria_mod
-        nav.atirador = atirador_mod.Atirador(io, memoria_mod.Memoria(), lambda: nav.instancia, sombra=args.sombra, log=log,
+        nav.atirador = atirador_mod.Atirador(io, memoria_mod.Memoria(), lambda: nav.instancia_batalha, sombra=args.sombra, log=log,
                                              ordem_itens=ordem, reg=reg, metricas=metr, combos=combos)
     nav.idx = max(0, min(len(rota) - 1, args.comecar_em - 1))
     try:

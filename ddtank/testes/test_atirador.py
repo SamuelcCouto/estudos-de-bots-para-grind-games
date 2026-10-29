@@ -314,6 +314,9 @@ print("\n".join(l for l in logs if "virando" in l or "mirar" in l or "tiro dado"
 assert w.lado == -1 and len(w.tiros) == 1, (w.lado, w.tiros)
 print("boss a esquerda: virou e atirou OK")
 
+import estrategias as EST
+assert EST.estrategia("ESCORPIAO_REI")["aviao"] is False, "aviao do Escorpiao desligado (pedido do usuario)"
+EST.ESTRATEGIAS["ESCORPIAO_REI"]["aviao"] = True      # o mecanismo continua testado, ligado so aqui
 # Escorpiao: nasceu colado na borda esquerda (x=18), boss com 100% -> 1o turno voa com F para o meio, sem itens;
 # no turno seguinte (ja no meio) ataca com os itens
 w = MundoSul(vez_inicio=1.0, vez_fim=9.0); w.azul, w.boss = (17.7, 60.6), (48.8, 60.0)
@@ -334,6 +337,11 @@ w.capturar_original = w.capturar
 at, logs = novo_sul(w, "ESCORPIAO_REI"); rodar(at, w, ate=14)
 assert not [t for t in w.teclas if t[0] == "f"] and w.itens_apertados, (w.teclas, w.itens_apertados)
 print("Escorpiao fraco: ataca direto OK")
+EST.ESTRATEGIAS["ESCORPIAO_REI"]["aviao"] = False
+w = MundoSul(vez_inicio=1.0, vez_fim=9.0); w.azul, w.boss = (17.7, 60.6), (48.8, 60.0)
+at, logs = novo_sul(w, "ESCORPIAO_REI"); rodar(at, w, ate=14)
+assert not [t for t in w.teclas if t[0] == "f"] and w.itens_apertados, "aviao desligado: ataca direto"
+print("Escorpiao sem aviao (desligado): ataca direto OK")
 print("\natirador (Rota Sul) OK")
 
 # ------------------------------------------------------------ 20) combo de itens aprende com o dano do 1o ataque

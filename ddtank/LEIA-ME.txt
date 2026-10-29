@@ -248,3 +248,11 @@ QUALIDADE DE VIDA - noites inteiras (28/10)
   atacar (um Dragao ficou 15 min assim; um Escorpiao se curou e ganhou a luta). Agora "morto" = retrato do boss CINZA.
   Combos: mesmo quando precisa upar, o bot testa os outros combos e fica com a luta mais curta (no Escorpiao o 3,4 tirou
   mais vida que o 2,3,4 - o tridente espalha as balas e ele so tem colisao no pe).
+
+MENU ATUAL (28/10 noite)
+========================
+  S = Rota Sul (Enter)   P = Pericao comum (fora do horario do chefao)   C = Chefao Global
+  Rota Norte e Todas: desabilitadas no menu (nao apagadas): python navegador.py --atirar --rota N  (ou T)
+  Depois da rota o bot pergunta em quais instancias abrir as cartas (Sul: so a Rainha Liris; as outras so completam a
+  missao e ele espera a tela passar). Sem perguntar: --cartas RAINHA_LIRIS  (ou --cartas TODAS).
+  O aviao (F) do Escorpiao Rei esta desligado: o boneco mata de primeira.
