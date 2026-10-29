@@ -95,14 +95,19 @@ Dados do usuario (fora do git): `logs/`, `sessoes/` (guarda as 3 ultimas), `dado
 - O usuario so quer ser perguntado o necessario; resumir bem, sem jargao.
 
 ## 7. Backlog / proximos passos (ordem de prioridade do usuario)
-1. **Gato Preto** (instancia late game, melhores drops; boss generico que so se cura): o usuario gravou a run (29/10 tarde) mas as zips AINDA
-   NAO chegaram ao GitHub (so ha sessoes `_bot`). Mecanicas informadas por ele: (a) na tela inicial/sala pegar os **perks POW Z, X, C** (acabam
-   apos o uso; so repoe na tela inicial; enchem a barra do especial B mais rapido); (b) **item E = item do PET**, so liberado apos algumas
-   rodadas; depois de usado o boneco fica **imovel** e aparece uma **arma envolvendo o boneco** = buff que aumenta muito o dano e dura a run
-   toda (se nao mexer: so angulo e tiro); (c) usar o **especial B sempre apos o E ativo**; (d) drops principais = **aboboras** (o grind) -> contador
-   de aboboras por execucao no painel (usar `drops.py`: criar `templates/drops/abobora.png` a partir da gravacao; o usuario marcou com F9);
-   (e) bot deve extrair o MAXIMO de dano nessa instancia (usar perks, pet e especial). Falta implementar: reposicao dos perks, uso de E/B,
-   deteccao do buff, estrategia `GATO_PRETO` em `estrategias.py`.
+1. **Gato Preto** - IMPLEMENTADO em 29/10 (nunca rodado pelo bot de verdade; falta o usuario testar e mandar o log). Da gravacao
+   `20261029_180936` (4 runs, ~15 turnos e rodadas 32-38/200 cada; boss generico que so se cura, barra de vida REAL):
+   (a) **perks POW Z/X/C**: na SALA, em "Minhas ferramentas"; acabam apos o uso; repostos clicando 1x por quadro vazio no perk
+   "Enfurecer" (+50% da barra do B, 120 vigor) em "Ferramentas a comprar" (`leitura.PERK_COMPRAR` (942,316), `perks_cheios`,
+   `navegador.repor_perks`, antes do Inicio); (b) **item E = pet**: so libera na rodada 6 (3o turno); o bot aperta E no inicio de cada turno
+   ate o **icone verde** da barra de itens (`leitura.buff_pet`, so visivel na SUA vez) aparecer; o buff (canhao em volta do boneco) dura a
+   luta toda e o boneco fica parado; (c) 1 perk por turno (Z, X, C) ate o POW encher; (d) **B so com o buff ativo** (tira 27-34% da vida do boss
+   de uma vez) e **depois do B nao se aperta o 2**; (e) `estrategias.GATO_PRETO` (angulo_min 0, combo 2,3,4); sementes de tiro em
+   `tiros_semente.json` (17 acertos; 3 posicoes de nascimento: (26,57), (18,53), (5,43.5); boss em (88.8,53.3)); (f) minimapa: o buff poe um
+   circulo em volta do boneco e o miolo azul fica com ~3 px -> `leitura._pontos_pequenos` (plano B, so quando nada foi achado); (g) drops:
+   **aboboras** (Medalha de abobora / Brilho da Abobora) vem nas CARTAS -> `templates/drops/*.png` + linha "Aboboras" no relatorio;
+   (h) diagnostico "LUTA LONGA" em `metricas`. Entrada pela aba normal (GATO_PRETO (765,357)), cartas todas abertas (padrao de chefe unico).
+   Duvidas: vento (0-2.8, parece nao mandar), se a forca/angulo das sementes serve para todos os nascimentos (o bot aprende), vigor para os perks.
 2. **Empacotamento facil** (BotDDT.exe sem Python): scaffold pronto, **falta gerar/testar no Windows** (secao 9).
 3. **Cupons por minuto**: cada rota/instancia da X cupons; objetivo = descobrir qual rende mais cupons por minuto corrido (rota mais
    rapida repetida pode ganhar da mais cara e lenta). Falta: usuario informar os cupons de cada instancia/rota; o `metricas.py` ja da

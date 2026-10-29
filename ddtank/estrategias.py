@@ -35,6 +35,15 @@ ESTRATEGIAS = {
     "PERICAO_COMUM": {                # o Pericao FORA do horario: chefe comum (vida propria, sem numeros de dano)
         "angulo_min": 0.0, "tolerancia_angulo": 1.0, "usar_pow": True,
     },
+    "GATO_PRETO": {                   # late game: tira o MAXIMO (perks Z/X/C, item E do pet, especial B). Gravacao 29/10.
+        "angulo_min": 0.0,            # mira baixa (ponteiro em 4.5-12 na maioria dos nascimentos)
+        "perks": True,                # Z, X, C: perks POW (cada um enche +50% da barra do especial); repostos na SALA (navegador)
+        "pet_e": True,                # E = item do pet, so liberado apos ~5 rodadas (rodada 6): o buff (canhao em volta do
+                                      # boneco, mais dano, dura a luta toda) e confirmado pelo icone verde na barra de itens
+        "usar_pow": True,             # B (especial: tirou ~27-34% da vida do boss de uma vez) ...
+        "pow_exige_buff": True,       # ... sempre DEPOIS do buff do E ativo
+        "combo": "2,3,4",             # dano maximo; depois do B nao se aperta o 2
+    },
     "PERICAO": {
         "chefe_global": True,         # vida do servidor; acerto pelos numeros de dano; vitoria = o chefao morreu para todos
         "angulo_min": 0.0,            # mira quase reta (o ponteiro le 7); nas outras o minimo e 15

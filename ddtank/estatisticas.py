@@ -87,6 +87,9 @@ def texto_resumo(d, nomes=None, agora=None):
         linhas.append(f"Ritmo:               {d['voltas'] / (rodando / 3600):.1f} voltas por hora")
     if d["lutas"]:
         linhas += ["", "Lutas por chefe:"] + [f"   {nomes.get(k, k.replace('_', ' ').title()):22s}{v}" for k, v in d["lutas"].items()]
+    aboboras = sum(v for k, v in d["drops"].items() if "abobora" in k.lower())
+    if aboboras:
+        linhas.insert(7, f"Aboboras:            {aboboras}")
     if d["drops"]:
         linhas += ["", "O que veio nas cartas:"]
         for k, v in sorted(d["drops"].items(), key=lambda kv: -kv[1]):

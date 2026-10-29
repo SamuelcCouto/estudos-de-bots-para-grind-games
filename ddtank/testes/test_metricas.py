@@ -107,3 +107,13 @@ assert len(os.listdir(os.path.join(reg.pasta, "frames"))) == 2
 shutil.rmtree(base)
 print("gravacao leve OK")
 print("\nmetricas OK")
+
+# Gato Preto: luta longa, nao "mata no 1o turno"
+m2 = M.Metricas("Gato", pasta=tempfile.mkdtemp(), agora=lambda: relogio[0], log=lambda x: None, salvar=False)
+m2.instancia_inicio("GATO_PRETO", 0); m2.batalha_inicio("GATO_PRETO", 0)
+for _ in range(15):
+    m2.turno("ataque", itens=[2, 3, 4], combo="2,3,4", especial=_ in (2, 7)); m2.resultado_tiro(4.0, True)
+relogio[0] += 280; m2.batalha_fim(True)
+d2 = M.Metricas.diagnostico("GATO_PRETO", m2.por_instancia()["GATO_PRETO"])
+assert d2.startswith("LUTA LONGA") and "15 turnos" in d2 and "2 especial" in d2, d2
+print("diagnostico do Gato Preto OK")

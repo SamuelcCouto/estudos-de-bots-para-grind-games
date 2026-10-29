@@ -141,3 +141,14 @@ assert perto(j, (10.5, 58.4)) and perto(b, (76.3, 61.4)) and L.minha_vez(f), (j,
 assert L.mira(f) == (4.5, 1) and 40 <= L.vida_boss(f) <= 46, (L.mira(f), L.vida_boss(f))   # vida do servidor: 43%
 print("chefao global (numeros de dano, POW) OK")
 print("\nleituras OK")
+
+# Gato Preto (gravacao 29/10): perks Z/X/C na sala, buff do item E e minimapa com o circulo do buff em volta do boneco
+for nome, esperado in [("GATO_SALA_PERKS_VAZIO", (False, False, False)), ("GATO_SALA_PERKS_2", (True, True, False)), ("GATO_SALA_PERKS_CHEIO", (True, True, True))]:
+    assert tuple(L.perks_cheios(img(nome)).values()) == esperado, nome
+assert not L.buff_pet(img("GATO_BATALHA_SEM_BUFF")) and L.buff_pet(img("GATO_BATALHA_BUFF"))
+assert L.minha_vez(img("GATO_BATALHA_BUFF")) and L.minha_vez(img("GATO_BATALHA_SEM_BUFF"))
+for nome in ("GATO_BUFF", "GATO_SEM_BUFF"):
+    j, b = L.pontos_minimapa(so_minimapa(nome))
+    print(f"minimapa {nome}: jogador {j}, boss {b}")
+    assert j is not None and perto(j, (18.0, 52.8), 2.0) and perto(b, (88.8, 53.7), 2.0), (nome, j, b)
+print("gato preto (perks, buff do E, minimapa) OK")

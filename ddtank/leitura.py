@@ -135,6 +135,23 @@ def _pontos_redondos(mk):
     return sorted(out, key=lambda c: -c[2])
 
 
+def _pontos_pequenos(mk):
+    """Plano B (so quando o leitor normal nao achou nada): pontos MUITO pequenos (Gato Preto: o boneco com o buff do pet tem
+    um circulo claro em volta e o miolo azul fica com ~3 px, que a erosao em cruz apaga). Componentes sem erosao, 3 a 30 px,
+    compactos (preenchem >= 55% do retangulo), fora de tracos retos."""
+    n, _, st, ce = cv2.connectedComponentsWithStats(_sem_linhas(mk))
+    out = []
+    for i in range(1, n):
+        _x, _y, w, h, a = st[i]
+        cx, cy = float(ce[i][0]), float(ce[i][1])
+        if not (3 <= a <= 30) or w > MINIMAPA_PONTO_MAX or h > MINIMAPA_PONTO_MAX or a < 0.55 * w * h:
+            continue
+        if cy < MINIMAPA_Y_CONTEUDO or cy > MINIMAPA_Y_MAX or not (MINIMAPA_X_LIM[0] <= cx <= MINIMAPA_X_LIM[1]):
+            continue
+        out.append((cx, cy, int(a)))
+    return sorted(out, key=lambda c: -c[2])
+
+
 def candidatos_minimapa(f):
     """(pontos azuis, pontos vermelhos) do minimapa: listas [(x, y, tamanho)], maiores primeiro.
     Coordenadas em pixels do minimapa (y cresce para baixo).
@@ -152,6 +169,8 @@ def candidatos_minimapa(f):
     for c in _pontos_redondos(estrita):
         if all(abs(c[0] - a[0]) + abs(c[1] - a[1]) > 2.5 for a in azuis):
             azuis.append(c)
+    if not azuis:
+        azuis = _pontos_pequenos(azul & (s > 190))
     return sorted(azuis, key=lambda c: -c[2]), _pontos_redondos(verm)
 
 
@@ -266,3 +285,27 @@ def pow_cheio(f):
     """O medidor do especial (POW, tecla B) encheu? O botao fica vermelho e pulsa."""
     x0, y0, x1, y1 = POW_CENTRO
     return float(cv2.cvtColor(f[y0:y1, x0:x1], cv2.COLOR_BGR2HSV)[..., 1].mean()) >= SATURACAO_POW_CHEIO
+
+
+# ---- Gato Preto: perks Z/X/C, item E do pet --------------------------------------------------------------------
+PERKS_SLOTS = {"Z": (853, 260), "X": (896, 260), "C": (942, 260)}   # "Minhas ferramentas" na SALA (centro de cada quadro)
+PERK_COMPRAR = (942, 316)        # perk POW ("Enfurecer", +50% da barra do especial, 120 de vigor) em "Ferramentas a comprar"
+BUFF_PET_CAIXA = (438, 498, 472, 532)   # icone VERDE que aparece na barra de itens quando o buff do item E esta ativo
+BUFF_PET_MIN = 25                # px verdes (ativo ~81-92; sem o buff 0-2)
+
+
+def perks_cheios(f):
+    """{'Z': bool, 'X': bool, 'C': bool}: o quadro tem um perk (icone vermelho "POW") ou esta vazio (quadrado verde)?"""
+    hsv = cv2.cvtColor(f, cv2.COLOR_BGR2HSV)
+    out = {}
+    for nome, (x, y) in PERKS_SLOTS.items():
+        h = hsv[y - 9:y + 9, x - 9:x + 9]
+        out[nome] = int((((h[..., 0] <= 8) | (h[..., 0] >= 170)) & (h[..., 1] > 150) & (h[..., 2] > 130)).sum()) >= 30
+    return out
+
+
+def buff_pet(f):
+    """O buff do item E (canhao em volta do boneco) esta ativo? So aparece na SUA vez (some durante a animacao do boss)."""
+    x0, y0, x1, y1 = BUFF_PET_CAIXA
+    h = cv2.cvtColor(f[y0:y1, x0:x1], cv2.COLOR_BGR2HSV)
+    return int(((h[..., 0] >= 45) & (h[..., 0] <= 85) & (h[..., 1] > 120) & (h[..., 2] > 110)).sum()) >= BUFF_PET_MIN

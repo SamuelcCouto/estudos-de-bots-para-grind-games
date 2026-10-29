@@ -31,6 +31,7 @@ import numpy as np
 
 import config
 import estados as estados_mod
+import estrategias
 
 # ---------------------------------------------------------------------------
 # Posicoes (em pixels de uma imagem com 1280 de largura; saem da sua gravacao)
@@ -565,6 +566,7 @@ class Navegador:
         self.cartas_escolhidas, self.cartas_clicadas_em, self.cartas_rodadas = None, None, 0
         self.cartas_max_viradas, self.quadro_cartas = 0, None
         self.dificuldade = dificuldade    # None = a de cada instancia (DIFICULDADE_DA_INSTANCIA) | "NORMAL" | "DIFICIL" | "HEROI"
+        self.perks_tentativas = 0         # reposicao dos perks Z/X/C na sala (Gato Preto)
         self.clicou_cfg = None            # instancia clicada por ultimo na configuracao
         self.confirmada = None            # instancia confirmada ("Sim") por ultimo: a sala deve mostrar ela
         self.dificuldade_clicada = False
@@ -1086,6 +1088,27 @@ class Navegador:
         else:
             self.dormir(1.0)
 
+    def repor_perks(self, f):
+        """Gato Preto: os perks POW (Z, X, C) acabam depois do uso e so se repoe na SALA: clica no perk em "Ferramentas a comprar"
+        uma vez por quadro vazio. True = estava repondo (volta depois para conferir). Se nao repuser (sem vigor?), desiste."""
+        import leitura as L
+        vazios = [k for k, cheio in L.perks_cheios(f).items() if not cheio]
+        if not vazios:
+            if self.perks_tentativas:
+                self.log("[PERKS] Z, X e C repostos")
+            return False
+        if self.perks_tentativas >= 2:
+            self.log(f"   ! [PERKS] nao consegui repor {', '.join(vazios)} (falta vigor?); sigo sem eles")
+            return False
+        self.perks_tentativas += 1
+        self.log(f"[PERKS] quadros vazios: {', '.join(vazios)}; comprando {len(vazios)} perk(s) POW (tentativa {self.perks_tentativas})")
+        for _ in vazios:
+            self.clicar(L.PERK_COMPRAR)
+            self.dormir(0.7)
+        self.clicar(FOCO_PONTO_PADRAO)          # tira o balao que o mouse parado em cima do icone abre
+        self.dormir(0.5)
+        return True
+
     def contar_drops(self, f, costas):
         """Cartas viradas: le o icone de cada uma das SUAS 3 cartas (esperando ~1 s a animacao) e conta no catalogo."""
         if self.drops_contados or not self.catalogo or not self.cartas_escolhidas:
@@ -1145,6 +1168,9 @@ class Navegador:
             self.clicar(abertos[0])
             self.dormir(0.9)
             return
+        if estrategias.estrategia(self.instancia_batalha).get("perks") and f is not None and self.repor_perks(f):
+            return
+        self.perks_tentativas = 0
         self.clicar_e_verificar(estado, SALA_INICIO, descricao=f"Inicio ({nome})", espera=6.0)
 
     def coletar_tarefas(self):

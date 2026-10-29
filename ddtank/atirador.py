@@ -37,6 +37,7 @@ ANTECIPACAO_INICIAL = 4.0     # % de folga: solta um pouco antes (atraso da capt
 FOCO_CLICK_BATALHA = (560, 230)   # clique na cena de batalha (nunca no chat/log)
 MAX_SEGURANDO = 7.0           # s: trava de seguranca (a carga pode andar na METADE da velocidade; ver NOTAS.md)
 MARGEM_TEMPO_MINIMO = 0.35    # s: tolerancia da trava de tempo minimo
+PERKS_TECLAS = ["z", "x", "c"]
 ESPERA_NUMEROS_DANO = 4.0     # s depois do tiro olhando os numeros de dano (Chefao Global): eles sobem ~1-3 s depois
 
 
@@ -53,6 +54,7 @@ class LeitorReal:
     vida = staticmethod(L.vida_boss)
     numeros_dano = staticmethod(L.numeros_de_dano)
     pow_cheio = staticmethod(L.pow_cheio)
+    buff_pet = staticmethod(L.buff_pet)
 
 
 class Atirador:
@@ -89,6 +91,7 @@ class Atirador:
         self.inst_luta = None
         self.rastreador = L.RastreadorMinimapa()
         self.avioes_na_luta = 0
+        self.perks_usados = 0                     # perks Z/X/C ja usados nesta luta (Gato Preto)
         self.aviao_pendente = None                # {"de": (x, y)} do ultimo voo: confere no turno seguinte se andou
         self.falhas_aviao = 0
         self.aviao_indisponivel = False
@@ -196,6 +199,7 @@ class Atirador:
         self.vez_desde, self.agiu = None, False
         self.rastreador.reiniciar()               # proxima batalha: spawn novo
         self.avioes_na_luta, self.aviao_pendente = 0, None
+        self.perks_usados = 0
 
     # ------------------------------------------------------------------ um turno
     def devolver_foco(self):
@@ -275,8 +279,9 @@ class Atirador:
                 self.combo_luta = (nome_c, ordem_c)
             else:
                 self.combo_luta = (None, self.ordem)
-        especial = est.get("usar_pow") and self.usar_pow()
-        apertados = self.aplicar_itens(self.combo_luta[1])
+        especial = self.preparar_extras(est)
+        ordem_itens = [i for i in self.combo_luta[1] if i != 2] if especial else self.combo_luta[1]   # depois do B nao se aperta o 2
+        apertados = self.aplicar_itens(ordem_itens)
         t_itens = self.agora() - inicio
         if self.reg:
             fr.append(self.reg.frame(self.ver(), "apos_itens"))
@@ -474,6 +479,35 @@ class Atirador:
         return True
 
     # ------------------------------------------------------------------ itens
+    def preparar_extras(self, est):
+        """Antes dos itens do turno. Gato Preto: item E do pet (ate o buff aparecer), um perk Z/X/C por turno (enchem o POW)
+        e o especial B (so com o buff ativo se `pow_exige_buff`). Outras: B quando o POW enche (`usar_pow`). Devolve True se
+        apertou B."""
+        if est.get("pet_e"):
+            f = self.ver()
+            if f is not None and self.lei.minha_vez(f) and hasattr(self.lei, "buff_pet") and not self.lei.buff_pet(f):
+                self.io.tecla("e", 0.08)
+                self.dormir(0.5)
+                g = self.ver()
+                if g is not None and self.lei.buff_pet(g):
+                    self.log("   [PET] item E usado: buff ativo (o boneco fica parado; so angulo e tiro)")
+                else:
+                    self.log("   [PET] apertei E (ainda nao liberado ou sem efeito: tento de novo no proximo turno)")
+        if est.get("perks") and self.perks_usados < len(PERKS_TECLAS):
+            f = self.ver()
+            if f is not None and self.lei.minha_vez(f) and not (hasattr(self.lei, "pow_cheio") and self.lei.pow_cheio(f)):
+                tecla = PERKS_TECLAS[self.perks_usados]
+                self.io.tecla(tecla, 0.08)
+                self.perks_usados += 1
+                self.dormir(0.25)
+                self.log(f"   [PERK] {tecla.upper()}: a barra do especial enche +50%")
+        if not est.get("usar_pow"):
+            return False
+        f = self.ver()
+        if f is not None and est.get("pow_exige_buff") and not (hasattr(self.lei, "buff_pet") and self.lei.buff_pet(f)):
+            return False                              # o B espera o buff do E
+        return self.usar_pow()
+
     def usar_pow(self):
         """POW cheio (botao vermelho pulsando) -> aperta B (especial) antes dos itens. True se usou."""
         f = self.ver()

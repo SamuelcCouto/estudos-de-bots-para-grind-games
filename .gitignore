@@ -12,3 +12,4 @@ build/
 dist/
 *.spec
 BotDDT_*.zip
+suite.txt

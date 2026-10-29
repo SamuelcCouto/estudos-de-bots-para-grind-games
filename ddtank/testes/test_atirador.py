@@ -442,3 +442,54 @@ assert r["acertos"] == 1 and r["erros"] == 1 and r["especiais"] == 1 and diag.st
 assert "PERICAO" not in cb.dados, "Chefao Global: combo fixo, nada a aprender"
 assert cb.escolher("PERICAO")[0] == "2,3,4"
 print("\nChefao Global (mira reta, numeros de dano, POW) OK")
+
+# ------------------------------------------------------------ 24) GATO PRETO: perks Z/X/C, item E do pet, B so com o buff ativo
+class MundoGato(MundoComThread):
+    """E so funciona a partir do 2o turno (na vida real: rodada 6); perks +50% do POW cada; B so com o POW cheio."""
+    def __init__(self, **kw):
+        super().__init__(angulo=12.0, **kw)
+        self.azul, self.boss = (26.4, 57.2), (88.8, 53.3)
+        self.turno_n = 0; self.buff = False; self.pow_nivel = 0; self.especiais = 0; self.ordem = []
+    def novo_turno(self, ini, fim):
+        super().novo_turno(ini, fim); self.turno_n += 1; self.vida = 98.0
+    def capturar(self):
+        f = super().capturar()
+        f["buff"] = self.buff; f["pow"] = self.pow_nivel >= 100; f["vida"] = self.vida
+        return f
+    def tecla(self, nome, dur=0.05):
+        if self.vez[0] <= self.t <= self.vez[1] or True:
+            self.ordem.append(nome)
+        if nome == "e" and self.turno_n >= 2: self.buff = True
+        if nome in ("z", "x", "c"): self.pow_nivel += 50
+        if nome == "b" and self.pow_nivel >= 100: self.pow_nivel = 0; self.especiais += 1
+        super().tecla(nome, dur)
+
+class LeitorGato(Leitor):
+    buff_pet = staticmethod(lambda f: f["buff"])
+    pow_cheio = staticmethod(lambda f: f["pow"])
+
+w = MundoGato(); w.novo_turno(1.0, 9.0)
+tmp = tempfile.NamedTemporaryFile("w", suffix=".json", delete=False); tmp.close(); os.unlink(tmp.name)
+mem = M.Memoria(arq_aprendizado=tmp.name); logs = []
+at = A.Atirador(w, mem, lambda: "GATO_PRETO", leitor=LeitorGato(), dormir=w.dormir, agora=lambda: w.t, log=logs.append, combos=CB.Combos(arq=None))
+rodar(at, w, ate=16)
+t1 = list(w.ordem)
+print("turno 1:", t1)
+assert t1.index("e") < t1.index("z") and "b" not in t1 and not w.buff, "turno 1: tenta o E (ainda nao liberado), usa 1 perk, sem B"
+w.ordem.clear(); w.novo_turno(w.t + 1.0, w.t + 9.0)
+rodar(at, w, ate=w.t + 14)
+t2 = list(w.ordem)
+print("turno 2:", t2)
+assert w.buff and w.especiais == 1, (w.buff, w.especiais)
+assert t2.index("e") < t2.index("x") < t2.index("b"), "E, depois o 2o perk, e so entao o B (buff ativo)"
+assert "2" not in t2 and "3" in t2 and "4" in t2, "depois do B nao se aperta o item 2"
+assert any("[PET] item E usado" in l for l in logs) and any("[PERK] Z" in l for l in logs)
+# turno 3: buff ativo, perk C (o POW ainda vazio) e nada de E de novo
+w.ordem.clear(); w.novo_turno(w.t + 1.0, w.t + 9.0)
+rodar(at, w, ate=w.t + 14)
+t3 = list(w.ordem)
+assert "e" not in t3 and "c" in t3 and "b" not in t3 and "2" in t3, t3
+# nova luta: os perks voltam a contar
+at.fim_da_batalha(venceu=True, duracao=60.0)
+assert at.perks_usados == 0
+print("Gato Preto (E, perks, B depois do buff) OK")

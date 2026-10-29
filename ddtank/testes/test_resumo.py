@@ -61,4 +61,35 @@ nav.contar_drops(f, costas); assert est.d["cartas"] == 3, "conta uma vez so por 
 assert any("[CARTAS] vieram" in l for l in logs)
 print("contagem no navegador OK")
 
+# ---------------------------------------------------------------- Gato Preto: aboboras (Medalha de abobora / Brilho da Abobora) nas cartas reais
+g = cv2.imread(os.path.join(AQUI, "frames", "GATO_CARTAS.jpg"))
+cat3 = D.Catalogo(pasta_vistos=tempfile.mkdtemp(), arq_nomes=os.path.join(tempfile.mkdtemp(), "n.json"))      # usa templates/drops
+assert {"medalha_de_abobora", "brilho_da_abobora"} <= set(cat3.itens), cat3.itens.keys()
+assert cat3.reconhecer(g, pos(3, 0)) == "medalha_de_abobora" and cat3.reconhecer(g, pos(3, 1)) == "brilho_da_abobora"
+est3 = ES.Estatisticas(arq=os.path.join(tempfile.mkdtemp(), "e.json"), agora=lambda: 0.0)
+est3.drop("medalha_de_abobora"); est3.drop("brilho_da_abobora", 2); est3.drop("item_001")
+t3 = ES.texto_resumo(ES.ler(est3.arq))
+assert "Aboboras:            3" in t3, t3
+print("aboboras (cartas do Gato Preto) OK")
+
+# ---------------------------------------------------------------- Gato Preto: repor os perks Z/X/C na sala antes do Inicio
+import leitura as LL
+class IOCliques:
+    k = 1.0
+    def __init__(self): self.cliques = []
+    def clicar(self, x, y, modo): self.cliques.append((x, y))
+    def tecla_apertada(self, vk): return False
+logs = []
+nav = N.Navegador(IOCliques(), None, ["GATO_PRETO"], agora=lambda: 0.0, dormir=lambda s: None, log=logs.append)
+vazio = cv2.imread(os.path.join(AQUI, "frames", "GATO_SALA_PERKS_VAZIO.jpg"))
+cheio = cv2.imread(os.path.join(AQUI, "frames", "GATO_SALA_PERKS_CHEIO.jpg"))
+parcial = cv2.imread(os.path.join(AQUI, "frames", "GATO_SALA_PERKS_2.jpg"))
+assert nav.repor_perks(vazio) is True and nav.io.cliques.count(LL.PERK_COMPRAR) == 3 and nav.io.cliques[-1] == N.FOCO_PONTO_PADRAO
+nav.io.cliques.clear()
+assert nav.repor_perks(parcial) is True and nav.io.cliques.count(LL.PERK_COMPRAR) == 1, "so 1 quadro vazio: 1 perk"
+assert nav.repor_perks(cheio) is False and any("repostos" in l for l in logs)
+nav.perks_tentativas = 0
+nav.repor_perks(vazio); nav.repor_perks(vazio)
+assert nav.repor_perks(vazio) is False and any("nao consegui repor" in l for l in logs), "sem vigor: desiste em vez de ficar clicando"
+print("reposicao de perks na sala OK")
 print("resumo OK")

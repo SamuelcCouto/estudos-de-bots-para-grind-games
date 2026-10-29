@@ -1,5 +1,5 @@
 {
- "_nota": "Tiros do usuario (todos acertaram). angulo = leitura do ponteiro; forca = % da barra no momento de soltar; azul/boss = pontos do minimapa em px (y para baixo). leitura 2 = posicoes relidas com o leitor novo do minimapa (a versao 1 confundia a agua da Profundezas com o jogador). PERICAO (Chefao Global): 34 tiros normais do usuario, todos com numeros de dano no boss (acertou); mira quase reta (ponteiro 7), forca 78-89%, com vento de 4.5 contra a 4.0 a favor - o vento nao mudou o acerto.",
+ "_nota": "Tiros do usuario (todos acertaram). angulo = leitura do ponteiro; forca = % da barra no momento de soltar; azul/boss = pontos do minimapa em px (y para baixo). leitura 2 = posicoes relidas com o leitor novo do minimapa (a versao 1 confundia a agua da Profundezas com o jogador). PERICAO (Chefao Global): 34 tiros normais do usuario, todos com numeros de dano no boss (acertou); mira quase reta (ponteiro 7), forca 78-89%, com vento de 4.5 contra a 4.0 a favor - o vento nao mudou o acerto. GATO_PRETO: tiros normais do usuario (29/10, 3 runs, 3 posicoes de nascimento) que tiraram >=2% da vida do boss; sem os tiros com B.",
  "tiros": [
   {
    "inst": "FANTASMA",
@@ -815,6 +815,295 @@
    "forca": 88,
    "acertou": true,
    "origem": "gravacao 20261028_121648",
+   "leitura": 2
+  },
+  {
+   "inst": "GATO_PRETO",
+   "azul": [
+    26.3,
+    57.0
+   ],
+   "boss": [
+    88.8,
+    53.2
+   ],
+   "angulo": 12.0,
+   "forca": 64,
+   "acertou": true,
+   "origem": "gravacao 20261029_180936",
+   "dano": 4.0,
+   "leitura": 2
+  },
+  {
+   "inst": "GATO_PRETO",
+   "azul": [
+    26.3,
+    57.0
+   ],
+   "boss": [
+    88.8,
+    53.3
+   ],
+   "angulo": 12.0,
+   "forca": 65,
+   "acertou": true,
+   "origem": "gravacao 20261029_180936",
+   "dano": 5.0,
+   "leitura": 2
+  },
+  {
+   "inst": "GATO_PRETO",
+   "azul": [
+    26.6,
+    57.0
+   ],
+   "boss": [
+    88.7,
+    53.1
+   ],
+   "angulo": 12.0,
+   "forca": 68,
+   "acertou": true,
+   "origem": "gravacao 20261029_180936",
+   "dano": 7.0,
+   "leitura": 2
+  },
+  {
+   "inst": "GATO_PRETO",
+   "azul": [
+    26.8,
+    56.8
+   ],
+   "boss": [
+    88.9,
+    53.1
+   ],
+   "angulo": 12.0,
+   "forca": 78,
+   "acertou": true,
+   "origem": "gravacao 20261029_180936",
+   "dano": 5.0,
+   "leitura": 2
+  },
+  {
+   "inst": "GATO_PRETO",
+   "azul": [
+    26.8,
+    57.2
+   ],
+   "boss": [
+    88.9,
+    53.1
+   ],
+   "angulo": 12.0,
+   "forca": 82,
+   "acertou": true,
+   "origem": "gravacao 20261029_180936",
+   "dano": 4.0,
+   "leitura": 2
+  },
+  {
+   "inst": "GATO_PRETO",
+   "azul": [
+    26.5,
+    57.5
+   ],
+   "boss": [
+    88.8,
+    53.2
+   ],
+   "angulo": 12.0,
+   "forca": 93,
+   "acertou": true,
+   "origem": "gravacao 20261029_180936",
+   "dano": 3.0,
+   "leitura": 2
+  },
+  {
+   "inst": "GATO_PRETO",
+   "azul": [
+    26.4,
+    57.3
+   ],
+   "boss": [
+    88.7,
+    53.1
+   ],
+   "angulo": 12.0,
+   "forca": 94,
+   "acertou": true,
+   "origem": "gravacao 20261029_180936",
+   "dano": 8.0,
+   "leitura": 2
+  },
+  {
+   "inst": "GATO_PRETO",
+   "azul": [
+    26.3,
+    57.3
+   ],
+   "boss": [
+    88.8,
+    53.2
+   ],
+   "angulo": 12.0,
+   "forca": 94,
+   "acertou": true,
+   "origem": "gravacao 20261029_180936",
+   "dano": 20.0,
+   "leitura": 2
+  },
+  {
+   "inst": "GATO_PRETO",
+   "azul": [
+    18.0,
+    52.5
+   ],
+   "boss": [
+    88.3,
+    53.7
+   ],
+   "angulo": 12.0,
+   "forca": 95,
+   "acertou": true,
+   "origem": "gravacao 20261029_180936",
+   "dano": 4.0,
+   "leitura": 2
+  },
+  {
+   "inst": "GATO_PRETO",
+   "azul": [
+    18.5,
+    53.0
+   ],
+   "boss": [
+    88.6,
+    53.6
+   ],
+   "angulo": 12.0,
+   "forca": 98,
+   "acertou": true,
+   "origem": "gravacao 20261029_180936",
+   "dano": 5.0,
+   "leitura": 2
+  },
+  {
+   "inst": "GATO_PRETO",
+   "azul": [
+    18.0,
+    52.5
+   ],
+   "boss": [
+    88.9,
+    53.8
+   ],
+   "angulo": 29.5,
+   "forca": 52,
+   "acertou": true,
+   "origem": "gravacao 20261029_180936",
+   "dano": 15.0,
+   "leitura": 2
+  },
+  {
+   "inst": "GATO_PRETO",
+   "azul": [
+    4.5,
+    43.5
+   ],
+   "boss": [
+    88.8,
+    53.1
+   ],
+   "angulo": 7.0,
+   "forca": 66,
+   "acertou": true,
+   "origem": "gravacao 20261029_180936",
+   "dano": 4.0,
+   "leitura": 2
+  },
+  {
+   "inst": "GATO_PRETO",
+   "azul": [
+    4.7,
+    43.3
+   ],
+   "boss": [
+    88.8,
+    53.1
+   ],
+   "angulo": 7.0,
+   "forca": 59,
+   "acertou": true,
+   "origem": "gravacao 20261029_180936",
+   "dano": 2.0,
+   "leitura": 2
+  },
+  {
+   "inst": "GATO_PRETO",
+   "azul": [
+    4.8,
+    43.7
+   ],
+   "boss": [
+    88.8,
+    53.1
+   ],
+   "angulo": 7.0,
+   "forca": 55,
+   "acertou": true,
+   "origem": "gravacao 20261029_180936",
+   "dano": 29.0,
+   "leitura": 2
+  },
+  {
+   "inst": "GATO_PRETO",
+   "azul": [
+    5.3,
+    43.7
+   ],
+   "boss": [
+    88.8,
+    53.1
+   ],
+   "angulo": 7.0,
+   "forca": 57,
+   "acertou": true,
+   "origem": "gravacao 20261029_180936",
+   "dano": 10.0,
+   "leitura": 2
+  },
+  {
+   "inst": "GATO_PRETO",
+   "azul": [
+    4.5,
+    43.5
+   ],
+   "boss": [
+    88.8,
+    53.1
+   ],
+   "angulo": 7.0,
+   "forca": 58,
+   "acertou": true,
+   "origem": "gravacao 20261029_180936",
+   "dano": 5.0,
+   "leitura": 2
+  },
+  {
+   "inst": "GATO_PRETO",
+   "azul": [
+    4.8,
+    43.7
+   ],
+   "boss": [
+    88.8,
+    53.1
+   ],
+   "angulo": 7.0,
+   "forca": 58,
+   "acertou": true,
+   "origem": "gravacao 20261029_180936",
+   "dano": 6.0,
    "leitura": 2
   }
  ]

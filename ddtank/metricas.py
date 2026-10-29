@@ -188,6 +188,10 @@ class Metricas:
     @staticmethod
     def diagnostico(inst, r):
         n = r["lutas"]
+        if estrategias.estrategia(inst).get("pet_e"):
+            return (f"LUTA LONGA (chefe com muita vida; item E + perks + especial) - {n} luta(s), {r['vitorias']} vitoria(s), "
+                    f"{r['turnos_medios'] or 0:.0f} turnos do bot por luta, {r['luta_media'] / 60:.1f} min em media, "
+                    f"{r['especiais']} especial(is) B no total.")
         if estrategias.estrategia(inst).get("chefe_global"):
             tiros = r["acertos"] + r["erros"]
             pont = (f"tiros normais acertando {r['acertos'] / tiros:.0%} ({r['acertos']} de {tiros}, pelos numeros de dano)"
