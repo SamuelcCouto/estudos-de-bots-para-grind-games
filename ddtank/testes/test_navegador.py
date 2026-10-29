@@ -21,7 +21,9 @@ ESPERADO = {"CLIQUE_JOGO": "CLIQUE_JOGO", "MAPA": "MAPA", "CENTRAL": "CENTRAL", 
             "POPUP_SOZINHO": "POPUP_SOZINHO", "BATALHA": "BATALHA", "CARTAS": "CARTAS", "POPUP_CARTA": "POPUP_CARTA",
             "PRONTA_PROFUNDEZAS": "PRONTA_PROFUNDEZAS", "PRONTA_MINHOCAO": "PRONTA_MINHOCAO", "SALA_FINAL": "SALA_VAZIA",
             "TAREFA_COM_OK": "TAREFA", "TAREFA_SEM_OK": "TAREFA", "TAREFA_ATIVA_OK": "TAREFA", "TAREFA_SUPER": "TAREFA",
-            "CFG_SEL_ESCORPIAO": "CONFIG_SEL", "SALA_ESCORPIAO": "SALA"}
+            "CFG_SEL_ESCORPIAO": "CONFIG_SEL", "SALA_ESCORPIAO": "SALA",
+            # 28/10 21h: outro boneco/visual no painel "Informacoes do usuario" (o recorte antigo pegava o retrato)
+            "CENTRAL_OUTRO_BONECO": "CENTRAL"}
 ruim = 0
 for nome, esp in ESPERADO.items():
     got = det.detectar(E.normalizar(img(nome)))
