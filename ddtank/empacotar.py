@@ -101,7 +101,7 @@ def main():
             zf.write(tiros, f"{nome}/aprendizado.json")
         # cronometro/placar (logs\relatorio.txt, lutas.csv, voltas.csv), combos aprendidos e o log do console do dia
         if parte == 1:
-            extras = [os.path.join(config.PASTA_LOGS, a) for a in ("relatorio.txt", "lutas.csv", "voltas.csv")]
+            extras = [os.path.join(config.PASTA_LOGS, a) for a in ("relatorio.txt", "lutas.csv", "voltas.csv", "teste_tela.txt", "teste_tela.png")]
             extras.append(os.path.join(config.PASTA, "dados", "combos.json"))
             dia = os.path.basename(os.path.normpath(sessao))[:8]
             extras += sorted(glob.glob(os.path.join(config.PASTA_LOGS, f"navegador_{dia}*.log")))

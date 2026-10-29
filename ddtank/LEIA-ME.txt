@@ -15,3 +15,15 @@ mostra o total pausado. Teclas do bot: F8 tambem pausa/continua, F10 sai.
 Pastas: dados\ (o que o bot aprendeu), templates\ (imagens para reconhecer as telas), logs\ (relatorio.txt, lutas.csv,
 voltas.csv), sessoes\ (gravacoes), envio\ (zips para o GitHub). O historico tecnico fica em NOTAS.md.
 Fora do menu (mas funciona por linha de comando): python navegador.py --atirar --rota N   (Norte)  /  --rota T (Norte+Sul).
+
+QUALQUER TAMANHO DE TELA / PARA AMIGOS (29/10)
+==============================================
+O bot calibra sozinho onde o jogo esta na janela e em que tamanho (tela cheia, 1080p, 1440p, notebook, zoom...). Ao ligar
+ele escreve no log "[TELA] calibrada: janela 1920x1080: zoom 1.00, deslocamento (...)". Se mudar o tamanho da janela com
+o bot rodando, ele calibra de novo sozinho. Na janela original nada muda.
+Botao "Testar a minha tela" no painel (deixe o jogo no mapa ou numa sala): diz se o bot enxerga o jogo e grava
+logs\teste_tela.txt e logs\teste_tela.png (o que o bot ve) - o EMPACOTAR manda junto. Se der "nao reconheci", me mande.
+Zoom abaixo de 0.75 (jogo pequeno na janela) avisa: o minimapa perde precisao e os tiros podem errar.
+Para um amigo: Windows + Python + Git, jogo BetelTank.exe aberto e logado (uma janela so); baixar a pasta
+(git clone --depth 1 -b claude/wonderful-rubin-3oyqi3 <repositorio>), pip install numpy opencv-python-headless,
+BotDDT.bat. Cada conta aprende a propria forca de tiro nas primeiras lutas (as sementes de tiro sao do seu boneco).

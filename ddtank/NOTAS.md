@@ -551,3 +551,15 @@ painel: INICIAR/PARAR, "Enviar gravacao" (empacota e envia sem perguntas e sem j
   POPUP_SOZINHO) nao era reconhecida (clicava em Inicio 83x) e, as 12:10, o aviso "O Chefao Global vai comecar em
   alguns minutos! ... sim" apareceu por cima. -> estados POPUP_SOZINHO2 (Concordar 575,402) e POPUP_AVISO (sim 644,394).
 - Bug meu: sed no empacotar.py deixou aspas dentro de aspas (SyntaxError no envio). Regra: py_compile em todos os .py.
+
+## Calibracao de tela (29/10): qualquer tamanho de janela
+O jogo e um canvas fixo de 1000x600 px (666x399 no quadro de referencia de 1280, em (312,162)) cercado de decoracao da
+pagina (static map: todo o resto muda entre telas; todos os patches de estados.json ficam dentro do canvas).
+tela.py: canonico = janela*f + (tx,ty). 1) calibrar_pontos: SIFT da janela (reduzida a 1400 px) x quadros de referencia do
+canvas em templates/ref/*.jpg -> estimateAffinePartial2D (escala + deslocamento, <2 s, sub-pixel); 2) confere que o quadro
+canonico e uma tela conhecida; 3) plano B lento: recortes de estados.json em ~70 zooms (0.5-2.2). Janela original (f~0.666,
+t~0) = modo legado (nada muda). IOJanela renderiza o quadro canonico (1280x688, k=1) e converte os cliques de volta;
+recalibra se o tamanho da janela mudar ou a tela ficar desconhecida (>=15 s, no maximo 1x/90 s). navegador.testar_tela +
+--testar-tela + botao do painel. Testes: testes/test_tela.py (7 janelas x 6 telas sinteticas a partir de quadros reais;
+erro < 3 px). LIMITES: so testado com janelas SINTETICAS; nao sabemos como o launcher do amigo se comporta (se o canvas
+for esticado sem manter a proporcao, falha); zoom < 0.75 perde o minimapa; refs vem das minhas telas (retrato etc.).

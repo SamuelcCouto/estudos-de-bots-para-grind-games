@@ -142,25 +142,74 @@ def fmt_tempo(s):
 # entrada/saida (trocavel nos testes)
 # ---------------------------------------------------------------------------
 class IOJanela:
-    def __init__(self, hwnd):
-        import janela
-        self.j = janela
+    """Entrada/saida com o jogo. Calibra sozinho o tamanho/posicao do jogo na janela (tela.py): o resto do bot sempre
+    ve o quadro canonico de 1280 px (como na janela original) e clica em coordenadas dele."""
+    def __init__(self, hwnd, janela_mod=None, calibrar=True, log=print):
+        if janela_mod is None:
+            import janela as janela_mod
+        self.j = janela_mod
         self.hwnd = hwnd
+        self.auto, self.log = calibrar, log
+        self.calib, self.tam, self.det = None, None, None
+        self.calibrar_agora = calibrar
+        self.ultima_calibracao = -1e9
 
     k = 1.0
 
+    def capturar_bruto(self):
+        return self.j.capturar(self.hwnd, "print")
+
+    def pedir_calibracao(self):
+        """Pede para calibrar de novo no proximo quadro (tela desconhecida por muito tempo, janela mudou...)."""
+        if self.auto and time.time() - self.ultima_calibracao >= 60:
+            self.calibrar_agora = True
+
+    def _calibrar(self, img):
+        import tela
+        self.calibrar_agora = False
+        self.ultima_calibracao = time.time()
+        self.tam = img.shape[:2]
+        self.det = self.det or estados_mod.Detector()
+        t0 = time.time()
+        c = tela.calibrar(img, self.det)
+        if c is None:
+            if self.calib is None:
+                self.log(f"[TELA] janela {self.tam[1]}x{self.tam[0]}: nao reconheci nenhuma tela conhecida para calibrar; uso o "
+                         f"tamanho original. Se o bot nao reconhecer as telas, deixe o jogo no mapa/sala e tente de novo.")
+            return
+        self.calib = c
+        self.log(f"[TELA] calibrada em {time.time() - t0:.1f}s: {c.texto((self.tam[1], self.tam[0]))} (tela usada: {c.estado})")
+        if c.zoom < tela.ZOOM_MIN_BOM:
+            self.log(f"[TELA] ! o jogo esta pequeno na janela (zoom {c.zoom:.2f}): o minimapa perde precisao. Prefira a janela "
+                     f"maior / tela cheia.")
+
     def capturar(self):
-        img = self.j.capturar(self.hwnd, "print")
-        if img is not None:
-            self.k = img.shape[1] / LARGURA_REF
+        img = self.capturar_bruto()
+        if img is None:
+            return None
+        if self.auto and (self.calibrar_agora or img.shape[:2] != self.tam):
+            self._calibrar(img)
+        if self.calib is not None and not self.calib.legado:
+            self.k = 1.0
+            return self.calib.renderizar(img)
+        self.k = img.shape[1] / LARGURA_REF
         return img
+
+    def _para_janela(self, x, y):
+        if self.calib is not None and not self.calib.legado:
+            x, y = self.calib.ref_para_janela(x, y)             # (no modo calibrado k = 1: x, y ja sao do quadro canonico)
+        return int(round(x)), int(round(y))
 
     def clicar_ref(self, xr, yr, modo="top"):
         """Clique em coordenadas da imagem de 1280 de largura (usado pelo atirador)."""
-        self.j.clicar(self.hwnd, int(xr * self.k), int(yr * self.k), modo)
+        if self.calib is not None and not self.calib.legado:
+            x, y = self._para_janela(xr, yr)
+        else:
+            x, y = int(xr * self.k), int(yr * self.k)
+        self.j.clicar(self.hwnd, x, y, modo)
 
     def clicar(self, x, y, modo):
-        self.j.clicar(self.hwnd, x, y, modo)
+        self.j.clicar(self.hwnd, *self._para_janela(x, y), modo)
 
     def tecla_apertada(self, vk):
         return bool(self.j.user32.GetAsyncKeyState(vk) & 0x8000)
@@ -518,6 +567,7 @@ class Navegador:
         self.falhas_clique = 0
         self.parar, self.pausado = False, False
         self.pausa_desde, self.pausado_total = None, 0.0
+        self.ultima_calib_pedida = -1e9
         self.voltas = 0
         self.novo_ciclo()
         self.cartas_vistas = False
@@ -1145,6 +1195,9 @@ class Navegador:
                 self.reg.evento("recuperacao", [self.reg.frame(self.ultimo_quadro, "recuperacao")], de=self.ultimo_conhecido)
             self.clicar(SALA_PORTA)
             return
+        if parado >= 15 and hasattr(self.io, "pedir_calibracao") and agora - self.ultima_calib_pedida >= 90:
+            self.ultima_calib_pedida = agora
+            self.io.pedir_calibracao()                # talvez o jogo mudou de tamanho/lugar na janela: calibra de novo
         if parado > 45 and agora - self.ultimo_aviso > 45:
             self.ultimo_aviso = agora
             self.log("? tela desconhecida ha mais de 45 s (carregando, ou uma tela que o bot ainda nao conhece).")
@@ -1218,6 +1271,52 @@ def perguntar_cartas(chave, rota, entrada=input, saida=print):
     return None if set(padrao) == set(rota) else padrao
 
 
+def testar_tela(io, det, saida=print, pasta=None):
+    """Diagnostico "a minha tela funciona?": calibra a janela atual e diz o que reconheceu. Grava logs/teste_tela.txt e
+    logs/teste_tela.png (o que o bot enxerga) para mandar ao desenvolvedor. Devolve True se calibrou e reconheceu uma tela."""
+    import tela
+    pasta = pasta or config.PASTA_LOGS
+    os.makedirs(pasta, exist_ok=True)
+    linhas = []
+
+    def dizer(t):
+        linhas.append(t)
+        saida(t)
+
+    img = io.capturar_bruto()
+    if img is None:
+        dizer("ERRO: nao consegui capturar a janela do jogo.")
+        return False
+    h, w = img.shape[:2]
+    dizer(f"Janela do jogo: {w}x{h} px")
+    c = tela.calibrar(img, det)
+    ok = False
+    if c is None:
+        dizer("RESULTADO: nao reconheci nenhuma tela conhecida do jogo. Deixe o jogo no MAPA ou numa SALA (sem janelinhas "
+              "abertas) e tente de novo. Se continuar, mande logs/teste_tela.png e este texto.")
+        enxerga = cv2.resize(img, (1280, int(h * 1280 / w)), interpolation=cv2.INTER_AREA)
+    else:
+        dizer(f"Calibracao: {c.texto()} (pela tela {c.estado})")
+        canon = c.renderizar(img)
+        achadas = det.detectar(estados_mod.normalizar(canon))
+        dizer(f"Tela reconhecida: {achadas[0] if achadas else 'nenhuma (tela que o bot ainda nao conhece)'}")
+        ok = bool(achadas)
+        if c.zoom < tela.ZOOM_MIN_BOM:
+            dizer("AVISO: o jogo esta pequeno na janela; o minimapa fica impreciso e os tiros podem errar. Use a janela maior ou tela cheia.")
+        if c.zoom > 1.8:
+            dizer("AVISO: o jogo esta muito ampliado; confira se o zoom/escala do Windows nao esta exagerado.")
+        dizer("RESULTADO: " + ("OK - o bot enxerga o jogo como esperado." if ok else
+                               "calibrou, mas a tela atual nao e uma das conhecidas (normal em telas novas)."))
+        enxerga = canon
+    try:
+        cv2.imwrite(os.path.join(pasta, "teste_tela.png"), enxerga)
+        with open(os.path.join(pasta, "teste_tela.txt"), "w", encoding="utf-8") as f:
+            f.write("\n".join(linhas) + "\n")
+    except OSError:
+        pass
+    return ok
+
+
 def perguntar_chefe(horarios=HORARIOS_CHEFE, entrada=input, saida=print):
     """Fazer o Chefao Global nos horarios, no meio da rota? Enter = sim."""
     saida(f"Fazer o CHEFAO GLOBAL (Pericao) nos horarios ({texto_horarios(horarios)})? Na hora, o bot termina a instancia "
@@ -1253,6 +1352,8 @@ def main():
     ap.add_argument("--sem-tarefas", action="store_true")
     ap.add_argument("--uma-vez", action="store_true")
     ap.add_argument("--so-ver", action="store_true", help="so mostra a tela detectada (nao clica)")
+    ap.add_argument("--testar-tela", action="store_true", help="diagnostico: calibra o tamanho da janela e diz o que o bot enxerga")
+    ap.add_argument("--sem-calibrar", action="store_true", help="nao calibra o tamanho da janela (usa so o tamanho original)")
     ap.add_argument("--simular", action="store_true", help="mostra o que clicaria, sem clicar")
     ap.add_argument("--atirar", action="store_true", help="o bot joga os turnos da batalha (tiro, itens)")
     ap.add_argument("--sombra", action="store_true", help="na batalha, so mostra o tiro que faria (nao aperta teclas)")
@@ -1273,10 +1374,13 @@ def main():
         sys.exit("Janela do jogo nao encontrada. Rode LISTAR_JANELAS.bat.")
     if janela.contar_janelas(titulo, exe) > 1:
         sys.exit("ERRO: ha mais de uma janela do jogo aberta. Deixe so uma.")
-    io = IOJanela(hwnd)
+    io = IOJanela(hwnd, calibrar=not args.sem_calibrar)
     io.foco_nivel = args.foco
     det = estados_mod.Detector()
     print("Janela:", janela.descrever_janela(hwnd))
+
+    if args.testar_tela:
+        sys.exit(0 if testar_tela(io, det) else 1)
 
     if args.so_ver:
         print("Telas que o bot conhece (so as da rota de instancias):")
@@ -1334,6 +1438,7 @@ def main():
     combos = combos_mod.Combos(fixo=ordem)
     metr = metricas_mod.Metricas(nome_rota, log=log, combos=combos)
     log(f"Cronometro: logs\\relatorio.txt (resumo, atualizado a cada luta), logs\\lutas.csv e logs\\voltas.csv")
+    io.log = log
     nav = Navegador(io, det, rota, not args.sem_tarefas, args.uma_vez, args.simular, log=log, reg=reg,
                     dificuldade=dificuldade, metricas=metr, chefe=chefe, horarios_chefe=horarios, cartas_em=cartas_em)
     log("Cartas: " + ("abre todas" if not cartas_em else "so de " + ", ".join(cartas_em) + " (as outras so completam a missao)"))

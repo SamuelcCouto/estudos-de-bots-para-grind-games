@@ -145,6 +145,7 @@ class Painel:
         ttk.Checkbutton(c, text="enviar a gravacao ao GitHub quando o bot parar", variable=self.v_enviar).pack(anchor="w")
         # ferramentas
         ttk.Button(esq, text="Enviar gravacao para o GitHub", command=self.enviar).pack(fill="x", pady=(0, 6))
+        ttk.Button(esq, text="Testar a minha tela (o bot enxerga o jogo?)", command=self.testar_tela).pack(fill="x", pady=(0, 6))
         ttk.Button(esq, text="Atualizar o bot (baixar novidades)", command=self.atualizar).pack(fill="x", pady=(0, 6))
         ttk.Button(esq, text="Gravar a MINHA jogada (para mapear algo novo)", command=self.gravar_jogada).pack(fill="x")
         # direita: abas
@@ -317,6 +318,12 @@ class Painel:
             subprocess.Popen(["cmd", "/c", "start", "", bat], cwd=config.PASTA)
         else:
             messagebox.showinfo("Gravar", "Rode GRAVAR_SESSAO.bat (Windows).")
+
+    def testar_tela(self):
+        if self.proc and self.proc.poll() is None:
+            messagebox.showinfo("Testar tela", "Pare o bot antes de testar a tela.")
+            return
+        self.rodar_passos([["python", "-u", "navegador.py", "--testar-tela"]], "testando a sua tela (deixe o jogo no mapa ou numa sala)")
 
     def atualizar(self):
         if self.proc and self.proc.poll() is None:
