@@ -7,6 +7,7 @@
  "horarios": "12:00-13:00,21:00-22:00",
  "gravar": true,
  "gravacao_leve": false,
+ "enviar_ao_parar": false,
  "tarefas": true,
  "avancado": false
 }

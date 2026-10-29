@@ -43,6 +43,7 @@ class Painel:
         self.v_horarios = tk.StringVar(value=self.cfg["horarios"])
         self.v_gravar = tk.BooleanVar(value=self.cfg["gravar"])
         self.v_leve = tk.BooleanVar(value=self.cfg["gravacao_leve"])
+        self.v_enviar = tk.BooleanVar(value=self.cfg["enviar_ao_parar"])
         self.v_tarefas = tk.BooleanVar(value=self.cfg["tarefas"])
         self.v_avancado = tk.BooleanVar(value=self.cfg["avancado"])
         self.v_cartas = {}
@@ -122,6 +123,7 @@ class Painel:
         ttk.Checkbutton(c, text="coletar as tarefas no fim de cada volta", variable=self.v_tarefas).pack(anchor="w")
         ttk.Checkbutton(c, text="gravar a sessao (para me mandar depois)", variable=self.v_gravar).pack(anchor="w")
         ttk.Checkbutton(c, text="gravacao leve (disco pequeno)", variable=self.v_leve).pack(anchor="w")
+        ttk.Checkbutton(c, text="enviar a gravacao ao GitHub quando o bot parar", variable=self.v_enviar).pack(anchor="w")
         # botoes
         b = ttk.Frame(esq)
         b.pack(fill="x", pady=(4, 0))
@@ -130,6 +132,7 @@ class Painel:
         self.b_parar = ttk.Button(b, text="PARAR", style="Parar.TButton", command=self.parar, state="disabled")
         self.b_parar.pack(side="left", expand=True, fill="x", padx=(8, 0))
         ttk.Button(esq, text="Enviar gravacao para o GitHub", command=self.enviar).pack(fill="x", pady=(8, 0))
+        ttk.Button(esq, text="Atualizar o bot (baixar novidades)", command=self.atualizar).pack(fill="x", pady=(6, 0))
         # direita: abas
         dir_ = ttk.Frame(corpo)
         dir_.pack(side="left", fill="both", expand=True)
@@ -185,7 +188,7 @@ class Painel:
     def config_atual(self):
         return {"rota": self.v_rota.get(), "cartas": [i for i, v in self.v_cartas.items() if v.get()],
                 "chefe_nos_horarios": self.v_chefe.get(), "horarios": self.v_horarios.get().strip(),
-                "gravar": self.v_gravar.get(), "gravacao_leve": self.v_leve.get(), "tarefas": self.v_tarefas.get(),
+                "gravar": self.v_gravar.get(), "gravacao_leve": self.v_leve.get(), "enviar_ao_parar": self.v_enviar.get(), "tarefas": self.v_tarefas.get(),
                 "avancado": self.v_avancado.get()}
 
     # ------------------------------------------------------------ rodar
@@ -234,12 +237,43 @@ class Painel:
         if self.proc and self.proc.poll() is None:
             self.proc.terminate()
 
+    def rodar_passos(self, passos, titulo):
+        """Empacota/envia ou atualiza SEM janela preta e sem perguntas: a saida vai para o log do painel."""
+        if getattr(self, "ocupado", False):
+            return
+        self.ocupado = True
+        self.escrever(self.t_log, f"--- {titulo} ---\n", "chefe")
+
+        def trabalho():
+            for cmd in passos:
+                cmd = [sys.executable if c == "python" else c for c in cmd]
+                try:
+                    r = subprocess.run(cmd, cwd=config.PASTA, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                                       stdin=subprocess.DEVNULL, creationflags=0x08000000 if os.name == "nt" else 0)
+                    saida = r.stdout.decode("utf-8", "replace").strip()
+                except OSError as e:
+                    saida, r = f"nao consegui rodar {cmd[0]}: {e}", None
+                if saida:
+                    self.fila.put(saida[-1500:] + "\n")
+                if cmd[:2] == ["git", "commit"] and r is not None and r.returncode == 1:
+                    continue                                   # nada novo para commitar: segue
+                if r is None or r.returncode != 0:
+                    self.fila.put(f"   ! falhou: {' '.join(cmd[:3])} (codigo {getattr(r, 'returncode', '?')})\n")
+                    break
+            else:
+                self.fila.put(f"--- {titulo}: pronto ---\n")
+            self.ocupado = False
+
+        threading.Thread(target=trabalho, daemon=True).start()
+
     def enviar(self):
-        bat = os.path.join(config.PASTA, "EMPACOTAR_E_ENVIAR.bat")
-        if os.name == "nt" and os.path.exists(bat):
-            subprocess.Popen(["cmd", "/c", "start", "", bat], cwd=config.PASTA)
-        else:
-            messagebox.showinfo("Enviar", "Rode EMPACOTAR_E_ENVIAR.bat (Windows).")
+        self.rodar_passos(P.PASSOS_ENVIO, "empacotando e enviando a gravacao")
+
+    def atualizar(self):
+        if self.proc and self.proc.poll() is None:
+            messagebox.showinfo("Atualizar", "Pare o bot antes de atualizar.")
+            return
+        self.rodar_passos([P.PASSO_ATUALIZAR], "baixando as novidades (feche e abra o BotDDT.bat para valer)")
 
     def fechar(self):
         if self.proc and self.proc.poll() is None:
@@ -290,6 +324,8 @@ class Painel:
                     self.b_parar.state(["disabled"])
                     self.inicio = None
                     self.atualizar_relatorio()
+                    if self.cfg.get("enviar_ao_parar") and self.cfg.get("gravar", True):
+                        self.enviar()
                 else:
                     self.escrever(self.t_log, linha, self.etiqueta(linha))
         except queue.Empty:

@@ -259,9 +259,13 @@ MENU ATUAL (28/10 noite)
 
 PAINEL COM BOTOES (28/10 noite)
 ===============================
-Duplo clique em PAINEL.bat: abre uma janela escura onde voce escolhe a rota (Sul, Pericao comum, Chefao Global; marque
+Duplo clique em BotDDT.bat: abre uma janela escura onde voce escolhe a rota (Sul, Pericao comum, Chefao Global; marque
 "mostrar Rota Norte..." para as antigas), em quais instancias abrir as cartas, se luta o Chefao Global nos horarios
 (e quais), tarefas, gravacao, e clica INICIAR. Mostra o log ao vivo (amarelo = chefao/POW, vermelho = problema, azul =
 tempos) e o relatorio. PARAR pede para o bot parar sozinho (fecha a gravacao e escreve o relatorio; ate 20 s).
 "Enviar gravacao" roda o EMPACOTAR_E_ENVIAR.bat. As escolhas ficam salvas (dados\painel.json).
 Por baixo o painel so roda o navegador.py --atirar com as opcoes: os .bat de antes continuam funcionando.
+
+BotDDT.bat = TUDO EM UM (substitui os outros .bat do dia a dia): baixa as novidades (git pull) e abre o painel. No
+painel: INICIAR/PARAR, "Enviar gravacao" (empacota e envia sem perguntas e sem janela preta), "enviar ao parar"
+(automatico) e "Atualizar". Os .bat antigos continuam existindo, mas nao precisa mais usar.
