@@ -1,0 +1,11 @@
+BOTDDT - COMO USAR (nao precisa instalar Python)
+================================================
+1) Descompacte a pasta BotDDT em um lugar fixo (ex.: D:\BotDDT) - NAO rode de dentro do zip.
+2) Abra o jogo (BetelTank.exe) e entre na conta. Deixe UMA janela do jogo so.
+3) Abra BotDDT.exe. Se o Windows avisar "protegeu seu PC", clique em Mais informacoes > Executar assim mesmo
+   (o programa e novo e nao tem assinatura digital).
+4) Clique em "Testar a minha tela" com o jogo no mapa ou numa sala: tem que dizer "OK".
+5) Escolha a rota e clique INICIAR. PAUSAR/PARAR ficam no topo. F8 pausa, F10 sai.
+O que o bot aprende fica nas pastas dados\ e logs\ ao lado do BotDDT.exe. Para mandar o resultado para quem mantem o bot:
+botao "Enviar gravacao" e mande os zips da pasta envio\.
+Use por sua conta e risco e SO onde a administracao do servidor permite (no Betel foi liberado).

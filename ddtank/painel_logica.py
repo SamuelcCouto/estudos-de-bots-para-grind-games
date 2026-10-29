@@ -2,6 +2,8 @@
 """Logica do painel (sem janela, testavel): monta a linha de comando do navegador.py a partir das escolhas."""
 import json
 import os
+import shutil
+import sys
 
 import config
 import navegador as N
@@ -20,10 +22,17 @@ def instancias_da_rota(chave):
     return list(N.ROTAS[chave][1])
 
 
+def comando_base(modulo, python="python"):
+    """['python', '-u', 'navegador.py'] ou, no BotDDT.exe, ['BotDDT.exe', '--navegador'] (o mesmo .exe faz tudo)."""
+    if config.CONGELADO:
+        return [sys.executable, "--" + modulo]
+    return [python, "-u", modulo + ".py"]
+
+
 def montar_comando(cfg, python="python"):
     """Lista de argumentos para subprocess. Tudo vai por argumento: o navegador nao pergunta nada."""
     rota = cfg["rota"]
-    cmd = [python, "-u", "navegador.py", "--atirar", "--rota", rota]
+    cmd = comando_base("navegador", python) + ["--atirar", "--rota", rota]
     inst = instancias_da_rota(rota)
     if len(inst) > 1:
         marcadas = [i for i in cfg.get("cartas", []) if i in inst]
@@ -45,8 +54,21 @@ def montar_comando(cfg, python="python"):
     return cmd
 
 
-PASSOS_ENVIO = [["python", "empacotar.py"], ["git", "add", "envio"], ["git", "commit", "-m", "sessao gravada"],
-                ["git", "pull", "--rebase", "--autostash"], ["git", "push"]]
+def passos_envio():
+    """Empacota e, se der (git instalado e pasta clonada), envia ao GitHub. Sem git (BotDDT.exe de amigo): so empacota, e
+    os zips ficam em envio\\ para a pessoa mandar do jeito que preferir."""
+    passos = [comando_base("empacotar", "python")]
+    if shutil.which("git") and os.path.isdir(os.path.join(config.PASTA, ".git")):
+        passos += [["git", "add", "envio"], ["git", "commit", "-m", "sessao gravada"], ["git", "pull", "--rebase", "--autostash"],
+                   ["git", "push"]]
+    return passos
+
+
+def tem_git():
+    return bool(shutil.which("git")) and os.path.isdir(os.path.join(config.PASTA, ".git"))
+
+
+PASSOS_ENVIO = passos_envio()
 PASSO_ATUALIZAR = ["git", "pull", "--autostash"]
 
 

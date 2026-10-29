@@ -58,3 +58,25 @@ with mock.patch.object(painel.subprocess, "Popen") as po:
 print("painel (fumaca) OK")
 assert painel.Painel.etiqueta("[ALERTA] preso em SALA") == "erro" and painel.Painel.etiqueta("[ERRO] falha") == "erro"
 print("painel (alertas) OK")
+
+# ---- empacotamento (BotDDT.exe): o mesmo exe faz tudo; dados ao lado do exe, templates de dentro do pacote
+import importlib
+import config as CFG
+import painel_logica as PL
+import botddt
+chamados = []
+sys.modules["navegador"] = types.SimpleNamespace(main=lambda: chamados.append(("navegador", list(sys.argv))))
+botddt.main(["BotDDT.exe", "--navegador", "--atirar", "--rota", "S"])
+assert chamados == [("navegador", ["navegador.py", "--atirar", "--rota", "S"])], chamados
+del sys.modules["navegador"]
+antes = (CFG.CONGELADO, sys.executable)
+CFG.CONGELADO = True
+try:
+    c = PL.montar_comando(PL.PADRAO)
+    assert c[0] == sys.executable and c[1] == "--navegador" and "-u" not in c, c
+    assert PL.comando_base("empacotar") == [sys.executable, "--empacotar"]
+finally:
+    CFG.CONGELADO = antes[0]
+src = open(os.path.join(os.path.dirname(AQUI), "config.py"), encoding="utf-8").read()
+assert "_MEIPASS" in src and "PASTA_RECURSOS" in src
+print("empacotamento (BotDDT.exe: entrada unica, comandos, caminhos) OK")

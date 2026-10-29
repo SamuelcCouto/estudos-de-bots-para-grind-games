@@ -24,7 +24,7 @@ import numpy as np
 import config
 import estrategias
 
-ARQ_SEMENTE = os.path.join(config.PASTA, "dados", "tiros_semente.json")
+ARQ_SEMENTE = os.path.join(config.PASTA_RECURSOS, "dados", "tiros_semente.json")
 ARQ_APRENDIZADO = os.path.join(config.PASTA, "dados", "aprendizado.json")
 DIST_MESMA_SITUACAO = 6.0     # px de minimapa (L1, soma de jogador + boss)
 ANGULO_MIN, ANGULO_MAX = 15.0, 70.0

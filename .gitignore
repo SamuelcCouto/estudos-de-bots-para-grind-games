@@ -8,3 +8,7 @@ ddtank/dados/painel.json
 ddtank/dados/aprendizado.json
 ddtank/dados/combos.json
 ddtank/dados/modelos_aprendidos/
+build/
+dist/
+*.spec
+BotDDT.zip

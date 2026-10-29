@@ -303,7 +303,7 @@ class Painel:
 
         def trabalho():
             for cmd in passos:
-                cmd = [sys.executable if c == "python" else c for c in cmd]
+                cmd = [sys.executable if c == "python" else c for c in cmd]   # (no .exe o comando ja vem pronto)
                 try:
                     r = subprocess.run(cmd, cwd=config.PASTA, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                                        stdin=subprocess.DEVNULL, creationflags=0x08000000 if os.name == "nt" else 0)
@@ -324,7 +324,8 @@ class Painel:
         threading.Thread(target=trabalho, daemon=True).start()
 
     def enviar(self):
-        self.rodar_passos(P.PASSOS_ENVIO, "empacotando e enviando a gravacao")
+        self.rodar_passos(P.passos_envio(), "empacotando e enviando a gravacao" if P.tem_git() else
+                          "empacotando a gravacao (sem git: mande os zips da pasta envio\\ para quem vai analisar)")
 
     def gravar_jogada(self):
         """Abre o gravador (observa voce jogando; F9 marca, F10 termina e empacota). Nao pode haver o bot rodando."""
@@ -332,7 +333,9 @@ class Painel:
             messagebox.showinfo("Gravar", "Pare o bot antes de gravar a sua jogada.")
             return
         bat = os.path.join(config.PASTA, "GRAVAR_SESSAO.bat")
-        if os.name == "nt":
+        if os.name == "nt" and config.CONGELADO:
+            subprocess.Popen(P.comando_base("gravador"), cwd=config.PASTA, creationflags=0x00000010)   # CREATE_NEW_CONSOLE
+        elif os.name == "nt":
             subprocess.Popen(["cmd", "/c", "start", "", bat], cwd=config.PASTA)
         else:
             messagebox.showinfo("Gravar", "Rode GRAVAR_SESSAO.bat (Windows).")
@@ -341,11 +344,14 @@ class Painel:
         if self.proc and self.proc.poll() is None:
             messagebox.showinfo("Testar tela", "Pare o bot antes de testar a tela.")
             return
-        self.rodar_passos([["python", "-u", "navegador.py", "--testar-tela"]], "testando a sua tela (deixe o jogo no mapa ou numa sala)")
+        self.rodar_passos([P.comando_base("navegador") + ["--testar-tela"]], "testando a sua tela (deixe o jogo no mapa ou numa sala)")
 
     def atualizar(self):
         if self.proc and self.proc.poll() is None:
             messagebox.showinfo("Atualizar", "Pare o bot antes de atualizar.")
+            return
+        if not P.tem_git():
+            messagebox.showinfo("Atualizar", "Esta copia nao usa o git: para atualizar, baixe o BotDDT novo (zip) de quem te passou.")
             return
         self.rodar_passos([P.PASSO_ATUALIZAR], "baixando as novidades (feche e abra o BotDDT.bat para valer)")
 
