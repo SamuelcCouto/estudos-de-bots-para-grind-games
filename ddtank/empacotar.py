@@ -65,10 +65,33 @@ def sessao_mais_recente():
     return os.path.join(base, pastas[-1])
 
 
+def sessoes_novas():
+    """Todas as sessoes que ainda nao foram empacotadas (sem o marcador .enviada), da mais antiga a mais nova."""
+    base = os.path.join(config.PASTA, "sessoes")
+    if not os.path.isdir(base):
+        return []
+    return [os.path.join(base, p) for p in sorted(os.listdir(base))
+            if os.path.isdir(os.path.join(base, p, "frames")) and not os.path.exists(os.path.join(base, p, ".enviada"))]
+
+
 def main():
     args = [a for a in sys.argv[1:] if not a.startswith("--")]
     tudo = "--tudo" in sys.argv
-    sessao = args[0] if args else sessao_mais_recente()
+    if "--novas" in sys.argv:
+        # a gravacao da SUA jogada pode nao ser a mais recente (o bot rodou depois): empacota todas as que ainda nao foram
+        novas = sessoes_novas()
+        if not novas:
+            print("Nenhuma sessao nova para empacotar.")
+            return
+        print(f"{len(novas)} sessao(oes) nova(s): " + ", ".join(os.path.basename(p) for p in novas))
+        for p in novas:
+            empacotar_sessao(p, tudo)
+            open(os.path.join(p, ".enviada"), "w").close()
+        return
+    empacotar_sessao(args[0] if args else sessao_mais_recente(), tudo)
+
+
+def empacotar_sessao(sessao, tudo):
     frames = os.path.join(sessao, "frames")
     saida = os.path.join(config.PASTA, "envio")
     os.makedirs(saida, exist_ok=True)

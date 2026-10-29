@@ -69,9 +69,10 @@ def montar_comando(cfg, python="python", amigo=False):
 def passos_envio():
     """Empacota e, se der (git instalado e pasta clonada), envia ao GitHub. Sem git (BotDDT.exe de amigo): so empacota, e
     os zips ficam em envio\\ para a pessoa mandar do jeito que preferir."""
-    passos = [comando_base("empacotar", "python")]
+    passos = [comando_base("empacotar", "python") + ["--novas"]]
     if shutil.which("git") and os.path.isdir(os.path.join(config.PASTA, ".git")):
-        passos += [["git", "add", "envio"], ["git", "commit", "-m", "sessao gravada"], ["git", "pull", "--rebase", "--autostash"],
+        # (o "reset" limpa um conflito de arquivo que o git deixou pendente - ja impediu o envio uma vez)
+        passos += [["git", "reset", "-q"], ["git", "add", "envio"], ["git", "commit", "-m", "sessao gravada"], ["git", "pull", "--rebase", "--autostash"],
                    ["git", "push"]]
     return passos
 
@@ -82,6 +83,7 @@ def tem_git():
 
 PASSOS_ENVIO = passos_envio()
 PASSO_ATUALIZAR = ["git", "pull", "--autostash"]
+PASSOS_ATUALIZAR = [["git", "reset", "-q"], PASSO_ATUALIZAR]
 
 
 def carregar():

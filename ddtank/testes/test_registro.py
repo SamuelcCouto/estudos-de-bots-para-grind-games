@@ -35,3 +35,21 @@ assert N.instancia_unica() is True
 ctypes.windll.kernel32.GetLastError.return_value = 183
 assert N.instancia_unica() is False
 print("trava de instancia unica OK (a segunda copia e recusada)")
+
+# ---- empacotar --novas: empacota TODAS as sessoes ainda nao enviadas (a gravacao do usuario nao e a mais recente)
+import empacotar as EMP
+import config as CFG
+import tempfile as _tf
+raiz = _tf.mkdtemp()
+antiga = CFG.PASTA
+CFG.PASTA = raiz
+try:
+    for nome in ("20261029_100000", "20261029_110000_bot"):
+        os.makedirs(os.path.join(raiz, "sessoes", nome, "frames"))
+    open(os.path.join(raiz, "sessoes", "20261029_100000", ".enviada"), "w").close()
+    assert [os.path.basename(p) for p in EMP.sessoes_novas()] == ["20261029_110000_bot"]
+    os.makedirs(os.path.join(raiz, "sessoes", "20261029_090000", "frames"))
+    assert [os.path.basename(p) for p in EMP.sessoes_novas()] == ["20261029_090000", "20261029_110000_bot"]
+finally:
+    CFG.PASTA = antiga
+print("empacotar --novas OK")

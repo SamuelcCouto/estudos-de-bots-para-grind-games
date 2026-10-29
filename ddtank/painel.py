@@ -367,7 +367,7 @@ class Painel:
         if not P.tem_git():
             messagebox.showinfo("Atualizar", "Esta copia nao usa o git: para atualizar, baixe o BotDDT novo (zip) de quem te passou.")
             return
-        self.rodar_passos([P.PASSO_ATUALIZAR], "baixando as novidades (feche e abra o BotDDT.bat para valer)")
+        self.rodar_passos(P.PASSOS_ATUALIZAR, "baixando as novidades (feche e abra o BotDDT.bat para valer)")
 
     def fechar(self):
         if self.proc and self.proc.poll() is None:
