@@ -1299,7 +1299,7 @@ def main():
     elif chefe:
         log(f"Chefao Global nos horarios {texto_horarios(horarios)}: a rota pausa e volta depois.")
     if chefe and not (args.atirar or args.sombra):
-        log("(sem --atirar: no Chefao Global e voce quem atira - use ATIRAR.bat / CHEFAO_GLOBAL.bat para o bot lutar)")
+        log("(sem --atirar: no Chefao Global e voce quem atira - use o BotDDT (o painel liga o atirador))")
     if args.atirar or args.sombra:
         import atirador as atirador_mod
         import memoria as memoria_mod

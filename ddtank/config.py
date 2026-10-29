@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Configuracao do bot de DDTank. Preencha depois de rodar:  python bot_ddtank.py --listar"""
+"""Configuracao do bot de DDTank. O jogo e achado pelo nome do .exe"""
 import os
 
 # Como achar a janela do launcher. Preencha pelo menos um (ou passe --titulo / --exe).

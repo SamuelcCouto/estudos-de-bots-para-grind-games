@@ -35,8 +35,8 @@ class Painel:
         self.inicio = None
         raiz.title("DDTank Bot - Painel")
         raiz.configure(bg=COR["fundo"])
-        raiz.geometry("1020x700")
-        raiz.minsize(900, 600)
+        raiz.geometry("1040x660")
+        raiz.minsize(900, 520)
         self.estilo()
         self.v_rota = tk.StringVar(value=self.cfg["rota"])
         self.v_chefe = tk.BooleanVar(value=self.cfg["chefe_nos_horarios"])
@@ -82,7 +82,7 @@ class Painel:
         s.map("TNotebook.Tab", background=[("selected", COR["borda"])], foreground=[("selected", COR["texto"])])
 
     def cartao(self, pai, titulo):
-        quadro = ttk.Frame(pai, style="Cartao.TFrame", padding=14)
+        quadro = ttk.Frame(pai, style="Cartao.TFrame", padding=10)
         ttk.Label(quadro, text=titulo, style="Cartao.TLabel", font=FONTE_B).pack(anchor="w", pady=(0, 8))
         return quadro
 
@@ -91,11 +91,26 @@ class Painel:
         topo.pack(fill="x")
         ttk.Label(topo, text="DDTank Bot", style="Titulo.TLabel").pack(side="left")
         self.l_status = ttk.Label(topo, text="Parado", foreground=COR["fraco"], font=FONTE_B)
-        self.l_status.pack(side="right")
+        self.l_status.pack(side="right", padx=(14, 0))
+        # os botoes principais ficam NO TOPO (sempre visiveis, mesmo em tela pequena)
+        self.b_parar = ttk.Button(topo, text="PARAR", style="Parar.TButton", command=self.parar, state="disabled")
+        self.b_parar.pack(side="right", padx=(8, 0))
+        self.b_iniciar = ttk.Button(topo, text="INICIAR", style="Iniciar.TButton", command=self.iniciar)
+        self.b_iniciar.pack(side="right")
         corpo = ttk.Frame(self.raiz, padding=(18, 4, 18, 14))
         corpo.pack(fill="both", expand=True)
-        esq = ttk.Frame(corpo)
-        esq.pack(side="left", fill="y", padx=(0, 14))
+        # coluna da esquerda com rolagem (se a tela for pequena, rola com a roda do mouse)
+        caixa = ttk.Frame(corpo)
+        caixa.pack(side="left", fill="y", padx=(0, 14))
+        tela = tk.Canvas(caixa, bg=COR["fundo"], highlightthickness=0, width=345)
+        barra = ttk.Scrollbar(caixa, orient="vertical", command=tela.yview)
+        tela.configure(yscrollcommand=barra.set)
+        barra.pack(side="right", fill="y")
+        tela.pack(side="left", fill="y", expand=True)
+        esq = ttk.Frame(tela)
+        tela.create_window((0, 0), window=esq, anchor="nw")
+        esq.bind("<Configure>", lambda e: tela.configure(scrollregion=tela.bbox("all")))
+        tela.bind_all("<MouseWheel>", lambda e: tela.yview_scroll(int(-e.delta / 120), "units"))
         # rota
         self.c_rota = self.cartao(esq, "O que fazer")
         self.c_rota.pack(fill="x", pady=(0, 10))
@@ -124,15 +139,10 @@ class Painel:
         ttk.Checkbutton(c, text="gravar a sessao (para me mandar depois)", variable=self.v_gravar).pack(anchor="w")
         ttk.Checkbutton(c, text="gravacao leve (disco pequeno)", variable=self.v_leve).pack(anchor="w")
         ttk.Checkbutton(c, text="enviar a gravacao ao GitHub quando o bot parar", variable=self.v_enviar).pack(anchor="w")
-        # botoes
-        b = ttk.Frame(esq)
-        b.pack(fill="x", pady=(4, 0))
-        self.b_iniciar = ttk.Button(b, text="INICIAR", style="Iniciar.TButton", command=self.iniciar)
-        self.b_iniciar.pack(side="left", expand=True, fill="x")
-        self.b_parar = ttk.Button(b, text="PARAR", style="Parar.TButton", command=self.parar, state="disabled")
-        self.b_parar.pack(side="left", expand=True, fill="x", padx=(8, 0))
-        ttk.Button(esq, text="Enviar gravacao para o GitHub", command=self.enviar).pack(fill="x", pady=(8, 0))
-        ttk.Button(esq, text="Atualizar o bot (baixar novidades)", command=self.atualizar).pack(fill="x", pady=(6, 0))
+        # ferramentas
+        ttk.Button(esq, text="Enviar gravacao para o GitHub", command=self.enviar).pack(fill="x", pady=(0, 6))
+        ttk.Button(esq, text="Atualizar o bot (baixar novidades)", command=self.atualizar).pack(fill="x", pady=(0, 6))
+        ttk.Button(esq, text="Gravar a MINHA jogada (para mapear algo novo)", command=self.gravar_jogada).pack(fill="x")
         # direita: abas
         dir_ = ttk.Frame(corpo)
         dir_.pack(side="left", fill="both", expand=True)
@@ -268,6 +278,17 @@ class Painel:
 
     def enviar(self):
         self.rodar_passos(P.PASSOS_ENVIO, "empacotando e enviando a gravacao")
+
+    def gravar_jogada(self):
+        """Abre o gravador (observa voce jogando; F9 marca, F10 termina e empacota). Nao pode haver o bot rodando."""
+        if self.proc and self.proc.poll() is None:
+            messagebox.showinfo("Gravar", "Pare o bot antes de gravar a sua jogada.")
+            return
+        bat = os.path.join(config.PASTA, "GRAVAR_SESSAO.bat")
+        if os.name == "nt":
+            subprocess.Popen(["cmd", "/c", "start", "", bat], cwd=config.PASTA)
+        else:
+            messagebox.showinfo("Gravar", "Rode GRAVAR_SESSAO.bat (Windows).")
 
     def atualizar(self):
         if self.proc and self.proc.poll() is None:

@@ -39,7 +39,7 @@ var = lambda value=None: mock.MagicMock(get=mock.Mock(return_value=value))
 tk.StringVar = lambda value="": var(value); tk.BooleanVar = lambda value=False: var(value)
 ttk = mock.MagicMock(); msg = mock.MagicMock()
 tkmod = types.ModuleType("tkinter"); tkmod.__dict__.update(tk=tk, ttk=ttk, messagebox=msg, TclError=Exception,
-                                                              StringVar=tk.StringVar, BooleanVar=tk.BooleanVar, Tk=lambda *a, **k: mock.MagicMock(), Text=lambda *a, **k: mock.MagicMock())
+                                                              StringVar=tk.StringVar, BooleanVar=tk.BooleanVar, Tk=lambda *a, **k: mock.MagicMock(), Text=lambda *a, **k: mock.MagicMock(), Canvas=lambda *a, **k: mock.MagicMock())
 tkmod.tk = tk
 sys.modules["tkinter"] = tkmod
 sys.modules["tkinter.ttk"] = ttk

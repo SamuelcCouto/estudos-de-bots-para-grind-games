@@ -2,7 +2,7 @@
 """
 Gravacao do proprio bot em acao (caixa-preta): cada decisao, clique, tecla e turno de tiro, com
 prints dos momentos-chave. Mesmo formato do gravador.py (eventos.jsonl + resumo.txt + frames/),
-entao o empacotar.py / ENVIAR_SESSAO.bat funcionam igual.
+entao o empacotar.py funciona igual.
 
   sessoes/<data>_bot/  eventos.jsonl  resumo.txt  frames/0001_clique_antes.jpg ...
 

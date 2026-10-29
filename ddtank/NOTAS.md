@@ -265,3 +265,280 @@ Duvida aberta: se o Pericao continua entravel fora do horario ("modo global ence
    duvida: se o jogo entrega as 2 cartas gratis sozinho no fim do cronometro).
 7. (sem texto na mensagem do usuario)
 8. Painel com botoes (front): estudar - ver resposta na conversa (tkinter, sem instalar nada).
+
+
+## ARQUIVO: LEIA-ME antigo (historico das sessoes; os .bat citados foram removidos em 28/10 noite - hoje so o BotDDT.bat)
+```
+DDTANK - FASE 1 (captura e controle da janela)
+==============================================
+
+Esta fase ainda nao joga. Ela so confirma que o bot ENXERGA o jogo e consegue
+CLICAR / APERTAR TECLAS nele sem usar o seu mouse. Nada do launcher e modificado.
+
+Requisitos: Windows, Python, e:  pip install numpy opencv-python-headless
+Jogo em 1920x1080 com escala do Windows em 100% (se possivel).
+
+Passo a passo (na pasta ddtank, com o jogo aberto e logado)
+-----------------------------------------------------------
+1) python bot_ddtank.py --listar
+   Procure a linha do launcher/jogo e anote o EXE e um trecho do TITULO.
+   Preencha TITULO_JANELA / EXE_JANELA em config.py (ou use --titulo / --exe).
+
+2) python bot_ddtank.py --diagnostico
+   Salva duas capturas em ddtank\capturas (modos "print" e "tela") e diz se estao
+   pretas, brancas ou OK. Mande-me o texto que aparecer e os PNGs.
+
+3) Deixe o jogo numa tela qualquer e teste:
+   python bot_ddtank.py --clicar 960 540        (clica no meio e salva a captura com o alvo marcado)
+   python bot_ddtank.py --tecla espaco --segundos 1.5
+
+4) Para me mostrar como uma partida acontece (bala, vento, barra de forca):
+   python bot_ddtank.py --gravar 1 --n 60       (60 capturas, 1 por segundo)
+
+Se "print" der imagem PRETA, o launcher precisa ser aberto com flags que mantem o
+jogo desenhando coberto (como no INICIAR_FARM.bat do Social Empires) - me avise.
+Use  --modo tela  para forcar a captura por copia da tela (a janela tem que estar visivel).
+
+Pastas: capturas\ (criada na 1a captura), logs\ e sessoes\ ficam so no seu PC; envio\ vai para o GitHub.
+Coloque suas imagens-modelo do jogo em templates\ (nas proximas fases).
+
+
+GRAVADOR DE SESSAO (observa voce jogando - nao controla nada)
+==============================================================
+Duplo clique em GRAVAR_SESSAO.bat (ou: python gravador.py --nota "rota1") e jogue a rota
+normalmente. Ele registra cliques, teclas (e por quanto tempo cada uma ficou segurada: a
+barra de espaco = a forca do tiro) e prints antes/depois de cada acao.
+  F9  = marcador (ex.: "comecou a luta", "errei o tiro")      F10 = terminar
+So grava quando a janela do jogo esta em primeiro plano; o que voce faz em outros
+programas nao e registrado. (Se digitar no chat do jogo, isso aparece como teclas.)
+Ao terminar, o empacotar.py gera zips de ate 20 MB em ddtank\envio\.
+ATENCAO: so pode haver UMA janela do jogo aberta (uma conta). Se houver duas, o gravador
+se recusa a rodar para nao gravar a janela errada.
+
+ENVIAR / ATUALIZAR COM GIT (sem arrastar arquivos)
+--------------------------------------------------
+Uma vez: instale o Git (https://git-scm.com/download/win), abra o cmd e rode:
+   git config --global user.name "Seu Nome"
+   git config --global user.email "seu@email.com"
+   cd /d D:\
+   git clone --depth 1 -b claude/wonderful-rubin-3oyqi3 https://github.com/samuelccouto/estudos-de-bots-para-grind-games.git
+(na primeira vez abre o navegador para voce entrar no GitHub). Use a pasta D:\estudos-de-bots-para-grind-games\ddtank.
+(--depth 1 = baixa so a versao atual, sem o historico das gravacoes antigas: poucos MB.)
+Ja tem a pasta no C:? Rode o MUDAR_PARA_D.bat de la (veja "DISCO D:" no fim deste arquivo).
+Depois:  ATUALIZAR.bat = baixa as novidades.  ENVIAR_SESSAO.bat = envia os zips de envio\.
+O GRAVAR_SESSAO.bat ja pergunta no fim se quer enviar.
+
+ATALHOS (duplo clique):  LISTAR_JANELAS.bat | DIAGNOSTICO.bat | GRAVAR_SESSAO.bat | ENVIAR_SESSAO.bat | ATUALIZAR.bat
+
+
+NAVEGADOR (fase 2) - percorre a rota de instancias sozinho
+==========================================================
+Rota: Fantasma -> Profundezas -> O Minhocao -> coleta as Tarefas -> Central -> recomeca.
+A BATALHA ainda e sua (o tiro automatico e a fase 3): o bot espera a luta terminar.
+Ele nao usa o seu mouse. Teclas: F8 = pausar/continuar, F10 = sair.
+
+Ordem de teste (faca nesta ordem!):
+ 1) VER_TELA.bat       so mostra qual tela o bot reconhece, a cada segundo (nao clica).
+                       Navegue pelo jogo (mapa, Central, sala, cartas...) e confira se bate.
+ 2) NAVEGAR_SIMULADO.bat  mostra onde clicaria, sem clicar.
+ 3) NAVEGAR.bat        liga de verdade. Comece com o jogo no MAPA ou na CENTRAL.
+Se um clique "nao tiver efeito", o bot troca sozinho o jeito de enviar o clique (janela principal ->
+janela interna do Chromium) e avisa no console. Se mesmo assim nada acontecer, me mande o log
+(logs\navegador_<data>.log) e um print.
+Outros comandos:  python navegador.py --uma-vez   |  --sem-tarefas  |  --comecar-em 2
+Testes sem o jogo:  python testes\test_navegador.py
+
+
+ATIRADOR (fase 3) - o bot joga os turnos da batalha
+===================================================
+Como funciona (cada turno; o botao PASS so aparece na SUA vez e dura ~8 s):
+  - le a posicao sua e do boss no minimapa e decide angulo + forca pela MEMORIA dos seus tiros
+    (dados\tiros_semente.json = seus 17 acertos) ou, quando a instancia tem constante confiavel, pela fisica;
+  - ajusta o angulo com as setas (olhando o ponteiro), aperta os itens que estiverem COLORIDOS
+    (ordem em atirador.py: ORDEM_ITENS = 2,3,4,4,4,4,5,6,7,8; limites: item 1 e 3 ate 2x, item 2 ate 1x),
+    segura ESPACO olhando a barra e solta na forca certa;
+  - depois olha a vida do boss: acertou/errou, e APRENDE (dados\aprendizado.json).
+Teste na ordem:
+ 1) ATIRAR_SOMBRA.bat   so mostra o tiro que faria (nao aperta tecla). Jogue VOCE e compare: o angulo/forca
+                        que ele sugere e parecido com o que voce faz? "[tiro N] ... mirar X graus, forca Y%"
+ 2) ATIRAR.bat          liga de verdade (navegacao + batalha). Fique olhando o primeiro turno.
+Se as setas/teclas nao chegarem no jogo, o bot tenta outro modo de entrada sozinho e avisa; se nada
+funcionar ele NAO atira e escreve "Pulando o tiro" - me mande o log.
+Itens: python navegador.py --atirar --itens 3,4,4,5   (muda a ordem). Testes: python testes\test_atirador.py
+
+
+IMPORTANTE (versao de 28/10, tarde)
+===================================
+* USE SO UM BOT POR VEZ (NAVEGAR, ATIRAR_SOMBRA ou ATIRAR). Abrir mais de um faz todos clicarem e apertarem
+  teclas juntos, e a ordem das instancias e os tiros ficam malucos. Agora o programa recusa abrir uma 2a copia.
+* O bot GRAVA o que faz (cliques, turnos de tiro, prints) em sessoes\<data>_bot\ e, ao fechar, oferece
+  empacotar e enviar (EMPACOTAR_E_ENVIAR.bat). Assim eu vejo o que ele fez. (--sem-gravar desliga.)
+* Se o jogo perder o foco (voce clicou em outra janela, ou no proprio .bat) aparece "Clique no jogo para continuar
+  jogando". O bot reconhece esse pop-up em qualquer tela (inclusive na batalha) e fecha clicando numa AREA NEUTRA
+  (o chat, o log da batalha...), nunca no pop-up: o clique atravessa o pop-up e acertaria o que esta por baixo
+  (no mapa, o pop-up cobre a Sala de Casamento).
+* Se o bot cair numa tela de cidade que a rota nao usa (Sala de Casamento, Leilao...), depois de 6 s ele volta
+  pela porta da barra de baixo (ate 4 tentativas).
+* Ordem das instancias: o bot confere qual instancia esta marcada na configuracao e na sala; se estiver
+  errada ele corrige, e no fim da rota coleta as tarefas antes de recomecar.
+* Vagas da sala: so clica nas que mostram "Em Espera". Vaga ocupada por outro jogador nao e tocada
+  (o bot avisa no log "outro jogador entrou na sala").
+
+* Carga da forca: a tecla ESPACO agora e mantida com repeticao automatica a cada 30 ms numa thread propria (como o
+  teclado de verdade); se a forca ficar muito abaixo do alvo, o bot troca sozinho de "olhar a barra" para "soltar
+  pelo relogio". Cada tiro grava o trace da barra no registro. TESTE_FORCA.bat (numa batalha, na sua vez) mede qual
+  forma de segurar o espaco o jogo aceita (esperado ~38% em 1,0 s).
+
+* FOCO DO TECLADO (28/10): o mouse funciona com o jogo em segundo plano, mas o TECLADO nao: o Chromium so entrega
+  teclas a pagina em foco (por isso o pop-up "Clique no jogo" aparece e as setas nao mudam o angulo). Na batalha o bot
+  pede foco antes de cada turno: 1o "virtual" (sem mexer nas suas janelas); se as setas nao funcionarem, sobe para
+  "jogo em primeiro plano durante o turno" e devolve o foco para a sua janela logo depois. Para ja comecar assim:
+  python navegador.py --atirar --foco 2   (ou deixe o jogo na frente). Sem foco real o teclado simplesmente nao chega.
+
+* COMO O BOT DECIDE FORCA E ANGULO (28/10): (1) se ja acertou nessa mesma situacao (voce e o boss nas mesmas posicoes
+  do minimapa) repete o angulo e usa o CENTRO da faixa de forca aprendida; (2) senao, CALCULA pela balistica
+  (forca^2 = R * F(distancia, altura, angulo)); a constante R de cada instancia e APRENDIDA: cada acerto prende R
+  perto do que ele implica, cada erro descarta a faixa correspondente - numa instancia nova ele acerta em ate ~4
+  tiros e depois mantem; (3) o angulo preferido e o que voce costuma usar na instancia (ou 35), trocando por outro
+  se a forca ficar fora de 18-85%. O que aprende vai para dados\aprendizado.json. O log mostra "fisica: R=..."
+  e a incerteza (x1.3 = confiante; x3 = ainda procurando).
+
+* MINIMAPA CORRIGIDO (28/10, noite): a causa da "forca fraca" no Fantasma era a LEITURA DO MINIMAPA. O bot achava que voce
+  estava em (71,23) - la em cima do mapa - quando voce estava no chao em ~(32,57); com a posicao errada a conta da forca
+  da 10-20%. O leitor antigo pegava "a maior mancha azul" (na Profundezas era a AGUA). O novo procura so pontos redondos
+  da cor exata do seu marcador e, na batalha, usa a posicao que MAIS SE REPETE (um efeito azul passageiro nao engana).
+  O log agora mostra "voce (32, 57) (em 90% das leituras)". Se esse numero vier baixo ou a posicao parecer estranha,
+  me mande a gravacao.
+  Os tiros que o bot aprendeu com a leitura antiga (dados\aprendizado.json) sao ignorados automaticamente.
+  Forca: o bot escolhe a forca com MAIOR CHANCE DE ACERTO ("chance de acerto ~95%" no log); se voce ja acertou daquela
+  mesma posicao, ele repete a sua forca quando a fisica concorda.
+  Boss a ESQUERDA do seu boneco: ainda nao vira o boneco (precisa de mais estudo do mostrador) - ele avisa no log.
+
+* ANGULO PERTO DE ZERO (28/10, madrugada): na Profundezas o chao inclinado faz o mostrador cair para ~1 grau. O bot so
+  sabia ler o ponteiro entre 8 e 90 graus, leu errado, apertou a seta para o lado errado e desistiu do turno ("parou de
+  mexer"). Agora le de -30 a 100 graus. E se uma seta nao mexer o ponteiro, ele testa a outra: se a outra funciona, o
+  angulo esta no limite da arma e ele atira dali, recalculando a forca.
+
+* TAREFAS (28/10): o bot agora coleta TODAS as tarefas concluidas (selo verde "OK!") antes de recomecar: as diarias,
+  a "Super Rota Norte" e o que mais tiver. Antes, quando o botao vermelho "Obter recompensa" estava no momento mais
+  escuro do brilho (ele pisca), o bot achava que nao havia nada e fechava o painel. Ele tambem rola a lista de cada
+  categoria ate o fim procurando mais selos. O log mostra "[TAREFA] N recompensa(s) coletada(s)".
+
+ROTAS NORTE, SUL E TODAS (28/10)
+================================
+Ao abrir NAVEGAR / ATIRAR / ATIRAR_SOMBRA o bot pergunta:
+   N = Rota Norte: Fantasma > Profundezas > Minhocao
+   S = Rota Sul:   Escorpiao Rei > Dragao Gelado > Rainha Liris
+   T = Todas: Fantasma > Profundezas > Minhocao > Escorpiao Rei > Dragao Gelado > Rainha Liris; so depois coleta
+       as tarefas e recomeca.
+(Enter sem nada = Norte.) Para nao perguntar: python navegador.py --atirar --rota S   (ou N / T).
+Nenhuma dessas instancias tem dificuldade para escolher; o bot nao mexe nos botoes Normal/Dificil/Heroi.
+Primeira vez na Rota Sul: o bot ainda nao conhece o desenho dessas instancias. Ele APRENDE sozinho na 1a vez que as
+escolhe (aparece "[APRENDI] arte de ESCORPIAO_REI..." no log) e guarda em dados\modelos_aprendidos; o EMPACOTAR manda
+esses desenhos junto com a gravacao para eu transformar em oficiais. A forca dos tiros tambem e aprendida: nas
+primeiras lutas de cada instancia nova ele pode errar alguns tiros ate acertar a "escala" do mapa (acerta em ~4).
+Rota Leste: ainda nao.
+
+ROTA SUL - ESCORPIAO, RAINHA E O TRIDENTE (28/10, noite)
+=======================================================
+* VIRAR O BONECO: o bot agora le o ponteiro dos DOIS lados do mostrador e sabe para onde o boneco olha. Se o boss
+  (a Rainha corre para os dois lados) estiver do outro lado, ele toca a seta esquerda/direita (toque curto) ate virar
+  e atira espelhado. Log: "virando para a esquerda (o boss esta desse lado)".
+* ESCORPIAO REI - AVIAO (F): ele nao morre num turno e a "Investida do rei" joga para fora quem esta perto da borda.
+  Se o boneco nasceu perto da borda (x ate ~29 ou a partir de ~77 no minimapa) e o boss tem mais de 55% de vida, o
+  1o turno e um VOO: aperta F, mira no meio da arena e atira SEM itens. Depois ataca normalmente. Log: "[AVIAO]".
+  No turno seguinte ele confere se o boneco saiu do lugar; se o F nao funcionar 2 vezes, desiste dele.
+  As regras ficam em estrategias.py (arena, distancia da borda, destino, vida para atacar direto) - da para ajustar.
+* HITBOX NO PE: o ponto vermelho do minimapa ja e a posicao do pe do boss (fica na altura do chao), entao a mira ja e
+  no pe. O bot aprendeu a forca do Escorpiao na 1a sessao (~20% a ~33 graus da borda esquerda).
+* TRIDENTE (item 2): os 3 projeteis caem espalhados; no Escorpiao (so o pe tem colisao) as vezes so 2 pegam. Agora o bot
+  guarda quanto de vida cada tiro tirou e, ao repetir um tiro, puxa a forca para a que tirou MAIS vida (3 acertos).
+
+CHEFAO GLOBAL - PERICAO (28/10, almoco)
+=======================================
+Ao abrir ATIRAR / NAVEGAR agora tem a opcao C:
+   C = so o Chefao Global: o bot vai para a sala, aba "Instancia do evento", marca o PERICAO, fecha as vagas, Inicio,
+       "sozinho? Sim" e luta. A luta so acaba (cartas) quando o servidor inteiro derruba o chefao. Depois ele ESPERA o
+       proximo horario (12h-13h e 21h-22h) e entra de novo. Atalho: CHEFAO_GLOBAL.bat.
+Escolhendo N, S ou T ele pergunta tambem:  "Chefao Global nos horarios? (S/n)"  (Enter = sim).
+   Sim: o bot faz a rota normalmente; quando der 12h (ou 21h) ele termina a instancia em andamento, vai para o Pericao,
+   luta ate o chefao cair e VOLTA PARA A ROTA de onde parou. Fora do horario nao muda nada.
+   Horarios diferentes?  python navegador.py --atirar --horarios-chefe 12:00-13:00,21:00-22:00
+Na luta (aprendido da sua gravacao 20261028_121648):
+ * mira quase reta (ponteiro em 7) e forca ~85%: 39 de 39 tiros seus pegaram, com o vento de 4,5 CONTRA ate 4,0 A FAVOR.
+   Ou seja, nessa distancia o vento quase nao muda o acerto - o bot nao corrige vento aqui (se comecar a errar, aparece
+   no log e eu ajusto).
+ * itens: sempre 2, 3 e o maximo de 4; quando a stamina nao der mais 4, os 5, 6, 7, 8 (sem testar combos).
+ * POW: quando o medidor do especial enche (o botao POW fica vermelho), aperta B antes dos itens (o especial tirou ~30 mil
+   de uma vez na sua gravacao; um tiro normal ~3 mil por bala).
+ * a barra de vida do topo e a do SERVIDOR (todo mundo batendo) - nao diz se o SEU tiro pegou. O bot confere pelos
+   NUMEROS DE DANO que sobem no boss. Log: "[tiro] numeros de dano no boss: 2500 px -> ACERTOU".
+ * se a luta acabar sem cartas (rodada 200? morte?), ele entra de novo enquanto for horario. Se o quadro do Pericao nao
+   marcar (evento fechado), desiste ate o proximo horario.
+ * a configuracao da sala abre na ultima aba usada: o bot confere a aba clara e clica na certa (normal ou do evento).
+ * relatorio: "Pericao (Chefao Global): CHEFAO GLOBAL - N lutas, turnos, tiros normais acertando X%, especiais (POW)".
+
+QUALIDADE DE VIDA - noites inteiras (28/10)
+===========================================
+* DISCO D: - o bot nao aponta para o C: em lugar nenhum (tudo fica dentro da pasta do bot). O que enchia o C: era a
+  propria pasta: as gravacoes antigas (envio\*.zip ~870 MB + o historico do git ~880 MB) e sessoes\ (~300 MB a cada
+  20 min de gravacao completa). Para mudar:
+    1) feche o bot; 2) na pasta ATUAL (C:\...\ddtank) de dois cliques em MUDAR_PARA_D.bat: ele baixa uma copia nova e
+    leve em D:\estudos-de-bots-para-grind-games e copia o que o bot aprendeu (dados\aprendizado.json, combos,
+    artes, logs); 3) teste um ATIRAR.bat da pasta do D:; 4) funcionando, apague a pasta antiga do C: pelo Explorer.
+  O Python continua instalado no C: (ocupa pouco). Os zips ja analisados eu apago do GitHub depois de ler.
+* GRAVACAO (atualizado): o bot grava TUDO no disco (sessoes\, guarda as 3 ultimas). O EMPACOTAR manda o texto inteiro
+  (eventos, resumo, relatorio, csv, log do dia) e os prints SELECIONADOS: tudo dos primeiros 15 min, inicio e fim de
+  cada turno de tiro e todos os problemas (com os prints dos 25 s antes). Uma noite fica em algumas centenas de MB.
+  EMPACOTAR_TUDO.bat manda todos os prints (so se eu pedir). Disco pequeno: python navegador.py --atirar --gravacao-leve
+* CARTAS SORTEADAS: a cada luta o bot sorteia 3 cartas diferentes e clica nas 3 em seguida (a tela tem cronometro de
+  15 s; com o PC ocupado o jogo demora a mostrar a carta virando e antes o bot esperava cada uma e estourava o tempo).
+  Se alguma nao virar em 3 s, clica de novo nela; depois de 2 tentativas, sorteia outra (o jogo trava na 3a carta,
+  entao cliques a mais nao abrem nada).
+* CRONOMETRO (logs\relatorio.txt, atualizado a cada luta; logs\lutas.csv e logs\voltas.csv acumulam tudo):
+  tempo de cada luta, de cada instancia (menus + luta + cartas) e de cada volta; voltas por hora; turnos por luta;
+  quanto de vida o 1o ataque tira; e o DIAGNOSTICO de cada instancia:
+     OK - mata no 1o turno | PRECISA UPAR - acerta mas nao mata (e quanto falta) | PONTARIA - o 1o tiro erra.
+  No console aparece "[TEMPO] Dragao Gelado: luta 45s - VITORIA em 2 turno(s), 1o ataque tirou 64%".
+  O EMPACOTAR manda o relatorio, os csv e o log do dia junto com a gravacao.
+* COMBOS DE ITENS (dados\combos.json) - o bot procura a LUTA MAIS CURTA em cada instancia:
+  1) TESTE DE FOGO: 2,3,4,4 + os buffs que a stamina der (dano maximo), 5 lutas. Se nem ele mata no 1o turno (com os
+     tiros acertando) -> PRECISA UPAR: usa sempre o dano maximo e o relatorio avisa.
+  2) Se o fogo mata no 1o turno (em pelo menos metade das lutas), testa combos com MENOS ANIMACAO (cada item 3/1 e mais
+     um tiro do boneco): 2,4 (tridente, 1 tiro so) / 4 (so buffs) / 3,4 / 1,4 / 3,3,4 - 3 lutas cada.
+  3) Depois fica com o de menor tempo medio de luta, com margem de duvida: um combo que matou 1 vez por CRITICO
+     continua sendo medido; so vence quem e rapido NA MEDIA de muitas lutas. O relatorio mostra a tabela de combos.
+  --itens 2,3,4,4 fixa a sua ordem e desliga os testes.
+* Outras correcoes desta gravacao: o turno "extra" depois do boss morto nao gasta mais itens; o PASS que pisca no turno
+  do Dragao nao vira mais "turno pulado"; o minimapa do Dragao Gelado (mapa todo azul, moldura azul) agora acha o
+  boneco em todas as leituras; depois do aviao a posicao nova do boneco e usada no ataque seguinte.
+* Para deixar a noite toda: desligue a suspensao do Windows (Configuracoes > Sistema > Energia > Suspender: Nunca)
+  e deixe o jogo na frente. Rode ATIRAR.bat e responda T.
+
+* (28/10, manha) VIDA DO BOSS: com 1-3% a barra fica sem vermelho e o bot achava que o boss tinha morrido - parava de
+  atacar (um Dragao ficou 15 min assim; um Escorpiao se curou e ganhou a luta). Agora "morto" = retrato do boss CINZA.
+  Combos: mesmo quando precisa upar, o bot testa os outros combos e fica com a luta mais curta (no Escorpiao o 3,4 tirou
+  mais vida que o 2,3,4 - o tridente espalha as balas e ele so tem colisao no pe).
+
+MENU ATUAL (28/10 noite)
+========================
+  S = Rota Sul (Enter)   P = Pericao comum (fora do horario do chefao)   C = Chefao Global
+  Rota Norte e Todas: desabilitadas no menu (nao apagadas): python navegador.py --atirar --rota N  (ou T)
+  Depois da rota o bot pergunta em quais instancias abrir as cartas (Sul: so a Rainha Liris; as outras so completam a
+  missao e ele espera a tela passar). Sem perguntar: --cartas RAINHA_LIRIS  (ou --cartas TODAS).
+  O aviao (F) do Escorpiao Rei esta desligado: o boneco mata de primeira.
+
+PAINEL COM BOTOES (28/10 noite)
+===============================
+Duplo clique em BotDDT.bat: abre uma janela escura onde voce escolhe a rota (Sul, Pericao comum, Chefao Global; marque
+"mostrar Rota Norte..." para as antigas), em quais instancias abrir as cartas, se luta o Chefao Global nos horarios
+(e quais), tarefas, gravacao, e clica INICIAR. Mostra o log ao vivo (amarelo = chefao/POW, vermelho = problema, azul =
+tempos) e o relatorio. PARAR pede para o bot parar sozinho (fecha a gravacao e escreve o relatorio; ate 20 s).
+"Enviar gravacao" roda o EMPACOTAR_E_ENVIAR.bat. As escolhas ficam salvas (dados\painel.json).
+Por baixo o painel so roda o navegador.py --atirar com as opcoes: os .bat de antes continuam funcionando.
+
+BotDDT.bat = TUDO EM UM (substitui os outros .bat do dia a dia): baixa as novidades (git pull) e abre o painel. No
+painel: INICIAR/PARAR, "Enviar gravacao" (empacota e envia sem perguntas e sem janela preta), "enviar ao parar"
+(automatico) e "Atualizar". Os .bat antigos continuam existindo, mas nao precisa mais usar.
+
+```

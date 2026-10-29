@@ -127,7 +127,7 @@ def main():
         os.startfile(saida)   # abre a pasta no Explorer
     except (AttributeError, OSError):
         pass
-    print("Para enviar: de dois cliques em ENVIAR_SESSAO.bat (usa git).")
+    print("Para enviar: botao "Enviar gravacao" do BotDDT.")
 
 
 if __name__ == "__main__":

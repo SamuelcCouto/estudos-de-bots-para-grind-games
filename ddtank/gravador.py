@@ -291,7 +291,7 @@ def main():
     titulo, exe = args.titulo or config.TITULO_JANELA, args.exe or config.EXE_JANELA
     hwnd = janela.resolver_janela(titulo, exe)
     if not hwnd:
-        sys.exit("Janela do jogo nao encontrada. Rode  python bot_ddtank.py --listar  e use --titulo/--exe.")
+        sys.exit("Janela do jogo nao encontrada. Confira o nome do .exe em config.py (EXE_JANELA).")
     if janela.contar_janelas(titulo, exe) > 1:
         sys.exit("ERRO: ha mais de uma janela do jogo aberta (outra conta?). Feche as outras e rode de novo - "
                  "senao o gravador pode olhar a janela errada.")
