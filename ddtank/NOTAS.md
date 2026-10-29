@@ -542,3 +542,12 @@ painel: INICIAR/PARAR, "Enviar gravacao" (empacota e envia sem perguntas e sem j
 (automatico) e "Atualizar". Os .bat antigos continuam existindo, mas nao precisa mais usar.
 
 ```
+
+## Sessoes de 28-29/10 (noite) e o travamento das 12h
+- 221836 (42 min) e 233755 (7h43, rota T, 68 voltas, 8,8/h): todas as lutas vencidas, 0 derrotas. Norte e Rainha 100% no 1o
+  turno; Escorpiao (com aviao, hoje desligado) 23% no 1o turno, 98% de acerto, 1,8 turnos; Dragao 71% (89% de 1o ataque).
+- 105018 (Rota Sul, ate 13h03): 26 voltas, 11,7/h; Escorpiao 96% no 1o turno, Dragao 88%, Rainha 96% (sem aviao).
+  TRAVOU 12:00-12:55 no Pericao: a confirmacao "A instancia apresenta mais desafios... Concordar" (texto diferente do
+  POPUP_SOZINHO) nao era reconhecida (clicava em Inicio 83x) e, as 12:10, o aviso "O Chefao Global vai comecar em
+  alguns minutos! ... sim" apareceu por cima. -> estados POPUP_SOZINHO2 (Concordar 575,402) e POPUP_AVISO (sim 644,394).
+- Bug meu: sed no empacotar.py deixou aspas dentro de aspas (SyntaxError no envio). Regra: py_compile em todos os .py.
