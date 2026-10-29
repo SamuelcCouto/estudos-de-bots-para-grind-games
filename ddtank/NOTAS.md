@@ -563,3 +563,17 @@ recalibra se o tamanho da janela mudar ou a tela ficar desconhecida (>=15 s, no 
 --testar-tela + botao do painel. Testes: testes/test_tela.py (7 janelas x 6 telas sinteticas a partir de quadros reais;
 erro < 3 px). LIMITES: so testado com janelas SINTETICAS; nao sabemos como o launcher do amigo se comporta (se o canvas
 for esticado sem manter a proporcao, falha); zoom < 0.75 perde o minimapa; refs vem das minhas telas (retrato etc.).
+
+## BACKLOG (decisao do usuario, 29/10): prioridade = bot 100% funcional e independente NA MAQUINA DELE
+- Adaptar o bot a outras maquinas/amigos (tamanhos de tela, personagens, launcher): tela.py ja calibra janelas de outros
+  tamanhos (testado so com janelas sinteticas); falta validar com um amigo de verdade ("Testar a minha tela"), telas que
+  dependem do visual do personagem e a forca de tiro de outros bonecos. NAO priorizar agora.
+- Rota Leste (quando o usuario conseguir fazer na mao), instancias especiais (mesma formula), Chefao Global (testar de verdade
+  no 1o horario com o bot), Pericao comum (rota P, nunca rodada de verdade).
+
+## Robustez (29/10)
+- [ERRO] falha inesperada no laco: registra o traceback, continua; 12 em 10 min param o bot.
+- [ALERTA] preso: mesma tela (fora BATALHA/CARTAS/TAREFA) ou tela desconhecida por 120 s -> Esc + botoes das janelinhas
+  conhecidas + print "preso" na gravacao; repete a cada 60 s.
+- PC nao entra em suspensao enquanto o bot roda (SetThreadExecutionState). Painel: "religar sozinho se o bot cair" (5x/hora).
+- testes/test_sintaxe.py compila todos os .py. dados/painel.json, aprendizado, combos e artes aprendidas fora do git (.gitignore).

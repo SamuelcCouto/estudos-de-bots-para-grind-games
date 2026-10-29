@@ -742,3 +742,46 @@ metr.batalha_fim(True)
 assert abs(metr.lutas[0]["duracao"] - 30) < 1, metr.lutas[0]["duracao"]       # 10 + 20 s, sem os 600 s parado
 assert "Tempo pausado" in metr.texto_relatorio() and abs(nav.batalha_desde - 700) < 1
 print("pausa do painel: tempo parado fora das medidas OK")
+
+# ---------------------------------------------------------------- VIGIA de "preso" e falhas inesperadas (12h de 29/10: 55 min clicando em "Inicio")
+class SimPreso(SimChefe):
+    """Uma janelinha por cima: nenhum clique faz nada (como a confirmacao do Pericao que o bot nao conhecia)."""
+    def clicar(self, x, y, modo): self.cliques_recebidos = getattr(self, "cliques_recebidos", []) + [(x, y)]
+    def tecla(self, nome, dur=0.05): self.teclas_recebidas = getattr(self, "teclas_recebidas", []) + [nome]
+sim = SimPreso(); sim.sala_inst = "FANTASMA"; relogio = [0.0]; logs = []
+nav = N.Navegador(sim, det, ["FANTASMA", "PROFUNDEZAS", "MINHOCAO"], dormir=lambda s: relogio.__setitem__(0, relogio[0] + s),
+                  agora=lambda: relogio[0], log=logs.append)
+nav.teclas = lambda: None
+while relogio[0] < 200:
+    e = nav.estado_estavel()
+    if e: nav.agir(e)
+alertas = [l for l in logs if "[ALERTA]" in l]
+print(alertas[:1])
+assert alertas and "preso em" in alertas[0] and 120 <= float(alertas[0].split("ha ")[1].split("min")[0].replace("s", "") if "min" not in alertas[0].split("ha ")[1][:6] else 120) , alertas
+assert "esc" in sim.teclas_recebidas and (575, 402) in sim.cliques_recebidos and (644, 394) in sim.cliques_recebidos, "tenta Esc e os botoes das janelinhas"
+assert len(alertas) <= 2, "nao fica avisando a cada passo"
+print("vigia de preso OK")
+
+# falha inesperada no meio do laco: o bot registra e continua; muitas seguidas param
+sim = SimChefe(); relogio = [0.0]; logs = []
+nav = N.Navegador(sim, det, ["FANTASMA"], dormir=lambda s: relogio.__setitem__(0, relogio[0] + s), agora=lambda: relogio[0], log=logs.append)
+nav.teclas = lambda: None
+chamadas = [0]
+orig_estado = nav.estado_estavel
+def quebra():
+    chamadas[0] += 1
+    if chamadas[0] in (2, 3):
+        raise ValueError("falha de teste")
+    if chamadas[0] > 30:
+        nav.parar = True
+    return orig_estado()
+nav.estado_estavel = quebra
+nav.rodar()
+assert sum("[ERRO] falha inesperada" in l for l in logs) == 2 and chamadas[0] > 30, (chamadas[0], logs[-3:])
+nav = N.Navegador(SimChefe(), det, ["FANTASMA"], dormir=lambda s: relogio.__setitem__(0, relogio[0] + s), agora=lambda: relogio[0], log=logs.append)
+nav.teclas = lambda: None
+def sempre(): raise RuntimeError("sempre quebra")
+nav.estado_estavel = sempre
+logs.clear(); nav.rodar()
+assert nav.parar and any("parando para nao fazer bobagem" in l for l in logs)
+print("falhas inesperadas: continua, e para se for demais OK")

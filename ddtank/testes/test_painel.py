@@ -56,3 +56,5 @@ with mock.patch.object(painel.subprocess, "Popen") as po:
     p.iniciar()
     assert po.called and po.call_args[0][0][2] == "navegador.py", po.call_args
 print("painel (fumaca) OK")
+assert painel.Painel.etiqueta("[ALERTA] preso em SALA") == "erro" and painel.Painel.etiqueta("[ERRO] falha") == "erro"
+print("painel (alertas) OK")

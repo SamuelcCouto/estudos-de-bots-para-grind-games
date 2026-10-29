@@ -13,7 +13,7 @@ ROTAS_PAINEL = [("S", "Rota Sul", "Escorpiao Rei > Dragao Gelado > Rainha Liris"
 ROTAS_AVANCADAS = [("N", "Rota Norte", "Fantasma > Profundezas > Minhocao (desabilitada no dia a dia)"),
                    ("T", "Norte + Sul", "as seis, em sequencia")]
 PADRAO = {"rota": "S", "cartas": ["RAINHA_LIRIS"], "chefe_nos_horarios": True, "horarios": "12:00-13:00,21:00-22:00",
-          "gravar": True, "gravacao_leve": False, "enviar_ao_parar": False, "tarefas": True, "avancado": False}
+          "gravar": True, "gravacao_leve": False, "enviar_ao_parar": False, "reiniciar_se_cair": True, "tarefas": True, "avancado": False}
 
 
 def instancias_da_rota(chave):

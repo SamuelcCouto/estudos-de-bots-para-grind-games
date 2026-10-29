@@ -59,6 +59,9 @@ SALA_PORTA = (949, 522)
 TAREFA_FECHAR = (881, 190)
 TAREFA_BOTAO = (760, 513)
 ESPERA_CONFIRMAR_TELA = 0.3   # s entre as 2 leituras que confirmam uma tela (era 0,45: ~1 s a menos por instancia)
+MAX_ERROS_EM_10_MIN = 12       # falhas inesperadas seguidas que param o bot
+PRESO_APOS = 120.0             # s na mesma tela (fora de batalha) ou em tela desconhecida = "preso": tenta se soltar
+PRESO_REPETIR = 60.0           # s entre as tentativas de se soltar
 MAX_ACOES_TAREFA = 40          # cliques no painel de tarefas por fim de rota (trava de seguranca)
 MAX_ROLAGENS_TAREFA = 12
 CARTAS_COLUNAS = [380, 468, 556, 644, 732, 820, 907]
@@ -394,6 +397,18 @@ def instancia_na_sala(f):
     return _melhor_modelo(f, _TPL_SALA, SALA_ARTE, SALA_ARTE_LIMIAR)
 
 
+def evitar_suspensao():
+    """Windows: enquanto o bot roda, o PC nao entra em suspensao (de madrugada ele parava com o PC dormindo). A tela pode
+    apagar. Volta ao normal quando o programa fecha."""
+    try:
+        import ctypes
+        ES_CONTINUOUS, ES_SYSTEM_REQUIRED = 0x80000000, 0x00000001
+        ctypes.windll.kernel32.SetThreadExecutionState(ES_CONTINUOUS | ES_SYSTEM_REQUIRED)
+        return True
+    except Exception:
+        return False
+
+
 def instancia_unica():
     """False se ja existe outro bot rodando neste PC (varios bots clicando juntos se atrapalham)."""
     try:
@@ -568,6 +583,8 @@ class Navegador:
         self.parar, self.pausado = False, False
         self.pausa_desde, self.pausado_total = None, 0.0
         self.ultima_calib_pedida = -1e9
+        self.tela_desde, self.tela_atual = None, None      # vigia: ha quanto tempo esta na mesma tela
+        self.preso_aviso, self.preso_vezes = -1e9, 0
         self.voltas = 0
         self.novo_ciclo()
         self.cartas_vistas = False
@@ -838,6 +855,10 @@ class Navegador:
                             run_completa=self.run_completa)
 
     def agir(self, estado):
+        if estado != self.tela_atual:
+            self.tela_atual, self.tela_desde, self.preso_vezes = estado, self.agora(), 0
+        elif estado not in ("BATALHA", "CARTAS", "POPUP_CARTA", "TAREFA", "CLIQUE_JOGO"):
+            self.vigiar(estado, self.tela_desde)
         if self.reg and estado != self.ultimo_estado_reg:
             self.reg.evento("estado", [self.reg.frame(self.ultimo_quadro, "estado_" + estado)], estado=estado,
                             instancia=self.instancia, idx=self.idx, voltas=self.voltas, run_completa=self.run_completa)
@@ -1146,44 +1167,94 @@ class Navegador:
     # ---------- laco principal ----------
     def rodar(self):
         self.log("Navegador ligado. F8 = pausar/continuar, F10 = sair.")
+        erros = []
         while not self.parar:
-            self.teclas()
-            if self.pausado:
-                self.esperar_pausa()
-                continue
-            if self.atirador and self.em_batalha:
-                # na batalha o tempo importa (a sua vez dura ~8 s): sem a dupla leitura de confirmacao
-                f, achadas = self.ver()
-                if achadas and achadas[0] == "CLIQUE_JOGO":
-                    self.agir("CLIQUE_JOGO")          # o jogo perdeu o foco: nao responde ate clicar nele
-                    continue
-                if achadas and achadas[0] == "BATALHA":
-                    self.fora_da_batalha_desde = None
-                    self.atirador.passo(f)
-                    continue
-                agora = self.agora()
-                self.fora_da_batalha_desde = self.fora_da_batalha_desde or agora
-                if agora - self.fora_da_batalha_desde < 3.0 and not (achadas and achadas[0] in ("CARTAS", "POPUP_CARTA")):
-                    self.dormir(0.15)
-                    continue
-                self.em_batalha = False
-                self.fora_da_batalha_desde = None
-                self.atirador.fim_da_batalha(venceu=bool(achadas and achadas[0] in ("CARTAS", "POPUP_CARTA")),
-                                             duracao=(agora - self.batalha_desde) if self.batalha_desde else None)
-            estado = self.estado_estavel()
-            if estado is None:
-                self.desconhecido()
-                self.dormir(0.6)
-                continue
-            self.perdido_desde = None
-            self.agir(estado)
+            try:
+                self._ciclo()
+            except KeyboardInterrupt:
+                raise
+            except Exception:
+                # uma falha inesperada nao pode derrubar o bot de madrugada: registra e tenta de novo
+                import traceback
+                t = self.agora()
+                erros = [e for e in erros if t - e < 600] + [t]
+                self.log("[ERRO] falha inesperada (o bot continua):\n" + traceback.format_exc())
+                if self.reg:
+                    self.reg.evento("erro_inesperado", [self.reg.frame(self.ultimo_quadro, "erro")] if self.ultimo_quadro is not None else [],
+                                    texto=traceback.format_exc()[-1500:])
+                if len(erros) >= MAX_ERROS_EM_10_MIN:
+                    self.log(f"[ERRO] {len(erros)} falhas em 10 min: parando para nao fazer bobagem. Me mande o log.")
+                    self.parar = True
+                self.dormir(2.0)
         self.log("Navegador encerrado.")
+
+    def _ciclo(self):
+        self.teclas()
+        if self.pausado:
+            self.esperar_pausa()
+            return
+        if self.atirador and self.em_batalha:
+            # na batalha o tempo importa (a sua vez dura ~8 s): sem a dupla leitura de confirmacao
+            f, achadas = self.ver()
+            if achadas and achadas[0] == "CLIQUE_JOGO":
+                self.agir("CLIQUE_JOGO")          # o jogo perdeu o foco: nao responde ate clicar nele
+                return
+            if achadas and achadas[0] == "BATALHA":
+                self.fora_da_batalha_desde = None
+                self.atirador.passo(f)
+                return
+            agora = self.agora()
+            self.fora_da_batalha_desde = self.fora_da_batalha_desde or agora
+            if agora - self.fora_da_batalha_desde < 3.0 and not (achadas and achadas[0] in ("CARTAS", "POPUP_CARTA")):
+                self.dormir(0.15)
+                return
+            self.em_batalha = False
+            self.fora_da_batalha_desde = None
+            self.atirador.fim_da_batalha(venceu=bool(achadas and achadas[0] in ("CARTAS", "POPUP_CARTA")),
+                                         duracao=(agora - self.batalha_desde) if self.batalha_desde else None)
+        estado = self.estado_estavel()
+        if estado is None:
+            self.desconhecido()
+            self.dormir(0.6)
+            return
+        self.perdido_desde = None
+        self.agir(estado)
+
+    def vigiar(self, chave, desde):
+        """Vigia de "preso": a mesma tela (ou uma tela desconhecida) por mais de PRESO_APOS s. Tenta se soltar com Esc e
+        com o botao de cada janelinha conhecida, avisa no log e guarda um print para eu ver o que e. (O bot ja ficou 55 min
+        clicando em "Inicio" com uma janelinha nova por cima.)"""
+        agora = self.agora()
+        if desde is None or agora - desde < PRESO_APOS or agora - self.preso_aviso < PRESO_REPETIR:
+            return
+        if self.chefe_modo == "so" and not self.no_chefe:
+            return                                      # opcao C esperando o proximo horario: parado de proposito
+        self.preso_aviso = agora
+        self.preso_vezes += 1
+        self.log(f"[ALERTA] preso em {chave} ha {fmt_tempo(agora - desde)}: tentando se soltar (tentativa {self.preso_vezes}). "
+                 f"Se nao resolver, veja o jogo e me mande o log.")
+        if self.reg:
+            self.reg.evento("preso", [self.reg.frame(self.ultimo_quadro, "preso")] if self.ultimo_quadro is not None else [],
+                            tela=chave, segundos=round(agora - desde), vezes=self.preso_vezes)
+        if self.simular:
+            return
+        if hasattr(self.io, "tecla"):
+            try:
+                self.io.tecla("esc", 0.08)
+            except Exception:
+                pass
+            self.dormir(0.5)
+        # os botoes das janelinhas conhecidas (um clique fora de lugar numa tela comum e inofensivo)
+        for ponto in (POPUP_AVISO_SIM, POPUP_SOZINHO_SIM, POPUP_CARTA_SIM, FOCO_PONTO_PADRAO):
+            self.clicar(ponto)
+            self.dormir(0.6)
 
     def desconhecido(self):
         agora = self.agora()
         if self.perdido_desde is None:
             self.perdido_desde = agora
         parado = agora - self.perdido_desde
+        self.vigiar("tela desconhecida", self.perdido_desde)
         # parou numa tela de cidade que a rota nao usa (Sala de Casamento, Leilao...): volta pela porta da barra de baixo
         if (parado >= 6 and self.ultimo_conhecido in ("MAPA", "CENTRAL", "CLIQUE_JOGO") and not self.em_batalha
                 and agora - self.ultima_recuperacao >= 8 and self.recuperacoes < 4):
@@ -1401,6 +1472,7 @@ def main():
                     ultimo = achadas
             time.sleep(0.7)
 
+    evitar_suspensao()
     os.makedirs(config.PASTA_LOGS, exist_ok=True)
     arq = open(os.path.join(config.PASTA_LOGS, f"navegador_{datetime.datetime.now():%Y%m%d}.log"), "a", encoding="utf-8")
 

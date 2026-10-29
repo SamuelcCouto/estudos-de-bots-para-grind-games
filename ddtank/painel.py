@@ -44,6 +44,9 @@ class Painel:
         self.v_gravar = tk.BooleanVar(value=self.cfg["gravar"])
         self.v_leve = tk.BooleanVar(value=self.cfg["gravacao_leve"])
         self.v_enviar = tk.BooleanVar(value=self.cfg["enviar_ao_parar"])
+        self.v_reiniciar = tk.BooleanVar(value=self.cfg["reiniciar_se_cair"])
+        self.pediu_parar = False
+        self.quedas = []
         self.v_tarefas = tk.BooleanVar(value=self.cfg["tarefas"])
         self.v_avancado = tk.BooleanVar(value=self.cfg["avancado"])
         self.v_cartas = {}
@@ -143,6 +146,7 @@ class Painel:
         ttk.Checkbutton(c, text="gravar a sessao (para me mandar depois)", variable=self.v_gravar).pack(anchor="w")
         ttk.Checkbutton(c, text="gravacao leve (disco pequeno)", variable=self.v_leve).pack(anchor="w")
         ttk.Checkbutton(c, text="enviar a gravacao ao GitHub quando o bot parar", variable=self.v_enviar).pack(anchor="w")
+        ttk.Checkbutton(c, text="religar sozinho se o bot cair", variable=self.v_reiniciar).pack(anchor="w")
         # ferramentas
         ttk.Button(esq, text="Enviar gravacao para o GitHub", command=self.enviar).pack(fill="x", pady=(0, 6))
         ttk.Button(esq, text="Testar a minha tela (o bot enxerga o jogo?)", command=self.testar_tela).pack(fill="x", pady=(0, 6))
@@ -203,7 +207,7 @@ class Painel:
     def config_atual(self):
         return {"rota": self.v_rota.get(), "cartas": [i for i, v in self.v_cartas.items() if v.get()],
                 "chefe_nos_horarios": self.v_chefe.get(), "horarios": self.v_horarios.get().strip(),
-                "gravar": self.v_gravar.get(), "gravacao_leve": self.v_leve.get(), "enviar_ao_parar": self.v_enviar.get(), "tarefas": self.v_tarefas.get(),
+                "gravar": self.v_gravar.get(), "gravacao_leve": self.v_leve.get(), "enviar_ao_parar": self.v_enviar.get(), "reiniciar_se_cair": self.v_reiniciar.get(), "tarefas": self.v_tarefas.get(),
                 "avancado": self.v_avancado.get()}
 
     # ------------------------------------------------------------ rodar
@@ -228,6 +232,7 @@ class Painel:
             messagebox.showerror("Nao consegui iniciar", str(e))
             return
         self.inicio = time.time()
+        self.pediu_parar = False
         threading.Thread(target=self.ler_saida, args=(self.proc,), daemon=True).start()
         self.b_iniciar.state(["disabled"])
         self.b_parar.state(["!disabled"])
@@ -257,6 +262,18 @@ class Painel:
             self.fila.put(linha.decode("utf-8", "replace"))
         self.fila.put(None)
 
+    def religar_se_caiu(self, cod):
+        """O bot terminou sem o botao PARAR (erro, janela do jogo fechada...): religa sozinho, no maximo 5x por hora."""
+        if self.pediu_parar or not self.cfg.get("reiniciar_se_cair"):
+            return
+        agora = time.time()
+        self.quedas = [t for t in self.quedas if agora - t < 3600] + [agora]
+        if len(self.quedas) > 5:
+            self.escrever(self.t_log, "--- o bot caiu 5 vezes em 1 hora: nao religo mais (veja o log) ---\n", "erro")
+            return
+        self.escrever(self.t_log, f"--- o bot caiu (codigo {cod}): religando em 15 s ({len(self.quedas)}/5 nesta hora) ---\n", "erro")
+        self.raiz.after(15000, lambda: None if self.pediu_parar else self.iniciar())
+
     def parar(self):
         if not (self.proc and self.proc.poll() is None):
             return
@@ -269,6 +286,7 @@ class Painel:
             os.remove(N.ARQUIVO_PAUSAR)                     # parado de verdade: sai da pausa
         except OSError:
             pass
+        self.pediu_parar = True
         self.escrever(self.t_log, "Parando... (ate 20 s)\n", "chefe")
         self.raiz.after(20000, self.matar_se_preciso)
 
@@ -351,6 +369,8 @@ class Painel:
     def etiqueta(linha):
         if "[CHEFAO]" in linha or "[POW]" in linha:
             return "chefe"
+        if "[ALERTA]" in linha or "[ERRO]" in linha:
+            return "erro"
         if "!" in linha[:14] or "   !" in linha or "ERRO" in linha or "Traceback" in linha:
             return "erro"
         if "[TEMPO]" in linha:
@@ -383,6 +403,7 @@ class Painel:
                     self.pausado_desde = None
                     self.inicio = None
                     self.atualizar_relatorio()
+                    self.religar_se_caiu(cod)
                     if self.cfg.get("enviar_ao_parar") and self.cfg.get("gravar", True):
                         self.enviar()
                 else:
