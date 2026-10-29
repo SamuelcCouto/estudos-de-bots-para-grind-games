@@ -235,6 +235,36 @@
      "y": 465
     }
    ]
+  },
+  "POPUP_SOZINHO2": {
+   "limiar": 0.8,
+   "patches": [
+    {
+     "arquivo": "POPUP_SOZINHO2_0.png",
+     "x": 508,
+     "y": 300
+    },
+    {
+     "arquivo": "POPUP_SOZINHO2_1.png",
+     "x": 545,
+     "y": 394
+    }
+   ]
+  },
+  "POPUP_AVISO": {
+   "limiar": 0.8,
+   "patches": [
+    {
+     "arquivo": "POPUP_AVISO_0.png",
+     "x": 396,
+     "y": 308
+    },
+    {
+     "arquivo": "POPUP_AVISO_1.png",
+     "x": 610,
+     "y": 384
+    }
+   ]
   }
  }
 }

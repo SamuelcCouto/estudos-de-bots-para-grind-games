@@ -53,6 +53,7 @@ CONFIG_SIM = (640, 529)
 SALA_INICIO = (934, 473)
 POPUP_SOZINHO_SIM = (575, 402)
 POPUP_CARTA_SIM = (566, 391)
+POPUP_AVISO_SIM = (644, 394)
 SALA_ICONE_TAREFAS = (806, 533)
 SALA_PORTA = (949, 522)
 TAREFA_FECHAR = (881, 190)
@@ -120,6 +121,10 @@ PASTA_APRENDIDOS = os.path.join(config.PASTA, "dados", "modelos_aprendidos")   #
 CLIQUE_SIMPLES = {                      # tela -> onde clicar para avancar
     "MAPA": MAPA_CENTRAL,
     "POPUP_SOZINHO": POPUP_SOZINHO_SIM,
+    # 29/10: o Pericao pede confirmacao com outro texto ("A instancia apresenta mais desafios...", botao Concordar) e
+    # o jogo avisa "O Chefao Global vai comecar em alguns minutos!" (botao sim) POR CIMA: o bot ficou 55 min parado
+    "POPUP_SOZINHO2": POPUP_SOZINHO_SIM,
+    "POPUP_AVISO": POPUP_AVISO_SIM,
     "POPUP_CARTA": POPUP_CARTA_SIM,
 }
 MODOS_ENTRADA = ["top", "filha"]
@@ -562,7 +567,7 @@ class Navegador:
                 self.log(f"[CHEFAO] fim do horario do Chefao Global: voltando para a rota ({self.instancia})")
                 return False
         if pendente:
-            if estado == "POPUP_SOZINHO" or (self.chefe_modo == "horarios" and estado not in (
+            if estado in ("POPUP_SOZINHO", "POPUP_SOZINHO2", "POPUP_AVISO") or (self.chefe_modo == "horarios" and estado not in (
                     "SALA_VAZIA", "SALA", "CONFIG_VAZIA", "CONFIG_SEL", "CONFIG", "CENTRAL", "MAPA")
                     and not estado.startswith("PRONTA_")):
                 return False              # no meio de outra coisa (tarefas, comecando a luta): troca na proxima tela

@@ -23,7 +23,9 @@ ESPERADO = {"CLIQUE_JOGO": "CLIQUE_JOGO", "MAPA": "MAPA", "CENTRAL": "CENTRAL", 
             "TAREFA_COM_OK": "TAREFA", "TAREFA_SEM_OK": "TAREFA", "TAREFA_ATIVA_OK": "TAREFA", "TAREFA_SUPER": "TAREFA",
             "CFG_SEL_ESCORPIAO": "CONFIG_SEL", "SALA_ESCORPIAO": "SALA",
             # 28/10 21h: outro boneco/visual no painel "Informacoes do usuario" (o recorte antigo pegava o retrato)
-            "CENTRAL_OUTRO_BONECO": "CENTRAL"}
+            "CENTRAL_OUTRO_BONECO": "CENTRAL",
+            # 29/10 12h: o bot ficou 55 min parado - confirmacao do Pericao com outro texto, e o aviso do chefao por cima
+            "POPUP_SOZINHO_CHEFE": "POPUP_SOZINHO2", "POPUP_AVISO_CHEFE": "POPUP_AVISO"}
 ruim = 0
 for nome, esp in ESPERADO.items():
     got = det.detectar(E.normalizar(img(nome)))
