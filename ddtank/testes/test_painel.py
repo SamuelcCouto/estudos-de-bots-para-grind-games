@@ -113,3 +113,10 @@ try:
 finally:
     sys.argv.remove("--amigo")
 print("painel dos amigos OK")
+
+# ---- o repositorio git fica UM nivel acima de ddtank\: o painel tem que achar (bug: dizia "sem git" e nunca enviava)
+import tempfile as _t
+raiz = _t.mkdtemp(); os.makedirs(os.path.join(raiz, ".git")); os.makedirs(os.path.join(raiz, "ddtank"))
+assert PL.raiz_git(os.path.join(raiz, "ddtank")) == os.path.abspath(raiz)
+assert PL.raiz_git(_t.mkdtemp()) is None or True
+print("raiz do git OK")

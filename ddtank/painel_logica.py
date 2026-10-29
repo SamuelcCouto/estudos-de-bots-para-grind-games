@@ -70,15 +70,28 @@ def passos_envio():
     """Empacota e, se der (git instalado e pasta clonada), envia ao GitHub. Sem git (BotDDT.exe de amigo): so empacota, e
     os zips ficam em envio\\ para a pessoa mandar do jeito que preferir."""
     passos = [comando_base("empacotar", "python") + ["--novas"]]
-    if shutil.which("git") and os.path.isdir(os.path.join(config.PASTA, ".git")):
+    if tem_git():
         # (o "reset" limpa um conflito de arquivo que o git deixou pendente - ja impediu o envio uma vez)
         passos += [["git", "reset", "-q"], ["git", "add", "envio"], ["git", "commit", "-m", "sessao gravada"], ["git", "pull", "--rebase", "--autostash"],
                    ["git", "push"]]
     return passos
 
 
+def raiz_git(pasta=None):
+    """Pasta que tem o .git: o repositorio fica UM NIVEL ACIMA de ddtank\\ (o painel achava que nao havia git e nunca enviava)."""
+    d = os.path.abspath(pasta or config.PASTA)
+    for _ in range(4):
+        if os.path.exists(os.path.join(d, ".git")):
+            return d
+        pai = os.path.dirname(d)
+        if pai == d:
+            break
+        d = pai
+    return None
+
+
 def tem_git():
-    return bool(shutil.which("git")) and os.path.isdir(os.path.join(config.PASTA, ".git"))
+    return bool(shutil.which("git")) and raiz_git() is not None
 
 
 PASSOS_ENVIO = passos_envio()
