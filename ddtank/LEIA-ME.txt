@@ -256,3 +256,12 @@ MENU ATUAL (28/10 noite)
   Depois da rota o bot pergunta em quais instancias abrir as cartas (Sul: so a Rainha Liris; as outras so completam a
   missao e ele espera a tela passar). Sem perguntar: --cartas RAINHA_LIRIS  (ou --cartas TODAS).
   O aviao (F) do Escorpiao Rei esta desligado: o boneco mata de primeira.
+
+PAINEL COM BOTOES (28/10 noite)
+===============================
+Duplo clique em PAINEL.bat: abre uma janela escura onde voce escolhe a rota (Sul, Pericao comum, Chefao Global; marque
+"mostrar Rota Norte..." para as antigas), em quais instancias abrir as cartas, se luta o Chefao Global nos horarios
+(e quais), tarefas, gravacao, e clica INICIAR. Mostra o log ao vivo (amarelo = chefao/POW, vermelho = problema, azul =
+tempos) e o relatorio. PARAR pede para o bot parar sozinho (fecha a gravacao e escreve o relatorio; ate 20 s).
+"Enviar gravacao" roda o EMPACOTAR_E_ENVIAR.bat. As escolhas ficam salvas (dados\painel.json).
+Por baixo o painel so roda o navegador.py --atirar com as opcoes: os .bat de antes continuam funcionando.

@@ -124,6 +124,7 @@ CLIQUE_SIMPLES = {                      # tela -> onde clicar para avancar
 }
 MODOS_ENTRADA = ["top", "filha"]
 VK_F8, VK_F10 = 0x77, 0x79
+ARQUIVO_PARAR = os.path.join(config.PASTA_LOGS, "parar.flag")
 
 
 # ---------------------------------------------------------------------------
@@ -635,7 +636,16 @@ class Navegador:
             self.dormir(0.3)
             self.teclas()
 
+    arquivo_parar = None              # o painel (painel.py) pede para parar criando este arquivo
+
     def teclas(self):
+        if self.arquivo_parar and os.path.exists(self.arquivo_parar):
+            try:
+                os.remove(self.arquivo_parar)
+            except OSError:
+                pass
+            self.log("Parada pedida pelo painel.")
+            self.parar = True
         if self.io.tecla_apertada(VK_F10):
             self.parar = True
         if self.io.tecla_apertada(VK_F8):
@@ -1296,6 +1306,9 @@ def main():
         nav.atirador = atirador_mod.Atirador(io, memoria_mod.Memoria(), lambda: nav.instancia_batalha, sombra=args.sombra, log=log,
                                              ordem_itens=ordem, reg=reg, metricas=metr, combos=combos)
     nav.idx = max(0, min(len(rota) - 1, args.comecar_em - 1))
+    nav.arquivo_parar = ARQUIVO_PARAR
+    if os.path.exists(ARQUIVO_PARAR):
+        os.remove(ARQUIVO_PARAR)          # pedido de parada velho
     try:
         nav.rodar()
     except KeyboardInterrupt:

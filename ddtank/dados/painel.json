@@ -1,0 +1,12 @@
+{
+ "rota": "S",
+ "cartas": [
+  "RAINHA_LIRIS"
+ ],
+ "chefe_nos_horarios": true,
+ "horarios": "12:00-13:00,21:00-22:00",
+ "gravar": true,
+ "gravacao_leve": false,
+ "tarefas": true,
+ "avancado": false
+}
