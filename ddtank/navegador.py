@@ -130,6 +130,12 @@ CLIQUE_SIMPLES = {                      # tela -> onde clicar para avancar
 MODOS_ENTRADA = ["top", "filha"]
 VK_F8, VK_F10 = 0x77, 0x79
 ARQUIVO_PARAR = os.path.join(config.PASTA_LOGS, "parar.flag")
+ARQUIVO_PAUSAR = os.path.join(config.PASTA_LOGS, "pausar.flag")   # existe = pausado (o painel cria/apaga)
+
+
+def fmt_tempo(s):
+    s = int(round(s))
+    return f"{s}s" if s < 60 else (f"{s // 60}min{s % 60:02d}s" if s < 3600 else f"{s // 3600}h{s % 3600 // 60:02d}min")
 
 
 # ---------------------------------------------------------------------------
@@ -511,6 +517,7 @@ class Navegador:
         self.modo = 0                     # indice em MODOS_ENTRADA
         self.falhas_clique = 0
         self.parar, self.pausado = False, False
+        self.pausa_desde, self.pausado_total = None, 0.0
         self.voltas = 0
         self.novo_ciclo()
         self.cartas_vistas = False
@@ -642,6 +649,23 @@ class Navegador:
             self.teclas()
 
     arquivo_parar = None              # o painel (painel.py) pede para parar criando este arquivo
+    pausa_pelo_painel = False
+    arquivo_pausar = None             # ...e para pausar/continuar criando/apagando este
+
+    def _pausar(self, origem):
+        self.pausado, self.pausa_desde = True, self.agora()
+        self.log(f"PAUSADO ({origem}). O relogio das lutas/voltas para ate continuar.")
+
+    def _continuar(self):
+        dur = self.agora() - self.pausa_desde if self.pausa_desde is not None else 0.0
+        self.pausado, self.pausa_desde = False, None
+        self.pausado_total += dur
+        if self.batalha_desde is not None:
+            self.batalha_desde += dur
+        if self.metr:
+            self.metr.descontar_pausa(dur)
+        self.log(f"Continuando. Ficou pausado {fmt_tempo(dur)} (total pausado: {fmt_tempo(self.pausado_total)}); "
+                 f"esse tempo nao entra nos cronometros.")
 
     def teclas(self):
         if self.arquivo_parar and os.path.exists(self.arquivo_parar):
@@ -651,11 +675,26 @@ class Navegador:
                 pass
             self.log("Parada pedida pelo painel.")
             self.parar = True
+        if self.arquivo_pausar:
+            quer = os.path.exists(self.arquivo_pausar)
+            if quer and not self.pausado:
+                self._pausar("botao do painel")
+            elif not quer and self.pausado and self.pausa_pelo_painel:
+                self._continuar()
+            self.pausa_pelo_painel = quer
         if self.io.tecla_apertada(VK_F10):
             self.parar = True
         if self.io.tecla_apertada(VK_F8):
-            self.pausado = not self.pausado
-            self.log("PAUSADO (F8 para continuar)" if self.pausado else "Continuando.")
+            if self.pausado:
+                self._continuar()
+                if self.arquivo_pausar and os.path.exists(self.arquivo_pausar):
+                    try:
+                        os.remove(self.arquivo_pausar)    # F8 continua: o painel tambem volta ao estado "rodando"
+                    except OSError:
+                        pass
+                    self.pausa_pelo_painel = False
+            else:
+                self._pausar("F8")
             self.dormir(0.5)
 
     def clicar(self, ponto):
@@ -1312,6 +1351,9 @@ def main():
                                              ordem_itens=ordem, reg=reg, metricas=metr, combos=combos)
     nav.idx = max(0, min(len(rota) - 1, args.comecar_em - 1))
     nav.arquivo_parar = ARQUIVO_PARAR
+    nav.arquivo_pausar = ARQUIVO_PAUSAR
+    if os.path.exists(ARQUIVO_PAUSAR):
+        os.remove(ARQUIVO_PAUSAR)         # pedido de pausa velho
     if os.path.exists(ARQUIVO_PARAR):
         os.remove(ARQUIVO_PARAR)          # pedido de parada velho
     try:

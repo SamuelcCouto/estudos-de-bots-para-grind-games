@@ -8,7 +8,9 @@ Jogo (BetelTank.exe) aberto e logado, UMA janela so. Nao use o mouse na janela d
    Chefao Global nos horarios (12h-13h e 21h-22h). Clique INICIAR (botoes INICIAR e PARAR ficam la em cima).
 3) Para me mandar o resultado: botao "Enviar gravacao para o GitHub" (ou marque "enviar ao parar").
 4) "Gravar a MINHA jogada" abre o gravador para mapear algo novo (F9 marca, F10 termina).
-Teclas do bot: F8 pausa, F10 sai.
+PAUSAR (botao amarelo no topo; vira CONTINUAR): o bot para onde esta (termina o turno em andamento) e, ao continuar,
+registra no log quanto tempo ficou pausado; esse tempo NAO entra nos cronometros (luta, instancia, volta) e o relatorio
+mostra o total pausado. Teclas do bot: F8 tambem pausa/continua, F10 sai.
 
 Pastas: dados\ (o que o bot aprendeu), templates\ (imagens para reconhecer as telas), logs\ (relatorio.txt, lutas.csv,
 voltas.csv), sessoes\ (gravacoes), envio\ (zips para o GitHub). O historico tecnico fica em NOTAS.md.

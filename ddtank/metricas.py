@@ -56,8 +56,19 @@ class Metricas:
         self.luta = None              # luta em andamento
         self.volta_t0 = None
         self.volta_lutas = []
+        self.pausado_total = 0.0
         if salvar:
             os.makedirs(self.pasta, exist_ok=True)
+
+    def descontar_pausa(self, dur):
+        """O bot ficou `dur` s pausado: empurra os relogios em andamento para esse tempo nao entrar nas medidas."""
+        self.pausado_total += dur
+        self.inicio += dur
+        for d in (self.inst, self.luta):
+            if d:
+                d["t0"] += dur
+        if self.volta_t0 is not None:
+            self.volta_t0 += dur
 
     # ------------------------------------------------------------------ eventos (chamados pelo navegador/atirador)
     def instancia_inicio(self, inst, volta):
@@ -216,6 +227,8 @@ class Metricas:
                           f"cartas e tarefas.")
         else:
             linhas.append(f"Rodando ha {fmt(rod)} | nenhuma volta completa ainda")
+        if self.pausado_total:
+            linhas.append(f"Tempo pausado (fora das medidas): {fmt(self.pausado_total)}")
         res = self.por_instancia()
         if res:
             linhas += ["", f"{'INSTANCIA':16s}{'lutas':>6s}{'vit':>5s}{'derr':>5s}{'luta media':>12s}{'instancia':>11s}"

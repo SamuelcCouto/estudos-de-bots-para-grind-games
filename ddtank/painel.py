@@ -75,6 +75,8 @@ class Painel:
         s.map("Iniciar.TButton", background=[("active", "#46d98c"), ("disabled", COR["borda"])])
         s.configure("Parar.TButton", background=COR["vermelho"], foreground="#220a0a", font=FONTE_B, padding=10, borderwidth=0)
         s.map("Parar.TButton", background=[("active", "#ff7373"), ("disabled", COR["borda"])])
+        s.configure("Pausar.TButton", background=COR["amarelo"], foreground="#221a06", font=FONTE_B, padding=10, borderwidth=0)
+        s.map("Pausar.TButton", background=[("active", "#ffd070"), ("disabled", COR["borda"])])
         s.configure("TButton", background=COR["borda"], foreground=COR["texto"], padding=8, borderwidth=0)
         s.map("TButton", background=[("active", "#3a4252")])
         s.configure("TNotebook", background=COR["fundo"], borderwidth=0)
@@ -95,6 +97,8 @@ class Painel:
         # os botoes principais ficam NO TOPO (sempre visiveis, mesmo em tela pequena)
         self.b_parar = ttk.Button(topo, text="PARAR", style="Parar.TButton", command=self.parar, state="disabled")
         self.b_parar.pack(side="right", padx=(8, 0))
+        self.b_pausar = ttk.Button(topo, text="PAUSAR", style="Pausar.TButton", command=self.pausar, state="disabled")
+        self.b_pausar.pack(side="right", padx=(8, 0))
         self.b_iniciar = ttk.Button(topo, text="INICIAR", style="Iniciar.TButton", command=self.iniciar)
         self.b_iniciar.pack(side="right")
         corpo = ttk.Frame(self.raiz, padding=(18, 4, 18, 14))
@@ -226,6 +230,26 @@ class Painel:
         threading.Thread(target=self.ler_saida, args=(self.proc,), daemon=True).start()
         self.b_iniciar.state(["disabled"])
         self.b_parar.state(["!disabled"])
+        self.b_pausar.state(["!disabled"])
+        self.pausado_desde = None
+        self.b_pausar.configure(text="PAUSAR")
+
+    def pausar(self):
+        """Pausa/continua o bot sem fecha-lo (arquivo logs/pausar.flag). O tempo parado nao entra nas medidas."""
+        if not (self.proc and self.proc.poll() is None):
+            return
+        try:
+            if os.path.exists(N.ARQUIVO_PAUSAR):
+                os.remove(N.ARQUIVO_PAUSAR)
+                self.pausado_desde = None
+                self.b_pausar.configure(text="PAUSAR")
+            else:
+                os.makedirs(config.PASTA_LOGS, exist_ok=True)
+                open(N.ARQUIVO_PAUSAR, "w").close()
+                self.pausado_desde = time.time()
+                self.b_pausar.configure(text="CONTINUAR")
+        except OSError:
+            pass
 
     def ler_saida(self, proc):
         for linha in proc.stdout:
@@ -238,6 +262,10 @@ class Painel:
         try:
             os.makedirs(config.PASTA_LOGS, exist_ok=True)
             open(N.ARQUIVO_PARAR, "w").close()              # o bot para sozinho (fecha a gravacao e escreve o relatorio)
+        except OSError:
+            pass
+        try:
+            os.remove(N.ARQUIVO_PAUSAR)                     # parado de verdade: sai da pausa
         except OSError:
             pass
         self.escrever(self.t_log, "Parando... (ate 20 s)\n", "chefe")
@@ -343,6 +371,9 @@ class Painel:
                     self.escrever(self.t_log, f"--- o bot terminou (codigo {cod}) ---\n", "chefe")
                     self.b_iniciar.state(["!disabled"])
                     self.b_parar.state(["disabled"])
+                    self.b_pausar.state(["disabled"])
+                    self.b_pausar.configure(text="PAUSAR")
+                    self.pausado_desde = None
                     self.inicio = None
                     self.atualizar_relatorio()
                     if self.cfg.get("enviar_ao_parar") and self.cfg.get("gravar", True):
@@ -351,7 +382,10 @@ class Painel:
                     self.escrever(self.t_log, linha, self.etiqueta(linha))
         except queue.Empty:
             pass
-        if self.inicio:
+        if self.inicio and getattr(self, "pausado_desde", None):
+            p = int(time.time() - self.pausado_desde)
+            self.l_status.configure(text=f"PAUSADO ha {p // 60}min{p % 60:02d}s", foreground=COR["amarelo"])
+        elif self.inicio:
             s = int(time.time() - self.inicio)
             self.l_status.configure(text=f"Rodando ha {s // 3600}h{s % 3600 // 60:02d}min{s % 60:02d}s", foreground=COR["verde"])
             if s % 10 == 0:

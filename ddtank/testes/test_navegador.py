@@ -722,3 +722,23 @@ nav.agir("CARTAS")
 assert nav.io.cliques_cartas > 0, "instancia que interessa: abre"
 print("cartas so das instancias escolhidas OK")
 print("\nmelhorias 28/10 noite OK")
+
+# ---------------------------------------------------------------- PAUSAR pelo painel: o tempo parado fica fora dos cronometros
+import tempfile
+arq_pausa = os.path.join(tempfile.mkdtemp(), "pausar.flag")
+sim = Sim(); relogio = [100.0]; logs = []
+metr = MET.Metricas("teste", agora=lambda: relogio[0], log=lambda m: None, salvar=False)
+nav = N.Navegador(sim, det, dormir=lambda s: relogio.__setitem__(0, relogio[0] + s), agora=lambda: relogio[0], log=logs.append, metricas=metr)
+nav.arquivo_pausar = arq_pausa
+metr.instancia_inicio("FANTASMA", 0); metr.batalha_inicio("FANTASMA", 0); nav.batalha_desde = relogio[0]
+relogio[0] += 10
+open(arq_pausa, "w").close(); nav.teclas()
+assert nav.pausado and any("PAUSADO" in l for l in logs)
+relogio[0] += 600                                  # 10 min pausado
+os.remove(arq_pausa); nav.teclas()
+assert not nav.pausado and abs(nav.pausado_total - 600) < 1 and any("Ficou pausado 10min00s" in l for l in logs), logs[-2:]
+relogio[0] += 20
+metr.batalha_fim(True)
+assert abs(metr.lutas[0]["duracao"] - 30) < 1, metr.lutas[0]["duracao"]       # 10 + 20 s, sem os 600 s parado
+assert "Tempo pausado" in metr.texto_relatorio() and abs(nav.batalha_desde - 700) < 1
+print("pausa do painel: tempo parado fora das medidas OK")
