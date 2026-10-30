@@ -18,7 +18,13 @@ Posicoes em pixels do MINIMAPA (o mesmo x que aparece no log: "voce (18, 61)").
 """
 
 ESTRATEGIAS = {
+    "FANTASMA": {"combo": "2,4,4"},
+    "PROFUNDEZAS": {"combo": "2,4,4"},
+    "MINHOCAO": {"combo": "2,4,4"},
+    "DRAGAO_GELADO": {"combo": "2,4,4"},
+    "RAINHA_LIRIS": {"combo": "2,4,4"},
     "ESCORPIAO_REI": {
+        "combo": "2,4",  # tridente e todos os buffs disponiveis; sem itens 1 e 3
         # DESLIGADO a pedido do usuario (28/10): o boneco ja mata o Escorpiao no 1o turno. Para voltar: "aviao": True
         "aviao": False,
         # chao da arena, da ponta esquerda a direita (medido na gravacao do bot 20261028_052531)
@@ -33,7 +39,7 @@ ESTRATEGIAS = {
         "atacar_se_vida_ate": 55.0,
     },
     "PERICAO_COMUM": {                # o Pericao FORA do horario: chefe comum (vida propria, sem numeros de dano)
-        "angulo_min": 0.0, "tolerancia_angulo": 1.0, "usar_pow": True,
+        "angulo_min": 0.0, "tolerancia_angulo": 1.0, "pet_e": True, "usar_pow": True,
     },
     # ---- ROTA LESTE (gravacao 20261030_004606): A Ultima Luta (2 fases) e Devoradores ------------------------------------------------
     "ULTIMA_LUTA_F1": {               # fase 1: boss pequeno ("Boxeador", ao lado do boneco) que morre e renasce com 50%: 2 turnos
@@ -76,6 +82,7 @@ ESTRATEGIAS = {
         "chefe_global": True,         # vida do servidor; acerto pelos numeros de dano; vitoria = o chefao morreu para todos
         "angulo_min": 0.0,            # mira quase reta (o ponteiro le 7); nas outras o minimo e 15
         "tolerancia_angulo": 1.0,     # graus: o ponteiro comeca em 4.5 - a 2.5 do alvo, que a tolerancia normal (3) aceitaria
+        "pet_e": True,                # E quando o buff do pet estiver disponivel
         "usar_pow": True,             # B quando o POW encher (antes dos itens; o tridente nao vale junto com o especial)
         "combo": "2,3,4",             # sempre 2, 3 e o maximo de 4 (depois 5, 6, 7, 8): dano maximo, sem testar combos
     },

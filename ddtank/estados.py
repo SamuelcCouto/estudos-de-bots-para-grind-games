@@ -19,7 +19,7 @@ LARGURA = 1280
 TOLERANCIA = 8   # px de folga ao procurar o recorte perto da posicao esperada
 
 # quando duas telas aparecem juntas (pop-up por cima de outra), vale a primeira da lista
-PRIORIDADE = ["CLIQUE_JOGO", "POPUP_AVISO", "POPUP_CARTA", "POPUP_SOZINHO", "POPUP_SOZINHO2", "TAREFA", "CARTAS", "CARTAS_P", "CONFIG_SEL", "CONFIG_VAZIA",
+PRIORIDADE = ["CLIQUE_JOGO", "POPUP_AVISO", "POPUP_CARTA", "POPUP_SOZINHO", "POPUP_SOZINHO2", "POPUP_SOZINHO3", "TAREFA", "CARTAS", "CARTAS_P", "CONFIG_SEL", "CONFIG_VAZIA",
               "CONFIG",          # janela de configuracao generica: vale quando a arte da instancia marcada e desconhecida
               "PRONTA_FANTASMA", "PRONTA_PROFUNDEZAS", "PRONTA_MINHOCAO", "SALA_VAZIA",
               "SALA",            # sala generica (painel da direita): vale quando a arte da instancia e desconhecida

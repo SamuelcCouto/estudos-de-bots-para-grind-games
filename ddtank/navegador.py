@@ -108,18 +108,21 @@ ROTAS = {
     "N": ("Rota Norte", ["FANTASMA", "PROFUNDEZAS", "MINHOCAO"]),
     "S": ("Rota Sul", ["ESCORPIAO_REI", "DRAGAO_GELADO", "RAINHA_LIRIS"]),
 }
-ROTAS["T"] = ("Norte + Sul", ROTAS["N"][1] + ROTAS["S"][1])
+ROTAS["L"] = ("Rota Leste", ["ULTIMA_LUTA", "DEVORADORES"])
+ROTAS["T"] = ("Rota Norte e Sul", ROTAS["N"][1] + ROTAS["S"][1])
+ROTAS["U"] = ("Super Rota", ROTAS["N"][1] + ROTAS["S"][1] + ROTAS["L"][1])
+CUPONS_POR_ROTA = {"N": 40000, "S": 50000, "L": 60000}
+FIM_ROTA_CUPOM = {3: "N", 6: "S", 8: "L"}     # indice da PROXIMA instancia (depois da ultima da rota) -> rota que acabou (Super Rota: 3+3+2)
 CHEFE = "PERICAO"
 ROTAS["C"] = ("Chefao Global", [CHEFE])
-ROTAS["L"] = ("Rota Leste", ["ULTIMA_LUTA", "DEVORADORES"])
 ROTAS["P"] = ("Pericao (comum, fora do horario do Chefao Global)", [CHEFE])
 # 28/10: o boneco ja esta completo com os drops da Rota Norte -> N e T ficam DESABILITADAS no menu (nao apagadas:
 # continuam funcionando com --rota N / --rota T). O menu oferece so o que esta em uso:
-ROTAS_NO_MENU = ("S", "L", "P", "C")
+ROTAS_NO_MENU = ("U", "T", "S", "L", "P", "C")
 ROTA_PADRAO_MENU = "S"
 # cartas que interessam por rota (as outras so completam a missao da rota: o bot nao abre as cartas delas)
 CARTAS_DE_INTERESSE = {"S": ["RAINHA_LIRIS"]}
-APELIDOS_ROTA = {"1": "N", "2": "S", "NORTE": "N", "SUL": "S", "TODAS": "T", "TUDO": "T", "AMBAS": "T",
+APELIDOS_ROTA = {"1": "N", "2": "S", "NORTE": "N", "SUL": "S", "CUPONS": "U", "SUPER": "U", "NORTE E SUL": "T", "TODAS": "T", "TUDO": "T", "AMBAS": "T",
                  "CHEFE": "C", "CHEFAO": "C", "PERICAO": "C", "COMUM": "P", "LESTE": "L"}
 # horarios do Chefao Global (relogio do PC): (inicio, fim). Mude aqui ou com --horarios-chefe 12:00-13:00,21:00-22:00
 HORARIOS_CHEFE = [((12, 0), (13, 0)), ((21, 0), (22, 0))]
@@ -140,6 +143,7 @@ CLIQUE_SIMPLES = {                      # tela -> onde clicar para avancar
     # 29/10: o Pericao pede confirmacao com outro texto ("A instancia apresenta mais desafios...", botao Concordar) e
     # o jogo avisa "O Chefao Global vai comecar em alguns minutos!" (botao sim) POR CIMA: o bot ficou 55 min parado
     "POPUP_SOZINHO2": POPUP_SOZINHO_SIM,
+    "POPUP_SOZINHO3": POPUP_SOZINHO_SIM,          # 30/10: mesma confirmacao do Pericao, em outro desenho ("Concordar" em (572,405))
     "POPUP_AVISO": POPUP_AVISO_SIM,
     "POPUP_CARTA": POPUP_CARTA_SIM,
 }
@@ -302,20 +306,18 @@ class IOJanela:
 _TPL_COSTAS = []
 
 
-def cartas_de_costas(f):
-    """Centros (x, y) das cartas que ainda estao viradas para baixo (inclui a que so ficou com a
-    borda amarela). Compara o bauzinho do verso com o de cada uma das 21 posicoes."""
+def cartas_de_costas(f, pontos=None):
+    """Centros das cartas de costas: grade comum (21) ou entrada da Ultima Luta (9)."""
     if not _TPL_COSTAS:
         _TPL_COSTAS.append(cv2.imread(os.path.join(config.PASTA_TEMPLATES, "costas_carta.png"), cv2.IMREAD_GRAYSCALE))
     t = _TPL_COSTAS[0]
     th, tw = t.shape
     g = cv2.GaussianBlur(cv2.cvtColor(f, cv2.COLOR_BGR2GRAY), (3, 3), 0)
     achadas = []
-    for y in CARTAS_LINHAS:
-        for x in CARTAS_COLUNAS:
-            roi = g[y - th // 2 - 8:y + th // 2 + 8, x - tw // 2 - 8:x + tw // 2 + 8]
-            if roi.shape[0] >= th and roi.shape[1] >= tw and cv2.matchTemplate(roi, t, cv2.TM_CCOEFF_NORMED).max() > 0.55:
-                achadas.append((x, y))
+    for x, y in (pontos or CARTAS_TODAS):
+        roi = g[y - th // 2 - 8:y + th // 2 + 8, x - tw // 2 - 8:x + tw // 2 + 8]
+        if roi.shape[0] >= th and roi.shape[1] >= tw and cv2.matchTemplate(roi, t, cv2.TM_CCOEFF_NORMED).max() > 0.55:
+            achadas.append((x, y))
     return achadas
 
 
@@ -469,6 +471,18 @@ def em_1280(img):
 # ---------------------------------------------------------------------------
 # leitura do painel de Tarefas (por cor, sem coordenadas fixas de itens)
 # ---------------------------------------------------------------------------
+_TPL_TAREFA_CABECALHO = []
+
+def painel_tarefa_visivel(f):
+    """Reconhece o cabecalho estavel do painel mesmo quando as recompensas mudam."""
+    if not _TPL_TAREFA_CABECALHO:
+        _TPL_TAREFA_CABECALHO.append(cv2.imread(os.path.join(config.PASTA_TEMPLATES, "tarefa_cabecalho.png"), cv2.IMREAD_GRAYSCALE))
+    t = _TPL_TAREFA_CABECALHO[0]
+    if t is None or f is None:
+        return False
+    area = cv2.cvtColor(f[168:212, 400:540], cv2.COLOR_BGR2GRAY)
+    return cv2.matchTemplate(area, t, cv2.TM_CCOEFF_NORMED).max() >= 0.8
+
 def botao_recompensa_ativo(f):
     """O botao 'Obter recompensa' fica vermelho quando da para coletar e cinza quando nao. O vermelho PULSA (R medio
     154-204 nas gravacoes); o cinza fica em ~(94, 92, 90). Vale a diferenca de cor, nao o brilho."""
@@ -476,6 +490,50 @@ def botao_recompensa_ativo(f):
     b, g, r = reg[..., 0].mean(), reg[..., 1].mean(), reg[..., 2].mean()
     return r > 120 and r - g > 50 and r - b > 60
 
+
+_TPL_ESCOLHER_PREMIO = []
+
+def tarefa_exige_escolha(f):
+    """A tarefa mostra premios de escolha livre; o bot nunca escolhe pelo usuario."""
+    if not _TPL_ESCOLHER_PREMIO:
+        t = cv2.imread(os.path.join(config.PASTA_TEMPLATES, "tarefa_escolher_premio.png"), cv2.IMREAD_GRAYSCALE)
+        _TPL_ESCOLHER_PREMIO.append(t)
+    t = _TPL_ESCOLHER_PREMIO[0]
+    if t is None:
+        return False
+    area = cv2.cvtColor(f[320:360, 590:850], cv2.COLOR_BGR2GRAY)
+    return cv2.matchTemplate(area, t, cv2.TM_CCOEFF_NORMED).max() >= 0.82
+
+_TPL_POPUP_ESCOLHA = []
+_TPL_SUPER_LESTE = []
+
+def popup_escolha_recompensa(f):
+    """Posicoes do popup 'Escolha uma recompensa' em um quadro normalizado para 1280."""
+    if f is None:
+        return None
+    if not _TPL_POPUP_ESCOLHA:
+        _TPL_POPUP_ESCOLHA.append(cv2.imread(os.path.join(config.PASTA_TEMPLATES, "tarefa_popup_escolha.png"), cv2.IMREAD_GRAYSCALE))
+    t = _TPL_POPUP_ESCOLHA[0]
+    if t is None:
+        return None
+    area = cv2.cvtColor(f[220:350, 450:800], cv2.COLOR_BGR2GRAY)
+    _, nota, _, (x, y) = cv2.minMaxLoc(cv2.matchTemplate(area, t, cv2.TM_CCOEFF_NORMED))
+    if nota < 0.82:
+        return None
+    x, y = x + 450, y + 220
+    return {"opcao": (x + 63, y + 54), "confirmar": (x + 117, y + 137), "fechar": (x + 220, y + 8)}
+
+def tarefa_leste_selecionada(f):
+    """Confirma que a tarefa aberta e Super Rota Leste antes de escolher um item."""
+    if f is None:
+        return False
+    if not _TPL_SUPER_LESTE:
+        _TPL_SUPER_LESTE.append(cv2.imread(os.path.join(config.PASTA_TEMPLATES, "tarefa_super_leste.png"), cv2.IMREAD_GRAYSCALE))
+    t = _TPL_SUPER_LESTE[0]
+    if t is None:
+        return False
+    area = cv2.cvtColor(f[300:470, 390:620], cv2.COLOR_BGR2GRAY)
+    return cv2.matchTemplate(area, t, cv2.TM_CCOEFF_NORMED).max() >= 0.90
 
 def selos_ok(f):
     """Posicoes (x, y) dos selos verdes 'OK!' na lista da esquerda do painel de Tarefas (em itens e em categorias
@@ -622,7 +680,11 @@ class Navegador:
         self.em_batalha = False
         self.fora_da_batalha_desde = None
         self.rota = rota or list(ROTA_PADRAO)
-        self.usar_tarefas, self.uma_vez, self.simular = usar_tarefas, uma_vez, simular
+        self.super_rota_cupons = self.rota in (ROTAS["U"][1], ROTAS["T"][1])
+        self.cupom_pendente = None
+        self.ultima_coleta_tarefas = 0
+        # Gato Preto sozinho tem recompensa com escolha manual; nunca abrir/coletar tarefas.
+        self.usar_tarefas, self.uma_vez, self.simular = (usar_tarefas or self.super_rota_cupons) and self.rota != ["GATO_PRETO"], uma_vez, simular
         self.dormir, self.agora, self.log = dormir, agora, log
         self.k = 1.0
         self.modo = 0                     # indice em MODOS_ENTRADA
@@ -697,7 +759,7 @@ class Navegador:
                 self.log(f"[CHEFAO] fim do horario do Chefao Global: voltando para a rota ({self.instancia})")
                 return False
         if pendente:
-            if estado in ("POPUP_SOZINHO", "POPUP_SOZINHO2", "POPUP_AVISO") or (self.chefe_modo == "horarios" and estado not in (
+            if estado in ("POPUP_SOZINHO", "POPUP_SOZINHO2", "POPUP_SOZINHO3", "POPUP_AVISO") or (self.chefe_modo == "horarios" and estado not in (
                     "SALA_VAZIA", "SALA", "CONFIG_VAZIA", "CONFIG_SEL", "CONFIG", "CENTRAL", "MAPA")
                     and not estado.startswith("PRONTA_")):
                 return False              # no meio de outra coisa (tarefas, comecando a luta): troca na proxima tela
@@ -769,6 +831,11 @@ class Navegador:
         f = em_1280(img)
         self.ultimo_quadro = f
         self.achadas_atual = self.det.detectar(estados_mod.normalizar(f))
+        if "TAREFA" not in self.achadas_atual and painel_tarefa_visivel(f):
+            if self.achadas_atual and self.achadas_atual[0] == "CLIQUE_JOGO":
+                self.achadas_atual.insert(1, "TAREFA")
+            elif not self.achadas_atual or not self.achadas_atual[0].startswith("POPUP_"):
+                self.achadas_atual.insert(0, "TAREFA")
         return f, self.achadas_atual
 
     def estado_estavel(self):
@@ -926,9 +993,12 @@ class Navegador:
         if self.metr:
             self.metr.instancia_fim("PERICAO_COMUM" if antes == CHEFE else antes)
         self.fase = 1
+        if self.super_rota_cupons:
+            self.cupom_pendente = FIM_ROTA_CUPOM.get(self.idx) if self.idx <= len(self.rota) else None
         if self.idx >= len(self.rota):
             self.run_completa = True
-            self.log(f"*** {antes} concluida: rota completa ({self.voltas + 1}a volta). Falta coletar as tarefas. ***")
+            self.log(f"*** {antes} concluida: rota completa ({self.voltas + 1}a volta)." +
+                     (" Falta coletar as tarefas. ***" if self.usar_tarefas else " ***"))
         else:
             self.log(f"[ORDEM] {antes} concluida. Proxima: {self.instancia} (idx {self.idx})")
         if self.reg:
@@ -960,12 +1030,28 @@ class Navegador:
             self.batalha_desde = None
 
         sala = estado in ("SALA_VAZIA", "SALA") or estado.startswith("PRONTA_")
-        if self.metr and (not self.run_completa or self.no_chefe) and (sala or estado.startswith("CONFIG")):
+        if self.metr and (not self.run_completa or self.no_chefe) and (sala or estado.startswith("CONFIG")) and not (sala and self.cupom_pendente):
             self.metr.instancia_inicio(self.instancia_metr, self.voltas)
+        if sala and self.cupom_pendente and not self.no_chefe:
+            if not self.tarefas_ok and self.usar_tarefas:
+                if not self.clicar_e_verificar(estado, SALA_ICONE_TAREFAS, descricao=f"coletar missao da rota {self.cupom_pendente}"):
+                    self.pontos_tarefa["abrir"] += 1
+                    if self.pontos_tarefa["abrir"] >= 3:
+                        self.log("   ! nao consegui abrir Tarefas; segmento sem cupons confirmados")
+                        self.tarefas_ok = True
+                return
+            if self.metr:
+                self.metr.rota_cupom_fim(self.cupom_pendente, CUPONS_POR_ROTA[self.cupom_pendente],
+                                        self.ultima_coleta_tarefas if self.usar_tarefas else 0)
+            self.log(f"[CUPONS] segmento {self.cupom_pendente} concluido; {self.ultima_coleta_tarefas} tarefa(s) coletada(s)")
+            self.cupom_pendente = None
+            self.ultima_coleta_tarefas = 0
+            if not self.run_completa:
+                self.tarefas_ok = False
         if sala and self.run_completa and not self.no_chefe:
             # a rota acabou: coleta as tarefas e so entao comeca outra volta (a sala pode continuar mostrando a
             # ultima instancia - antes o bot "aceitava" essa sala e repetia o Minhocao sem parar)
-            if self.usar_tarefas and not self.tarefas_ok and (self.voltas + 1) % self.tarefas_a_cada == 0:
+            if self.usar_tarefas and not self.super_rota_cupons and not self.tarefas_ok and (self.voltas + 1) % self.tarefas_a_cada == 0:
                 if not self.clicar_e_verificar(estado, SALA_ICONE_TAREFAS, descricao="abrir Tarefas"):
                     self.pontos_tarefa["abrir"] += 1
                     if self.pontos_tarefa["abrir"] >= 3:
@@ -1119,8 +1205,9 @@ class Navegador:
             if f is None:
                 return
             self.quadro_cartas = f
-            costas = cartas_de_costas(f)
-            viradas = len(CARTAS_TODAS) - len(costas)
+            pontos_cartas = CARTAS_TODAS
+            costas = cartas_de_costas(f, pontos_cartas)
+            viradas = len(pontos_cartas) - len(costas)
             self.cartas_max_viradas = max(self.cartas_max_viradas, viradas)
             if viradas >= CARTAS_VIRADAS_PARA_PAGAR:
                 self.contar_drops(f, costas)
@@ -1130,7 +1217,7 @@ class Navegador:
                 # sorteia 3 cartas e clica nas 3 em seguida (a tela tem cronometro de 15 s; com o PC ocupado o jogo
                 # demora a mostrar a carta virando - esperar cada uma virar antes da proxima estourava o tempo).
                 # O jogo trava na 3a: cliques a mais nao abrem outra.
-                livres = [p for p in CARTAS_TODAS if p in costas] or list(CARTAS_TODAS)
+                livres = [p for p in pontos_cartas if p in costas] or list(pontos_cartas)
                 self.cartas_escolhidas = self.rng.sample(livres, min(CARTAS_VIRADAS_PARA_PAGAR, len(livres)))
                 self.log(f"[CARTAS] cartas sorteadas: {self.cartas_escolhidas}")
                 for p in self.cartas_escolhidas:
@@ -1155,7 +1242,12 @@ class Navegador:
                 return
             self.dormir(0.4)
         elif estado == "TAREFA":
-            self.coletar_tarefas()
+            if self.usar_tarefas:
+                self.coletar_tarefas()
+            else:
+                self.tarefas_ok = True
+                self.log("[TAREFA] coleta desativada; fechando sem tocar nas recompensas")
+                self.clicar_e_verificar("TAREFA", TAREFA_FECHAR, descricao="fechar painel sem coletar")
         elif estado == "BATALHA":
             self.lutou = True
             if self.batalha_desde is None:
@@ -1261,10 +1353,39 @@ class Navegador:
         self.perks_tentativas = 0
         self.clicar_e_verificar(estado, SALA_INICIO, descricao=f"Inicio ({nome})", espera=6.0)
 
+    def escolher_material_leste(self, f, popup):
+        """Escolhe o primeiro material irrelevante e confirma somente na missao Super Rota Leste."""
+        leste_esperada = self.cupom_pendente == "L" or self.rota == ROTAS["L"][1]
+        if not leste_esperada or not tarefa_leste_selecionada(f):
+            self.log("   [TAREFA] escolha de outra missao: deixo para voce")
+            self.clicar(popup["fechar"])
+            self.dormir(0.4)
+            return False
+        self.log("   [TAREFA] Super Rota Leste: escolhendo material e confirmando a recompensa")
+        for tentativa in range(2):
+            self.clicar(popup["opcao"])
+            self.dormir(0.35)
+            g, _ = self.ver()
+            if g is None or popup_escolha_recompensa(g) is None:
+                return False
+            self.clicar(popup["confirmar"])
+            for _ in range(5):
+                self.dormir(0.4)
+                g, _ = self.ver()
+                if g is not None and popup_escolha_recompensa(g) is None:
+                    return True
+            self.log(f"   [TAREFA] confirmacao da escolha ainda aberta (tentativa {tentativa + 1}/2)")
+        return False
+
     def coletar_tarefas(self):
         """Coleta TODAS as tarefas concluidas (selo verde 'OK!'): clica na tarefa, depois no botao vermelho; categoria
         fechada com selo -> abre; sem selo visivel -> rola a sub-lista ate o fim procurando mais. So fecha o painel
         quando nao sobra selo nem lista para rolar."""
+        if not self.usar_tarefas or self.rota == ["GATO_PRETO"]:
+            self.tarefas_ok = True
+            self.log("[TAREFA] coleta desativada; fechando sem tocar nas recompensas")
+            self.clicar_e_verificar("TAREFA", TAREFA_FECHAR, descricao="fechar painel sem coletar")
+            return
         self.log("[TAREFA] procurando tarefas concluidas (selo OK!)")
         vezes = Counter()
         coletadas, sem_reacao, rolagens, ignorar_botao = 0, 0, 0, False
@@ -1272,9 +1393,22 @@ class Navegador:
             f, achadas = self.ver()
             if f is None:
                 break
+            popup = popup_escolha_recompensa(f)
+            if popup is not None:
+                if self.escolher_material_leste(f, popup):
+                    coletadas += 1
+                    sem_reacao, rolagens, ignorar_botao = 0, 0, False
+                    vezes.clear()
+                    continue
+                ignorar_botao = True
+                break
             if achadas and "TAREFA" not in achadas and not self.simular:
                 self.log(f"   (o painel de tarefas sumiu: tela {achadas[0]})")
                 break
+            leste_esperada = self.cupom_pendente == "L" or self.rota == ROTAS["L"][1]
+            if tarefa_exige_escolha(f) and not (leste_esperada and tarefa_leste_selecionada(f)) and not ignorar_botao:
+                ignorar_botao = True
+                self.log("   [TAREFA] recompensa com escolha manual; ignorando esta tarefa")
             acao, ponto = proxima_acao_tarefa(f, vezes, ignorar_botao)
             if acao == "botao":
                 antes = recorte_painel_tarefa(f)
@@ -1282,6 +1416,8 @@ class Navegador:
                 self.clicar(ponto)
                 self.dormir(1.4)
                 g, _e = self.ver()
+                if g is not None and popup_escolha_recompensa(g) is not None:
+                    continue  # so conta a missao depois de confirmar o item no popup
                 if g is not None and botao_recompensa_ativo(g) and float(np.abs(recorte_painel_tarefa(g) - antes).mean()) < 2.5:
                     sem_reacao += 1                   # nada mudou: o clique nao pegou (ou o jogo recusa, ex.: mochila cheia)
                     if sem_reacao >= 2:
@@ -1312,6 +1448,7 @@ class Navegador:
             rolagens += 1
             vezes.clear()
             self.log(f"   rolando a lista de tarefas ({rolagens}x) para procurar mais")
+        self.ultima_coleta_tarefas = coletadas
         self.log(f"[TAREFA] {coletadas} recompensa(s) coletada(s)")
         if self.estat and coletadas:
             self.estat.missoes(coletadas)
@@ -1359,9 +1496,18 @@ class Navegador:
                 self.fora_da_batalha_desde = None
                 self.atirador.passo(f)
                 return
+            cartas_apos_luta = bool(achadas and achadas[0] in CARTAS_ESTADOS)
+            # O Fantasma pode ser confundido com CONFIG_SEL durante a animacao da batalha.
+            # O PASS visivel e evidencia mais forte de que ainda e a nossa vez.
+            if not cartas_apos_luta and f is not None and hasattr(self.atirador, "lei") and self.atirador.lei.minha_vez(f):
+                self.fora_da_batalha_desde = None
+                self.atirador.passo(f)
+                return
             agora = self.agora()
             self.fora_da_batalha_desde = self.fora_da_batalha_desde or agora
-            if agora - self.fora_da_batalha_desde < 3.0 and not (achadas and achadas[0] in CARTAS_ESTADOS):
+            tela_final_clara = bool(achadas and achadas[0] in ("SALA", "SALA_VAZIA", "CENTRAL", "MAPA"))
+            espera_saida = 3.0 if tela_final_clara else 12.0
+            if agora - self.fora_da_batalha_desde < espera_saida and not cartas_apos_luta:
                 self.dormir(0.15)
                 return
             self.em_batalha = False
@@ -1451,19 +1597,22 @@ def perguntar_rota(entrada=input, saida=print):
     """Pergunta no console qual rota fazer. Enter sem nada (ou console sem teclado) = Sul. Norte (N) e Todas (T) estao
     desabilitadas no menu (o boneco ja esta completo com os drops do Norte) mas ainda funcionam se digitadas."""
     saida("Qual rota?  [S] Sul (Escorpiao Rei, Dragao Gelado, Rainha Liris)")
+    saida("            [L] Leste (A Ultima Luta, 2 fases, Devoradores)")
+    saida("            [U] Super Rota (Norte > Sul > Leste; missao apos cada rota)")
+    saida("            [T] Rota Norte e Sul (missao apos cada rota)")
     saida("            [P] Pericao comum (fora do horario do Chefao Global)")
     saida(f"            [C] Chefao Global (Pericao) - so ele: comeca agora e depois espera os horarios "
           f"({texto_horarios(HORARIOS_CHEFE)})")
     for _ in range(5):
         try:
-            r = entrada("Rota (S/P/C, Enter = S): ").strip().upper()
+            r = entrada("Rota (S/L/P/C, Enter = S): ").strip().upper()
         except EOFError:
             return ROTA_PADRAO_MENU
         if r == "":
             return ROTA_PADRAO_MENU
-        if r[0] in ("S", "P", "C", "N", "T"):
+        if r[0] in ("S", "L", "U", "P", "C", "N", "T"):
             return r[0]
-        saida("   responda S, P ou C")
+        saida("   responda S, L, P ou C")
     return ROTA_PADRAO_MENU
 
 
@@ -1566,7 +1715,7 @@ def main():
     ap = argparse.ArgumentParser(description="DDTank - navegador da rota de instancias")
     ap.add_argument("--titulo", default="")
     ap.add_argument("--exe", default="")
-    ap.add_argument("--rota", default=None, help="N (Norte), S (Sul), T (as duas) ou C (so o Chefao Global); ou instancias em ordem, ex.: "
+    ap.add_argument("--rota", default=None, help="N (Norte), S (Sul), L (Leste), U (Super Cupons), T (Norte+Sul) ou C (so o Chefao Global); ou instancias em ordem, ex.: "
                     "ESCORPIAO_REI,DRAGAO_GELADO (instancias: " + ", ".join(INSTANCIA_NA_CONFIG) + "). Sem isso, pergunta ao abrir.")
     ap.add_argument("--dificuldade", default=None, choices=sorted(DIFICULDADE_BOTAO),
                     help="clica nessa dificuldade antes de confirmar (as rotas Norte e Sul nao tem escolha)")
@@ -1673,7 +1822,7 @@ def main():
     tarefas_a_cada = args.tarefas_a_cada or (10 if len(rota) == 1 and chave not in ("C",) else 1)
     log(f"Cronometro: logs\\relatorio.txt (resumo, atualizado a cada luta), logs\\lutas.csv e logs\\voltas.csv")
     io.log = log
-    nav = Navegador(io, det, rota, not args.sem_tarefas, args.uma_vez, args.simular, log=log, reg=reg,
+    nav = Navegador(io, det, rota, not args.sem_tarefas or chave in ("U", "T"), args.uma_vez, args.simular, log=log, reg=reg,
                     dificuldade=dificuldade, metricas=metr, chefe=chefe, horarios_chefe=horarios, cartas_em=cartas_em,
                     estat=estat, catalogo=drops_mod.Catalogo(), tarefas_a_cada=tarefas_a_cada)
     log("Cartas: " + ("abre todas" if not cartas_em else "so de " + ", ".join(cartas_em) + " (as outras so completam a missao)"))

@@ -31,6 +31,7 @@ BUFFS = [4, 4, 4, 4, 5, 6, 7, 8]
 # nome -> ordem de itens. Os buffs do fim entram enquanto a stamina der.
 COMBOS = {
     "2,3,4": [2, 3] + BUFFS,     # TESTE DE FOGO: tridente + 1 ataque extra (2 animacoes de tiro)
+    "2,4,4": [2, 4, 4],         # 1 disparo, so dois amplificadores
     "2,4": [2] + BUFFS,          # tridente, 1 animacao so
     "4": list(BUFFS),            # so buffs: 1 bala, 1 animacao
     "3,4": [3] + BUFFS,          # 2 tiros simples
@@ -93,7 +94,7 @@ class Combos:
             return "personalizado", list(self.fixo), "ordem definida por voce (--itens)"
         fixo_inst = estrategias.estrategia(inst).get("combo")
         if fixo_inst:
-            return fixo_inst, list(COMBOS[fixo_inst]), "chefao global: sempre dano maximo (2, 3 e o maximo de 4; sem stamina para o 4, os 5-8)"
+            return fixo_inst, list(COMBOS[fixo_inst]), f"combo fixo de {inst}: {fixo_inst}"
         nf, mf, _dpf, mataf, danof = self.resumo(inst, TESTE_DE_FOGO)
         if nf < FOGO_PARA_CONCLUIR:
             return TESTE_DE_FOGO, list(COMBOS[TESTE_DE_FOGO]), f"teste de fogo (dano maximo), luta {nf + 1}/{FOGO_PARA_CONCLUIR}"

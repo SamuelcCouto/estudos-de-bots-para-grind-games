@@ -9,11 +9,13 @@ import config
 import navegador as N
 
 ARQ_CONFIG = os.path.join(config.PASTA, "dados", "painel.json")
-# alvo = o que o bot faz: "N" (Rota Norte), "S" (Rota Sul), "L" (Rota Leste - em desenvolvimento), "C" (Chefao Global) ou o nome
+# alvo = o que o bot faz: "N" (Rota Norte), "S" (Rota Sul), "L" (Rota Leste), "C" (Chefao Global) ou o nome
 # de UM chefe (o bot luta so nele, repetidamente)
 ROTAS_PAINEL = [("N", "Rota Norte", "Fantasma > Profundezas > Minhocao", True),
                 ("S", "Rota Sul", "Escorpiao Rei > Dragao Gelado > Rainha Liris", True),
-                ("L", "Rota Leste", "A Ultima Luta (2 fases) > Devoradores", True)]
+                ("L", "Rota Leste", "A Ultima Luta (2 fases) > Devoradores", True),
+                ("U", "Super Rota", "Norte > missao > Sul > missao > Leste > missao", True),
+                ("T", "Rota Norte e Sul", "Norte > missao > Sul > missao", True)]
 CHEFES_PAINEL = [("FANTASMA", "Fantasma"), ("PROFUNDEZAS", "Profundezas"), ("MINHOCAO", "Minhocao"),
                  ("ESCORPIAO_REI", "Escorpiao Rei"), ("DRAGAO_GELADO", "Dragao Gelado"), ("RAINHA_LIRIS", "Rainha Liris"),
                  ("ULTIMA_LUTA", "A Ultima Luta"), ("DEVORADORES", "Devoradores"),
@@ -29,7 +31,7 @@ def modo_amigo():
 
 
 def instancias_do_alvo(alvo):
-    if alvo in ("N", "S", "L"):
+    if alvo in N.ROTAS and alvo in ("N", "S", "L", "U", "T"):
         return list(N.ROTAS[alvo][1])
     return [N.CHEFE if alvo == "C" else alvo]
 
@@ -60,7 +62,7 @@ def montar_comando(cfg, python="python", amigo=False):
         cmd.append("--sem-gravar")                      # amigos: nada de gravacao
     elif cfg.get("gravacao_leve"):
         cmd.append("--gravacao-leve")
-    if not cfg.get("tarefas", True):
+    if alvo not in ("U", "T") and (alvo == "GATO_PRETO" or not cfg.get("tarefas", True)):
         cmd.append("--sem-tarefas")
     return cmd
 

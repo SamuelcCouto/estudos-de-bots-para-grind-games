@@ -350,6 +350,8 @@ arq_c = os.path.join(tempfile.mkdtemp(), "combos.json")
 w = MundoComThread()
 tmp = tempfile.NamedTemporaryFile("w", suffix=".json", delete=False); tmp.close(); os.unlink(tmp.name)
 mem = M.Memoria(arq_aprendizado=tmp.name); logs = []
+import estrategias as _EST
+_EST.ESTRATEGIAS.pop("MINHOCAO", None)           # (Norte/Sul tem combo FIXO por pedido do usuario: aqui testa o aprendizado de combos)
 cb = CB.Combos(arq=arq_c)
 at = A.Atirador(w, mem, lambda: "MINHOCAO", leitor=Leitor(), dormir=w.dormir, agora=lambda: w.t, log=logs.append, combos=cb)
 rodar(at, w, ate=16)

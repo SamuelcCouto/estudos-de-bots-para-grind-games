@@ -70,6 +70,8 @@ MUNDO = {
     # nem o fogo mata no 1o turno (precisa upar), mas o 3,4 tira mais vida (hitbox so no pe) -> luta mais curta
     "ESCORPIAO_REI": {**{c: (0.03, 30, 44) for c in C.COMBOS}, "3,4": (0.03, 30, 36), "4": (0.0, 30, 60)},
 }
+import estrategias as _EST
+_EST.ESTRATEGIAS["ESCORPIAO_REI"].pop("combo", None); _EST.ESTRATEGIAS.pop("FANTASMA", None)           # (combo fixo por pedido do usuario: aqui testa o aprendizado de combos)
 arq = os.path.join(tempfile.mkdtemp(), "combos.json")
 c = C.Combos(arq=arq)
 usados = {"FANTASMA": [], "ESCORPIAO_REI": []}

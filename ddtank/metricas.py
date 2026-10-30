@@ -57,6 +57,8 @@ class Metricas:
         self.luta = None              # luta em andamento
         self.volta_t0 = None
         self.volta_lutas = []
+        self.cupom_t0 = self.inicio
+        self.cupons_rotas = []
         self.pausado_total = 0.0
         if salvar:
             os.makedirs(self.pasta, exist_ok=True)
@@ -70,6 +72,7 @@ class Metricas:
                 d["t0"] += dur
         if self.volta_t0 is not None:
             self.volta_t0 += dur
+        self.cupom_t0 += dur
 
     # ------------------------------------------------------------------ eventos (chamados pelo navegador/atirador)
     def instancia_inicio(self, inst, volta):
@@ -156,6 +159,23 @@ class Metricas:
         self._csv_volta(V)
         self.escrever_relatorio()
 
+    def rota_cupom_fim(self, rota, recompensa, tarefas_coletadas):
+        """Tempo da rota inclui selecao, lutas, cartas e coleta da missao."""
+        agora = self.agora()
+        dur = max(0.0, agora - self.cupom_t0)
+        obtidos = recompensa if tarefas_coletadas > 0 else 0
+        r = {"rota": rota, "duracao": dur, "cupons": obtidos, "tarefas": tarefas_coletadas}
+        self.cupons_rotas.append(r)
+        self.cupom_t0 = agora
+        por_min = obtidos * 60 / dur if dur else 0.0
+        self.log(f"[CUPONS] rota {rota}: {fmt(dur)}, {obtidos:,} cupons estimados; "
+                 f"{por_min:,.0f}/min, {por_min * 10:,.0f}/10min, {por_min * 60:,.0f}/h")
+        self._csv("cupons.csv",
+                  ["data", "rota", "tempo_s", "tarefas_coletadas", "cupons_estimados", "cupons_min", "cupons_10min", "cupons_hora"],
+                  [datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"), rota, round(dur, 1), tarefas_coletadas, obtidos,
+                   round(por_min, 1), round(por_min * 10, 1), round(por_min * 60, 1)])
+        self.escrever_relatorio()
+
     # ------------------------------------------------------------------ resumo
     def por_instancia(self):
         ordem = []
@@ -190,7 +210,7 @@ class Metricas:
     @staticmethod
     def diagnostico(inst, r):
         n = r["lutas"]
-        if estrategias.estrategia(inst).get("pet_e"):
+        if estrategias.estrategia(inst).get("pet_e") and not estrategias.estrategia(inst).get("chefe_global"):
             return (f"LUTA LONGA (chefe com muita vida; item E + perks + especial) - {n} luta(s), {r['vitorias']} vitoria(s), "
                     f"{r['turnos_medios'] or 0:.0f} turnos do bot por luta, {r['luta_media'] / 60:.1f} min em media, "
                     f"{r['especiais']} especial(is) B no total.")
@@ -235,6 +255,22 @@ class Metricas:
             linhas.append(f"Rodando ha {fmt(rod)} | nenhuma volta completa ainda")
         if self.pausado_total:
             linhas.append(f"Tempo pausado (fora das medidas): {fmt(self.pausado_total)}")
+        if self.cupons_rotas:
+            linhas += ["", "CUPONS POR ROTA (estimativa: recompensa informada; creditada se houve coleta)"]
+            for rota in ("N", "S", "L"):
+                amostras = [r for r in self.cupons_rotas if r["rota"] == rota]
+                if not amostras:
+                    continue
+                tempo = sum(r["duracao"] for r in amostras)
+                total = sum(r["cupons"] for r in amostras)
+                taxa = total * 60 / tempo if tempo else 0.0
+                linhas.append(f"  {rota}: {len(amostras)} conclusao(oes), {total:,} cupons estimados; "
+                              f"media {fmt(tempo / len(amostras))}; {taxa:,.0f}/min, {taxa * 10:,.0f}/10min, {taxa * 60:,.0f}/h")
+            tempo_total = sum(r["duracao"] for r in self.cupons_rotas)
+            cupons_total = sum(r["cupons"] for r in self.cupons_rotas)
+            taxa_total = cupons_total * 60 / tempo_total if tempo_total else 0.0
+            linhas.append(f"  TOTAL: {cupons_total:,} cupons estimados em {fmt(tempo_total)}; "
+                          f"{taxa_total:,.0f}/min, {taxa_total * 10:,.0f}/10min, {taxa_total * 60:,.0f}/h")
         res = self.por_instancia()
         if res:
             linhas += ["", f"{'INSTANCIA':16s}{'lutas':>6s}{'vit':>5s}{'derr':>5s}{'luta media':>12s}{'instancia':>11s}"

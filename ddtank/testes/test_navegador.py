@@ -29,7 +29,8 @@ ESPERADO = {"CLIQUE_JOGO": "CLIQUE_JOGO", "MAPA": "MAPA", "CENTRAL": "CENTRAL", 
             # 28/10 21h: outro boneco/visual no painel "Informacoes do usuario" (o recorte antigo pegava o retrato)
             "CENTRAL_OUTRO_BONECO": "CENTRAL",
             # 29/10 12h: o bot ficou 55 min parado - confirmacao do Pericao com outro texto, e o aviso do chefao por cima
-            "POPUP_SOZINHO_CHEFE": "POPUP_SOZINHO2", "POPUP_AVISO_CHEFE": "POPUP_AVISO"}
+            "POPUP_SOZINHO_CHEFE": "POPUP_SOZINHO2", "POPUP_AVISO_CHEFE": "POPUP_AVISO",
+            "POPUP_DICAS_PERICAO": "POPUP_SOZINHO3"}
 ruim = 0
 for nome, esp in ESPERADO.items():
     got = det.detectar(E.normalizar(img(nome)))
@@ -674,7 +675,7 @@ print("evento fechado: desiste e segue a rota OK")
 # ---------------------------------------------------------------- 28/10 noite: Norte desabilitada, Pericao comum, cartas so de algumas
 saida_menu = []
 N.perguntar_rota(entrada=lambda p: "", saida=saida_menu.append)
-assert "Norte" not in " ".join(saida_menu) and "Todas" not in " ".join(saida_menu), "N e T saem do menu"
+assert "[U] Super Rota" in " ".join(saida_menu) and "[S] Sul" in " ".join(saida_menu), "menu: Super Rota (N > S > L com missao) e Sul"
 assert N.rota_dos_argumentos("N")[1] == ["FANTASMA", "PROFUNDEZAS", "MINHOCAO"] and len(N.rota_dos_argumentos("T")[1]) == 6, "...mas continuam"
 assert N.perguntar_rota(entrada=lambda p: "p", saida=lambda m: None) == "P" and N.rota_dos_argumentos("P")[1] == ["PERICAO"]
 ROTA_S = N.ROTAS["S"][1]

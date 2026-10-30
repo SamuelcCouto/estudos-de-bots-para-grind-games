@@ -606,3 +606,21 @@ for esticado sem manter a proporcao, falha); zoom < 0.75 perde o minimapa; refs 
 - Testes: test_navegador (SimLeste de ponta a ponta) passam; NADA testado no jogo.
 - O usuario continuou o projeto por conta propria (outro assistente) na pasta D:\...\ddtank\botDDTGPT; precisa subir para o GitHub
   (branch botddtgpt) para eu comparar, corrigir e unir a esta versao.
+
+## 30/10 noite: UNIAO com a versao paralela (botDDTGPT, feita pelo usuario com outro assistente)
+Comparei botDDTGPT com a base (e13e258) e com esta versao (3-way merge). O que ENTROU:
+- **Super Rota (U) e Rota Norte+Sul (T)**: ordem N > missao > S > missao > L > missao; `navegador.FIM_ROTA_CUPOM` (3 / 6 / 8 = indice depois da ultima
+  instancia de cada rota), `cupom_pendente`, `metricas.rota_cupom_fim` -> logs/cupons.csv e secao "CUPONS POR ROTA" no relatorio (valores informados
+  pelo usuario: N 40000, S 50000, L 60000; o bot NAO le o saldo de cupons, so estima: creditado se houve coleta de missao). Painel: cards Super Rota / Rota Norte e Sul.
+- **Tarefas**: reconhecimento do painel pelo cabecalho (`painel_tarefa_visivel`), recompensas de ESCOLHA MANUAL ignoradas (`tarefa_exige_escolha`),
+  popup "Escolha uma recompensa" e escolha do 1o material SO na missao Super Rota Leste (`escolher_material_leste`); Gato Preto sozinho nunca coleta tarefas.
+- **Saida da batalha mais robusta**: PASS visivel = ainda e a vez (animacao parecida com CONFIG_SEL nao encerra a luta); espera 12 s se a tela
+  seguinte nao e clara (SALA/CENTRAL/MAPA).
+- **Combos fixos pedidos pelo usuario**: Fantasma/Profundezas/Minhocao/Dragao/Rainha = 2,4,4; Escorpiao = 2,4 (por isso esses nao aprendem combos).
+- test_cupons.py, frames TAREFA_LESTE_ESCOLHA / POPUP_DICAS_PERICAO, 6 sementes de tiro da Leste (F1/F2).
+O que NAO entrou (decisao): a Leste deles (3 instancias na rota com ULTIMA_LUTA_FASE2 "escolhida" como se fosse outra instancia, CARTAS_ENTRADA, busca de
+forca por erros consecutivos, boneco do Devoradores chutado em (15,62) - o certo e x ~0.7, mira do Gato subindo para 18 graus com o item 2) - fica a
+versao com fase interna (`navegador.fase`), CARTAS_P, `minimapa_x_min` e Gato sem o item 2. Obs.: o commit e6e86b2 trouxe 4,2 GB de zips em
+botDDTGPT/envio (so no historico do git, .git ficou ~5 GB); o ideal e limpar o historico.
+Novo estado POPUP_SOZINHO3: a confirmacao "A instancia apresenta mais desafios" do Pericao em OUTRO desenho (frame POPUP_DICAS_PERICAO), que o detector
+nao reconhecia (nota 0.85 < 0.873 do POPUP_SOZINHO antigo).

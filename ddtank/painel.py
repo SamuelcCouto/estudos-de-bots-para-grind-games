@@ -154,7 +154,8 @@ class Painel:
         # opcoes
         c = self.cartao(esq, "Opcoes")
         c.pack(fill="x", pady=(0, 8))
-        ttk.Checkbutton(c, text="coletar as tarefas no fim de cada volta", variable=self.v_tarefas).pack(anchor="w")
+        self.k_tarefas = ttk.Checkbutton(c, text="coletar as tarefas no fim de cada rota", variable=self.v_tarefas)
+        self.k_tarefas.pack(anchor="w")
         if not self.amigo:
             # versao do desenvolvedor: gravacao, GitHub, ferramentas
             c = self.cartao(esq, "Desenvolvedor")
@@ -214,6 +215,14 @@ class Painel:
         ttk.Label(self.f_cartas, text="As desmarcadas so completam a missao (o jogo da 2 cartas sozinho).",
                   style="Fraco.TLabel").pack(anchor="w", pady=(4, 0))
         self.k_chefe.state(["disabled"] if alvo == "C" else ["!disabled"])
+        if alvo in ("U", "T"):
+            self.v_tarefas.set(True)
+            self.k_tarefas.state(["disabled"])
+        elif alvo == "GATO_PRETO":
+            self.v_tarefas.set(False)
+            self.k_tarefas.state(["disabled"])
+        else:
+            self.k_tarefas.state(["!disabled"])
 
     def marcar_cartas(self, valor):
         for v in self.v_cartas.values():

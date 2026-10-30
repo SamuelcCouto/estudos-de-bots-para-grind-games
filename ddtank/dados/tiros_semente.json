@@ -1360,6 +1360,102 @@
    "origem": "gravacao 20261030_004606",
    "dano": 41.0,
    "leitura": 2
+  },
+  {
+   "inst": "ULTIMA_LUTA_F1",
+   "azul": [
+    13,
+    62
+   ],
+   "boss": [
+    20,
+    62
+   ],
+   "angulo": 15.5,
+   "forca": 13,
+   "acertou": true,
+   "origem": "gravacao 20261030_004606 (versao GPT)",
+   "leitura": 2
+  },
+  {
+   "inst": "ULTIMA_LUTA_F1",
+   "azul": [
+    13,
+    62
+   ],
+   "boss": [
+    20,
+    62
+   ],
+   "angulo": 12.5,
+   "forca": 14,
+   "acertou": true,
+   "origem": "gravacao 20261030_004606 (versao GPT)",
+   "leitura": 2
+  },
+  {
+   "inst": "ULTIMA_LUTA_F2",
+   "azul": [
+    13,
+    62
+   ],
+   "boss": [
+    51.5,
+    27
+   ],
+   "angulo": 72,
+   "forca": 51,
+   "acertou": true,
+   "origem": "gravacao 20261030_004606 (versao GPT)",
+   "leitura": 2
+  },
+  {
+   "inst": "ULTIMA_LUTA_F2",
+   "azul": [
+    13,
+    62
+   ],
+   "boss": [
+    51.5,
+    27
+   ],
+   "angulo": 71,
+   "forca": 48,
+   "acertou": true,
+   "origem": "gravacao 20261030_004606 (versao GPT)",
+   "leitura": 2
+  },
+  {
+   "inst": "ULTIMA_LUTA_F2",
+   "azul": [
+    15,
+    62
+   ],
+   "boss": [
+    51.5,
+    27
+   ],
+   "angulo": 70,
+   "forca": 50,
+   "acertou": true,
+   "origem": "gravacao 20261030_004606 (versao GPT)",
+   "leitura": 2
+  },
+  {
+   "inst": "ULTIMA_LUTA_F2",
+   "azul": [
+    18,
+    62
+   ],
+   "boss": [
+    51.5,
+    27
+   ],
+   "angulo": 71,
+   "forca": 45,
+   "acertou": true,
+   "origem": "gravacao 20261030_004606 (versao GPT)",
+   "leitura": 2
   }
  ]
 }

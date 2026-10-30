@@ -280,6 +280,21 @@
      "y": 478
     }
    ]
+  },
+  "POPUP_SOZINHO3": {
+   "limiar": 0.8,
+   "patches": [
+    {
+     "arquivo": "POPUP_SOZINHO3_0.png",
+     "x": 508,
+     "y": 296
+    },
+    {
+     "arquivo": "POPUP_SOZINHO3_1.png",
+     "x": 540,
+     "y": 392
+    }
+   ]
   }
  }
 }
