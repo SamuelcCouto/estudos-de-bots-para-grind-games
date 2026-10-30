@@ -14,3 +14,5 @@ dist/
 BotDDT_*.zip
 suite.txt
 ddtank/botDDTGPT/envio/
+ddtank/envio/*.zip
+ddtank/envio/**/*.zip

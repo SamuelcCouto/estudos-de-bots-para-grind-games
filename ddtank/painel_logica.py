@@ -73,7 +73,7 @@ def passos_envio():
     passos = [comando_base("empacotar", "python") + ["--novas"]]
     if tem_git():
         # (o "reset" limpa um conflito de arquivo que o git deixou pendente - ja impediu o envio uma vez)
-        passos += [["git", "reset", "-q"], ["git", "add", "envio"], ["git", "commit", "-m", "sessao gravada"], ["git", "pull", "--rebase", "--autostash"],
+        passos += [["git", "reset", "-q"], ["git", "add", "-f", "envio"], ["git", "commit", "-m", "sessao gravada"], ["git", "pull", "--rebase", "--autostash"],
                    ["git", "push"]]
     return passos
 
