@@ -131,3 +131,11 @@ saida = []
 assert N.testar_tela(N.IOJanela(1, janela_mod=JanelaFalsa(np.zeros((900, 1600, 3), np.uint8)), log=lambda m: None), det, saida=saida.append, pasta=pasta) is False
 print("\n".join(saida[-2:]))
 print("testar_tela OK")
+
+# ---- tela desconhecida nao pode travar o bot (21h de 29/10: 4 sessoes ficaram minutos "ligadas" sem fazer nada na calibracao lenta)
+t0 = time.time()
+c = T.calibrar(np.zeros((1034, 1922, 3), np.uint8), det)
+assert c is not None and c.legado and time.time() - t0 < 3, "janela original + tela desconhecida: modo legado na hora"
+t0 = time.time()
+assert T.calibrar(np.zeros((900, 1600, 3), np.uint8), det) is None and time.time() - t0 < T.ORCAMENTO_PLANO_B + 4
+print("calibracao com tela desconhecida nao trava OK")

@@ -582,3 +582,12 @@ for esticado sem manter a proporcao, falha); zoom < 0.75 perde o minimapa; refs 
 - 135059: Rota Sul 2h50, 55 voltas, 19,4/h (cartas so da Rainha), Escorpiao 97% no 1o turno (2 derrotas em 58), Dragao 89%, Rainha 96%.
   As outras 3 eram testes curtos. Painel reformulado (cards Rotas / Chefes / Abrir cartas / Opcoes; modo desenvolvedor x amigos),
   estatisticas.py + drops.py (resumo da execucao). A gravacao do Gato Preto NAO estava no GitHub (so sessoes _bot): pedir de novo.
+
+## 30/10: Pericao do evento (sessoes 205939...210420) e Gato Preto
+- Chefao Global das 21h FUNCIONOU quando o bot chegou na batalha (21:01: tiro acertou 3666 px de numeros de dano, vitoria, cartas, espera 30/10 12:00).
+  Antes disso o Inicio da sala fica "sem efeito" ~18 s (o evento so abre na hora exata) - normal.
+- BUG (corrigido): 4 sessoes (210231, 210317, 210327, 210405) ficaram "ligadas" sem fazer nada: a calibracao de tela caia no plano B lento
+  (~35 s por tentativa, mais de 1 min em tela desconhecida) logo no 1o quadro. Agora: 0) tela conhecida so por largura (instantaneo), 1) SIFT,
+  2) plano B com orcamento de 5 s, e janela do tamanho original + tela desconhecida = modo legado na hora. Log "[TELA] calibrando...".
+- Gato Preto: os "ERROU" eram falsos (o boss se cura; ate nos tiros do usuario 41% -> 41%): estrategias.GATO_PRETO["acerto_incerto"] =
+  vida que nao caiu nao vira erro na memoria. 200138: 2 lutas de ~4min10, 16 turnos, 7 B.

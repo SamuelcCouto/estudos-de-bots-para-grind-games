@@ -43,6 +43,8 @@ ESTRATEGIAS = {
         "usar_pow": True,             # B (especial: tirou ~27-34% da vida do boss de uma vez) ...
         "pow_exige_buff": True,       # ... sempre DEPOIS do buff do E ativo
         "combo": "2,3,4",             # dano maximo; depois do B nao se aperta o 2
+        "acerto_incerto": True,       # o boss se cura e a barra mal mexe com 1 tiro (41% -> 41% ate nos tiros do usuario): vida que
+                                      # nao caiu NAO conta como erro (nao suja a memoria); so acertos (queda >= 2%) sao aprendidos
     },
     "PERICAO": {
         "chefe_global": True,         # vida do servidor; acerto pelos numeros de dano; vitoria = o chefao morreu para todos

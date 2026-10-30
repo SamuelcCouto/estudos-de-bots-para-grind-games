@@ -493,3 +493,13 @@ assert "e" not in t3 and "c" in t3 and "b" not in t3 and "2" in t3, t3
 at.fim_da_batalha(venceu=True, duracao=60.0)
 assert at.perks_usados == 0
 print("Gato Preto (E, perks, B depois do buff) OK")
+
+# ---- Gato Preto: a vida que nao cai (o boss se cura) nao vira "erro" na memoria
+w = MundoGato(); w.novo_turno(1.0, 9.0); w.boss_hit = False
+tmp = tempfile.NamedTemporaryFile("w", suffix=".json", delete=False); tmp.close(); os.unlink(tmp.name)
+mem = M.Memoria(arq_aprendizado=tmp.name); logs = []
+at = A.Atirador(w, mem, lambda: "GATO_PRETO", leitor=LeitorGato(), dormir=w.dormir, agora=lambda: w.t, log=logs.append, combos=CB.Combos(arq=None))
+rodar(at, w, ate=16); w.novo_turno(w.t + 1.0, w.t + 9.0); rodar(at, w, ate=w.t + 14)
+assert not [t for t in mem.tiros if t.get("origem") == "bot"], "nenhum erro falso registrado"
+assert any("nao conto como erro" in l for l in logs)
+print("Gato Preto: sem erros falsos OK")

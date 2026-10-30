@@ -13,6 +13,7 @@ Na janela original (f ~ 0.666, t ~ 0) nada muda (modo legado: o quadro inteiro r
 """
 import glob
 import os
+import time
 
 import cv2
 import numpy as np
@@ -155,25 +156,36 @@ def calibrar_pontos(img):
     return Calibracao(f, int(round(tx)), int(round(ty)), float(n), "pontos:" + nome)
 
 
-def calibrar(img, det=None, log=print):
-    """Calibracao de um quadro da janela (BGR, tamanho real): primeiro pelos pontos de interesse (rapido), conferindo que
-    o quadro canonico resultante e uma tela conhecida; senao, procurando os recortes das telas em varias escalas (lento).
+ORCAMENTO_PLANO_B = 5.0          # s: o plano B (lento) desiste depois disso (antes podia travar o bot por minutos)
+
+
+def calibrar(img, det=None, log=print, orcamento=ORCAMENTO_PLANO_B):
+    """Calibracao de um quadro da janela (BGR, tamanho real): 0) a tela ja e uma tela conhecida so redimensionando pela
+    largura (o caso da janela original; instantaneo); 1) pelos pontos de interesse (rapido), conferindo que o quadro canonico
+    resultante e uma tela conhecida; 2) procurando os recortes das telas em varias escalas (lento, no maximo `orcamento` s).
     None se nada deu certo."""
     det = det or E.Detector()
+    c0 = Calibracao(REF_W / float(img.shape[1]), 0, 0, 1.0, "tamanho original")
+    if conferir(img, c0, det):
+        return c0
+    if abs(img.shape[1] - 1922) <= 40 and abs(img.shape[0] - 1034) <= 40:
+        return c0                # janela do tamanho original: nada a descobrir (a tela atual so nao e uma das conhecidas)
     try:
         c = calibrar_pontos(img)
     except cv2.error:
         c = None
     if c is not None and (conferir(img, c, det) or c.legado):
         return c
-    return calibrar_recortes(img, det)
+    return calibrar_recortes(img, det, limite=time.time() + orcamento if orcamento else None)
 
 
-def calibrar_recortes(img, det):
+def calibrar_recortes(img, det, limite=None):
     estados = [n for n in det.estados if n not in ("CLIQUE_JOGO",)]
     # 1) primeiro o tamanho original (o caso comum e o mais rapido), 2) varia o zoom
     ordem = sorted(ZOOMS, key=lambda z: abs(np.log(z)))
     for z in ordem:
+        if limite is not None and time.time() > limite:
+            return None
         f = F0 / z
         g = _cinza(img, f)
         r = _achar(g, det, estados)

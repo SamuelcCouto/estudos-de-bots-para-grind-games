@@ -634,7 +634,13 @@ class Atirador:
         if "numeros" in p:
             return self._concluir_pelos_numeros(p)
         hp1 = self.lei.vida(f)
-        acertou = hp1 < p["hp0"] - 3
+        incerto = estrategias.estrategia(p["inst"]).get("acerto_incerto")
+        acertou = hp1 < p["hp0"] - (2 if incerto else 3)
+        if incerto and not acertou:
+            self.log(f"   [tiro] vida do boss {p['hp0']:.0f}% -> {hp1:.0f}%: nao caiu (o boss se cura): nao conto como erro")
+            if self.metricas:
+                self.metricas.resultado_tiro(0.0, None)
+            return
         self.log(f"   [tiro] vida do boss {p['hp0']:.0f}% -> {hp1:.0f}%: {'ACERTOU' if acertou else 'ERROU'}")
         self.mem.registrar(p["inst"], p["azul"], p["boss"], p["angulo"], p["forca"], acertou, origem="bot",
                            dano=max(0.0, p["hp0"] - hp1))

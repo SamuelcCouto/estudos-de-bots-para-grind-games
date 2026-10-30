@@ -174,6 +174,7 @@ class IOJanela:
         self.ultima_calibracao = time.time()
         self.tam = img.shape[:2]
         self.det = self.det or estados_mod.Detector()
+        self.log("[TELA] calibrando o tamanho/posicao do jogo na janela...")
         t0 = time.time()
         c = tela.calibrar(img, self.det)
         if c is None:
