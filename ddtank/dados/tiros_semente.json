@@ -1,5 +1,5 @@
 {
- "_nota": "Tiros do usuario (todos acertaram). angulo = leitura do ponteiro; forca = % da barra no momento de soltar; azul/boss = pontos do minimapa em px (y para baixo). leitura 2 = posicoes relidas com o leitor novo do minimapa (a versao 1 confundia a agua da Profundezas com o jogador). PERICAO (Chefao Global): 34 tiros normais do usuario, todos com numeros de dano no boss (acertou); mira quase reta (ponteiro 7), forca 78-89%, com vento de 4.5 contra a 4.0 a favor - o vento nao mudou o acerto. GATO_PRETO: tiros normais do usuario (29/10, 3 runs, 3 posicoes de nascimento) que tiraram >=2% da vida do boss; sem os tiros com B.",
+ "_nota": "Tiros do usuario (todos acertaram). angulo = leitura do ponteiro; forca = % da barra no momento de soltar; azul/boss = pontos do minimapa em px (y para baixo). leitura 2 = posicoes relidas com o leitor novo do minimapa (a versao 1 confundia a agua da Profundezas com o jogador). PERICAO (Chefao Global): 34 tiros normais do usuario, todos com numeros de dano no boss (acertou); mira quase reta (ponteiro 7), forca 78-89%, com vento de 4.5 contra a 4.0 a favor - o vento nao mudou o acerto. GATO_PRETO: tiros normais do usuario (29/10, 3 runs, 3 posicoes de nascimento) que tiraram >=2% da vida do boss; sem os tiros com B. ULTIMA_LUTA_F1/F2 e DEVORADORES: tiros do usuario (Rota Leste, gravacao 20261030_004606, 2 runs).",
  "tiros": [
   {
    "inst": "FANTASMA",
@@ -1104,6 +1104,261 @@
    "acertou": true,
    "origem": "gravacao 20261029_180936",
    "dano": 6.0,
+   "leitura": 2
+  },
+  {
+   "inst": "ULTIMA_LUTA_F1",
+   "azul": [
+    13.0,
+    62.0
+   ],
+   "boss": [
+    19.5,
+    61.5
+   ],
+   "angulo": 15.0,
+   "forca": 15,
+   "acertou": true,
+   "origem": "gravacao 20261030_004606",
+   "dano": 59.0,
+   "leitura": 2
+  },
+  {
+   "inst": "ULTIMA_LUTA_F1",
+   "azul": [
+    13.0,
+    62.0
+   ],
+   "boss": [
+    19.5,
+    61.5
+   ],
+   "angulo": 12.5,
+   "forca": 18,
+   "acertou": true,
+   "origem": "gravacao 20261030_004606",
+   "dano": 41.0,
+   "leitura": 2
+  },
+  {
+   "inst": "ULTIMA_LUTA_F1",
+   "azul": [
+    90.0,
+    62.2
+   ],
+   "boss": [
+    83.0,
+    62.0
+   ],
+   "angulo": 17.5,
+   "forca": 16,
+   "acertou": true,
+   "origem": "gravacao 20261030_004606",
+   "dano": 59.0,
+   "leitura": 2
+  },
+  {
+   "inst": "ULTIMA_LUTA_F1",
+   "azul": [
+    89.9,
+    62.2
+   ],
+   "boss": [
+    83.0,
+    62.0
+   ],
+   "angulo": 20.5,
+   "forca": 20,
+   "acertou": true,
+   "origem": "gravacao 20261030_004606",
+   "dano": 41.0,
+   "leitura": 2
+  },
+  {
+   "inst": "ULTIMA_LUTA_F2",
+   "azul": [
+    13.0,
+    61.5
+   ],
+   "boss": [
+    51.3,
+    27.0
+   ],
+   "angulo": 71.0,
+   "forca": 52,
+   "acertou": true,
+   "origem": "gravacao 20261030_004606",
+   "dano": 16.0,
+   "leitura": 2
+  },
+  {
+   "inst": "ULTIMA_LUTA_F2",
+   "azul": [
+    13.0,
+    62.0
+   ],
+   "boss": [
+    51.3,
+    27.0
+   ],
+   "angulo": 71.0,
+   "forca": 54,
+   "acertou": true,
+   "origem": "gravacao 20261030_004606",
+   "dano": 43.0,
+   "leitura": 2
+  },
+  {
+   "inst": "ULTIMA_LUTA_F2",
+   "azul": [
+    13.0,
+    62.0
+   ],
+   "boss": [
+    51.3,
+    27.0
+   ],
+   "angulo": 71.0,
+   "forca": 54,
+   "acertou": true,
+   "origem": "gravacao 20261030_004606",
+   "dano": 6.0,
+   "leitura": 2
+  },
+  {
+   "inst": "ULTIMA_LUTA_F2",
+   "azul": [
+    15.2,
+    62.4
+   ],
+   "boss": [
+    51.3,
+    27.0
+   ],
+   "angulo": 69.5,
+   "forca": 49,
+   "acertou": true,
+   "origem": "gravacao 20261030_004606",
+   "dano": 8.0,
+   "leitura": 2
+  },
+  {
+   "inst": "ULTIMA_LUTA_F2",
+   "azul": [
+    18.2,
+    62.4
+   ],
+   "boss": [
+    51.3,
+    27.0
+   ],
+   "angulo": 73.5,
+   "forca": 48,
+   "acertou": true,
+   "origem": "gravacao 20261030_004606",
+   "dano": 12.0,
+   "leitura": 2
+  },
+  {
+   "inst": "ULTIMA_LUTA_F2",
+   "azul": [
+    13.0,
+    61.5
+   ],
+   "boss": [
+    51.3,
+    27.0
+   ],
+   "angulo": 68.5,
+   "forca": 54,
+   "acertou": true,
+   "origem": "gravacao 20261030_004606",
+   "dano": 59.0,
+   "leitura": 2
+  },
+  {
+   "inst": "ULTIMA_LUTA_F2",
+   "azul": [
+    17.6,
+    62.4
+   ],
+   "boss": [
+    51.3,
+    27.0
+   ],
+   "angulo": 69.5,
+   "forca": 56,
+   "acertou": true,
+   "origem": "gravacao 20261030_004606",
+   "dano": 24.0,
+   "leitura": 2
+  },
+  {
+   "inst": "DEVORADORES",
+   "azul": [
+    0.7,
+    42.7
+   ],
+   "boss": [
+    89.0,
+    41.5
+   ],
+   "angulo": 27.0,
+   "forca": 57,
+   "acertou": true,
+   "origem": "gravacao 20261030_004606",
+   "dano": 59.0,
+   "leitura": 2
+  },
+  {
+   "inst": "DEVORADORES",
+   "azul": [
+    0.7,
+    42.7
+   ],
+   "boss": [
+    89.0,
+    41.5
+   ],
+   "angulo": 25.5,
+   "forca": 60,
+   "acertou": true,
+   "origem": "gravacao 20261030_004606",
+   "dano": 41.0,
+   "leitura": 2
+  },
+  {
+   "inst": "DEVORADORES",
+   "azul": [
+    0.7,
+    42.7
+   ],
+   "boss": [
+    89.0,
+    41.5
+   ],
+   "angulo": 30.0,
+   "forca": 56,
+   "acertou": true,
+   "origem": "gravacao 20261030_004606",
+   "dano": 59.0,
+   "leitura": 2
+  },
+  {
+   "inst": "DEVORADORES",
+   "azul": [
+    0.7,
+    42.7
+   ],
+   "boss": [
+    89.0,
+    41.5
+   ],
+   "angulo": 27.0,
+   "forca": 57,
+   "acertou": true,
+   "origem": "gravacao 20261030_004606",
+   "dano": 41.0,
    "leitura": 2
   }
  ]

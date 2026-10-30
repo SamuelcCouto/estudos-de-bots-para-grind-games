@@ -35,14 +35,40 @@ ESTRATEGIAS = {
     "PERICAO_COMUM": {                # o Pericao FORA do horario: chefe comum (vida propria, sem numeros de dano)
         "angulo_min": 0.0, "tolerancia_angulo": 1.0, "usar_pow": True,
     },
+    # ---- ROTA LESTE (gravacao 20261030_004606): A Ultima Luta (2 fases) e Devoradores ------------------------------------------------
+    "ULTIMA_LUTA_F1": {               # fase 1: boss pequeno ("Boxeador", ao lado do boneco) que morre e renasce com 50%: 2 turnos
+        "angulo_min": 0.0,            # mira baixa (12-20 graus, forca 15-20%); o boss pode nascer do outro lado (boneco vira)
+        "combo": "2,3,4",
+        "repor_perks": True,          # os perks Z/X/C sao comprados na sala ANTES desta fase (o usuario compra 3x); so se usam na fase 2
+    },
+    "ULTIMA_LUTA_F2": {               # fase 2: so o boss VERDE ("Juiz Ladrao") na plataforma (minimapa ~ (51, 27)); renasce com 50% e tem
+                                      # armadura forte (muitos turnos). O boss pequeno da fase 1 volta para atrapalhar.
+        "angulo_max": 80.0,           # boss numa plataforma alta: o usuario mirou 68-73.5 graus (o padrao e 70)
+        "alvo": "mais_alto",          # o ponto vermelho de MENOR y e o boss da plataforma (o pequeno anda junto do boneco)
+        "jogador_y_min": 50.0,        # o boneco fica no chao (y ~ 62): descarta cantos azuis da camera do minimapa
+        "reposicionar": True,         # boss pequeno colado no boneco = tiro perdido: anda para a direita (o usuario fez 0.2-0.3 s)
+        "angulo_min": 0.0,
+        "combo": "1,4",               # o usuario NUNCA usou o 2 aqui: item 1 (+2 ataques) e os buffs 4; depois do B tambem o 1
+        "perks": True, "repor_perks": True,
+        "pet_e": True,                # (andar desfaz o buff: aperta E de novo no proximo turno)
+        "usar_pow": True, "pow_exige_buff": True,
+        "acerto_incerto": True,       # armadura: tiros com 0-1% de dano sao normais e nao viram "erro"
+    },
+    "DEVORADORES": {                  # dragao simples (Zen'Gor): 2 turnos. O boneco nasce colado na borda esquerda do minimapa (x ~ 0.7)
+        "minimapa_x_min": 0.0,
+        "combo": "2,3,4",
+    },
     "GATO_PRETO": {                   # late game: tira o MAXIMO (perks Z/X/C, item E do pet, especial B). Gravacao 29/10.
         "angulo_min": 0.0,            # mira baixa (ponteiro em 4.5-12 na maioria dos nascimentos)
+        "repor_perks": True,
         "perks": True,                # Z, X, C: perks POW (cada um enche +50% da barra do especial); repostos na SALA (navegador)
         "pet_e": True,                # E = item do pet, so liberado apos ~5 rodadas (rodada 6): o buff (canhao em volta do
                                       # boneco, mais dano, dura a luta toda) e confirmado pelo icone verde na barra de itens
         "usar_pow": True,             # B (especial: tirou ~27-34% da vida do boss de uma vez) ...
         "pow_exige_buff": True,       # ... sempre DEPOIS do buff do E ativo
-        "combo": "2,3,4",             # dano maximo; depois do B nao se aperta o 2
+        "combo": "3,4",               # SEM o item 2 (tridente): a mira baixa (4-12 graus) faz 1 das 3 balas bater no chao antes do
+                                      # boss (o usuario viu 2 de 3 acertarem = o mesmo dano de 1 bala boa). Testar depois com o
+                                      # combos/relatorio se "2,3,4" compensa. Depois do B tambem nao se aperta o 2.
         "acerto_incerto": True,       # o boss se cura e a barra mal mexe com 1 tiro (41% -> 41% ate nos tiros do usuario): vida que
                                       # nao caiu NAO conta como erro (nao suja a memoria); so acertos (queda >= 2%) sao aprendidos
     },

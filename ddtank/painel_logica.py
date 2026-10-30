@@ -13,9 +13,10 @@ ARQ_CONFIG = os.path.join(config.PASTA, "dados", "painel.json")
 # de UM chefe (o bot luta so nele, repetidamente)
 ROTAS_PAINEL = [("N", "Rota Norte", "Fantasma > Profundezas > Minhocao", True),
                 ("S", "Rota Sul", "Escorpiao Rei > Dragao Gelado > Rainha Liris", True),
-                ("L", "Rota Leste", "em desenvolvimento", False)]
+                ("L", "Rota Leste", "A Ultima Luta (2 fases) > Devoradores", True)]
 CHEFES_PAINEL = [("FANTASMA", "Fantasma"), ("PROFUNDEZAS", "Profundezas"), ("MINHOCAO", "Minhocao"),
                  ("ESCORPIAO_REI", "Escorpiao Rei"), ("DRAGAO_GELADO", "Dragao Gelado"), ("RAINHA_LIRIS", "Rainha Liris"),
+                 ("ULTIMA_LUTA", "A Ultima Luta"), ("DEVORADORES", "Devoradores"),
                  ("GATO_PRETO", "Gato Preto"), ("PERICAO", "Pericao (comum)"), ("C", "Chefao Global")]
 NOMES_CHEFES = dict(CHEFES_PAINEL)
 PADRAO = {"alvo": "S", "cartas": ["RAINHA_LIRIS"], "chefe_nos_horarios": True, "horarios": "12:00-13:00,21:00-22:00",
@@ -28,7 +29,7 @@ def modo_amigo():
 
 
 def instancias_do_alvo(alvo):
-    if alvo in N.ROTAS and alvo in ("N", "S"):
+    if alvo in ("N", "S", "L"):
         return list(N.ROTAS[alvo][1])
     return [N.CHEFE if alvo == "C" else alvo]
 
@@ -43,8 +44,6 @@ def comando_base(modulo, python="python"):
 def montar_comando(cfg, python="python", amigo=False):
     """Lista de argumentos para subprocess. Tudo vai por argumento: o navegador nao pergunta nada."""
     alvo = cfg["alvo"]
-    if alvo == "L":
-        raise ValueError("a Rota Leste ainda esta em desenvolvimento")
     cmd = comando_base("navegador", python) + ["--atirar", "--rota", "P" if alvo == "PERICAO" else alvo]
     inst = instancias_do_alvo(alvo)
     marcadas = [i for i in cfg.get("cartas", []) if i in inst]

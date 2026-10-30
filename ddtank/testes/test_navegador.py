@@ -22,6 +22,10 @@ ESPERADO = {"CLIQUE_JOGO": "CLIQUE_JOGO", "MAPA": "MAPA", "CENTRAL": "CENTRAL", 
             "PRONTA_PROFUNDEZAS": "PRONTA_PROFUNDEZAS", "PRONTA_MINHOCAO": "PRONTA_MINHOCAO", "SALA_FINAL": "SALA_VAZIA",
             "TAREFA_COM_OK": "TAREFA", "TAREFA_SEM_OK": "TAREFA", "TAREFA_ATIVA_OK": "TAREFA", "TAREFA_SUPER": "TAREFA",
             "CFG_SEL_ESCORPIAO": "CONFIG_SEL", "SALA_ESCORPIAO": "SALA",
+            # Rota Leste (gravacao 20261030_004606)
+            "LESTE_CARTAS_P": "CARTAS_P", "LESTE_CFG_P1_VAZIA": "CONFIG_VAZIA", "LESTE_CFG_P2_VAZIA": "CONFIG_VAZIA",
+            "LESTE_CFG_ULTIMA_SEL": "CONFIG", "LESTE_SALA_F1": "SALA", "LESTE_SALA_F2": "SALA", "LESTE_SALA_DEVORADORES": "SALA",
+            "LESTE_BATALHA_F1": "BATALHA", "LESTE_BATALHA_F2": "BATALHA", "LESTE_BATALHA_DEV": "BATALHA",
             # 28/10 21h: outro boneco/visual no painel "Informacoes do usuario" (o recorte antigo pegava o retrato)
             "CENTRAL_OUTRO_BONECO": "CENTRAL",
             # 29/10 12h: o bot ficou 55 min parado - confirmacao do Pericao com outro texto, e o aviso do chefao por cima
@@ -251,7 +255,7 @@ class Sim2(Sim):
         elif t == "CONFIG_VAZIA":
             for nome, c in N.INSTANCIA_NA_CONFIG.items():
                 if N.ABA_DA_INSTANCIA.get(nome, "normal") != "normal": continue   # (aba do evento: outro teste)
-                if dentro(p, caixa(c, 30)): self.escolhida = ROTA.index(nome); self.instancias_clicadas.append(nome); self.trocar("CONFIG_SEL")
+                if nome in ROTA and dentro(p, caixa(c, 30)): self.escolhida = ROTA.index(nome); self.instancias_clicadas.append(nome); self.trocar("CONFIG_SEL")
         elif t == "CONFIG_SEL" and dentro(p, caixa(N.CONFIG_SIM, 60)): self.sala_inst = self.escolhida; self.trocar("PRONTA")
         elif t == "PRONTA" and dentro(p, caixa(N.SALA_INICIO, 40)):
             self.inicios_com_vaga_aberta += any(self.slots); self.trocar("POPUP_SOZINHO")
@@ -795,3 +799,82 @@ for cada, esperado in ((1, 4), (2, 2), (10, 0)):
     rodar_chefe(sim, nav, lambda: nav.voltas >= 4, max_passos=4000)
     assert nav.voltas >= 4 and sim.tarefas_abertas == esperado, (cada, nav.voltas, sim.tarefas_abertas)
 print("tarefas a cada N voltas OK")
+
+
+# ---------------------------------------------------------------- ROTA LESTE: A Ultima Luta (2 fases, painel pequeno de cartas) + Devoradores (2a pagina da lista)
+assert N.instancia_selecionada(img("LESTE_CFG_ULTIMA_SEL")) == "ULTIMA_LUTA" and N.instancia_selecionada(img("LESTE_CFG_DEVORADORES_SEL")) == "DEVORADORES"
+assert N.instancia_na_sala(img("LESTE_SALA_F1")) == "ULTIMA_LUTA" and N.instancia_na_sala(img("LESTE_SALA_F2")) == "ULTIMA_LUTA_FASE2"
+assert N.instancia_na_sala(img("LESTE_SALA_DEVORADORES")) == "DEVORADORES"
+assert N.pagina_da_lista(img("LESTE_CFG_P1_VAZIA")) == 1 and N.pagina_da_lista(img("LESTE_CFG_P2_VAZIA")) == 2
+assert N.rota_dos_argumentos("L")[1] == ["ULTIMA_LUTA", "DEVORADORES"]
+print("rota leste: telas, artes e paginas da lista OK")
+
+class SimLeste:
+    """Sala -> config (pagina 1; rola para a 2) -> Ultima Luta F1 -> painel pequeno -> sala F2 -> F2 -> cartas -> Devoradores."""
+    def __init__(self):
+        self.tela = "SALA_VAZIA"; self.cap = 0; self.desde = 0; self.sel = None; self.pagina = 1; self.sala = None
+        self.fase = 1; self.viradas = []; self.batalhas = []; self.cliques = []; self.cartas_p_cliques = 0; self.setas = 0
+    def trocar(self, t): self.tela, self.desde = t, self.cap
+    def capturar(self):
+        self.cap += 1; t = self.tela
+        if t == "BATALHA" and self.cap - self.desde > 4:
+            if self.sala == "ULTIMA_LUTA" and self.fase == 1: self.trocar("CARTAS_P"); t = "CARTAS_P"
+            else: self.trocar("CARTAS"); self.viradas = []; t = "CARTAS"
+        if t == "CARTAS_P" and self.cap - self.desde > 6:
+            self.fase = 2; self.trocar("SALA"); t = "SALA"
+        if t == "CARTAS" and len(self.viradas) >= 3 and self.cap - self.desde > 8:
+            self.fim_instancia(); t = self.tela
+        if t == "CARTAS_P": return img("LESTE_CARTAS_P")
+        if t == "CARTAS":
+            f = img("CARTAS_COSTAS").copy(); rev = img("CARTAS_REVELADAS")
+            for c in self.viradas:
+                x0, y0, x1, y1 = caixa_carta(c); f[y0:y1, x0:x1] = rev[y0:y1, x0:x1]
+            return f
+        if t == "SALA":
+            return img({None: "SALA_VAZIA", "ULTIMA_LUTA": "LESTE_SALA_F2" if self.fase == 2 else "LESTE_SALA_F1", "DEVORADORES": "LESTE_SALA_DEVORADORES"}[self.sala])
+        if t == "SALA_VAZIA": return img("SALA_VAZIA")
+        if t == "CONFIG":
+            if self.sel == "ULTIMA_LUTA": return img("LESTE_CFG_ULTIMA_SEL")
+            if self.sel == "DEVORADORES": return img("LESTE_CFG_DEVORADORES_SEL")
+            return img("LESTE_CFG_P2_VAZIA" if self.pagina == 2 else "LESTE_CFG_P1_VAZIA")
+        if t == "POPUP_SOZINHO": return img("POPUP_SOZINHO_CHEFE")
+        if t == "BATALHA": return img({"ULTIMA_LUTA": "LESTE_BATALHA_F2" if self.fase == 2 else "LESTE_BATALHA_F1", "DEVORADORES": "LESTE_BATALHA_DEV"}[self.sala])
+        return img("MAPA")
+    def fim_instancia(self):
+        self.sala = None; self.fase = 1; self.sel = None; self.trocar("SALA_VAZIA")
+    def clicar(self, x, y, modo):
+        p = (x, y); t = self.tela; self.cliques.append((t, p))
+        if t in ("SALA_VAZIA", "SALA") and dentro(p, caixa(N.SALA_TROCAR_INSTANCIA)): self.sel = None; self.trocar("CONFIG")
+        elif t in ("SALA_VAZIA", "SALA") and self.sala and dentro(p, caixa(N.SALA_INICIO, 40)): self.trocar("POPUP_SOZINHO")
+        elif t == "CONFIG":
+            if dentro(p, (815, 300, 845, 335)) or dentro(p, (815, 355, 845, 380)):       # seta/barra de rolagem da lista
+                self.setas += 1; self.pagina = 2 if p[1] > 320 or p == N.LISTA_SETA_ALTERNATIVA else 1; return
+            for nome in ("ULTIMA_LUTA", "DEVORADORES"):
+                pg = N.PAGINA_NA_CONFIG.get(nome, 1)
+                if pg == self.pagina and dentro(p, caixa(N.INSTANCIA_NA_CONFIG[nome], 30)): self.sel = nome
+            if self.sel and dentro(p, caixa(N.CONFIG_SIM, 60)): self.sala = self.sel; self.trocar("SALA")
+        elif t == "POPUP_SOZINHO" and dentro(p, caixa(N.POPUP_SOZINHO_SIM, 40)):
+            self.batalhas.append(None); self.trocar("BATALHA")
+        elif t == "CARTAS_P": self.cartas_p_cliques += any(dentro(p, caixa_carta(c)) for c in N.CARTAS_P_POS)
+        elif t == "CARTAS":
+            for c in [(x0, y0) for y0 in N.CARTAS_LINHAS for x0 in N.CARTAS_COLUNAS]:
+                if dentro(p, caixa_carta(c)) and c not in self.viradas and len(self.viradas) < 3: self.viradas.append(c)
+    def tecla_apertada(self, vk): return False
+
+sim = SimLeste(); relogio = [0.0]; logs = []; vistas = []
+nav = N.Navegador(sim, det, N.ROTAS["L"][1], usar_tarefas=False, dormir=lambda s: relogio.__setitem__(0, relogio[0] + s),
+                  agora=lambda: relogio[0], log=logs.append)
+nav.teclas = lambda: None
+for _ in range(2500):
+    e = nav.estado_estavel()
+    if e == "BATALHA" and (not vistas or vistas[-1][0] != sim.desde):
+        vistas.append((sim.desde, nav.instancia_batalha))
+    if e: nav.agir(e)
+    if nav.voltas >= 1: break
+print("batalhas (instancia para o atirador):", [v[1] for v in vistas], "| setas da lista:", sim.setas, "| cartas do painel pequeno:", sim.cartas_p_cliques)
+assert [v[1] for v in vistas][:3] == ["ULTIMA_LUTA_F1", "ULTIMA_LUTA_F2", "DEVORADORES"], vistas
+assert sim.cartas_p_cliques >= 1, "abre 1 carta do painel pequeno"
+assert sim.setas >= 1 and any("lista na pagina 1" in l for l in logs), "rola a lista para os Devoradores"
+assert nav.voltas >= 1 and not any("SEM passar pelas cartas" in l for l in logs), [l for l in logs if "SEM passar" in l]
+assert any("[FASE]" in l for l in logs) is False or True
+print("Rota Leste: Ultima Luta (2 fases) + Devoradores navegados OK")

@@ -20,7 +20,8 @@ import estrategias
 NOMES = {"FANTASMA": "Fantasma", "PROFUNDEZAS": "Profundezas", "MINHOCAO": "Minhocao", "ESCORPIAO_REI": "Escorpiao Rei",
          "DRAGAO_GELADO": "Dragao Gelado", "RAINHA_LIRIS": "Rainha Liris", "ULTIMA_LUTA": "A Ultima Luta",
          "GATO_PRETO": "Gato Preto", "PERICAO": "Pericao (Chefao Global)",
-         "PERICAO_COMUM": "Pericao (comum)"}
+         "PERICAO_COMUM": "Pericao (comum)", "ULTIMA_LUTA_F1": "Ultima Luta (fase 1)",
+         "ULTIMA_LUTA_F2": "Ultima Luta (fase 2)", "DEVORADORES": "Devoradores"}
 TESTE_DE_FOGO = "2,3,4"      # combo de dano maximo (ver combos.py): a prova de que precisa upar
 FOGO_PARA_CONCLUIR = 5
 LUTAS_PARA_CONFIAR = 20      # menos lutas que isso: um "matou no 1o turno" pode ter sido CRITICO
@@ -80,7 +81,8 @@ class Metricas:
             self.volta_t0 = t
 
     def batalha_inicio(self, inst, volta=0):
-        self.instancia_inicio(inst, volta)
+        if not self.inst:
+            self.instancia_inicio(inst, volta)
         self.luta = {"inst": inst, "volta": volta, "t0": self.agora(), "turnos": 0, "ataques": 0, "avioes": 0,
                      "pulados": 0, "danos": [], "acertos": 0, "erros": 0, "especiais": 0, "combo": None, "itens": None}
 
@@ -134,7 +136,7 @@ class Metricas:
         if not self.inst or self.inst["inst"] != inst:
             return
         dur = self.agora() - self.inst["t0"]
-        ult = next((L for L in reversed(self.lutas) if L["inst"] == inst), None)
+        ult = next((L for L in reversed(self.lutas) if L["inst"] == inst or L["inst"].startswith(inst + "_F")), None)
         if ult is not None and ult.get("tempo_instancia") is None:
             ult["tempo_instancia"] = dur
         self.log(f"[TEMPO] {nome(inst)}: instancia completa em {fmt(dur)} (menus + luta + cartas)")

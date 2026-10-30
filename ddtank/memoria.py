@@ -54,6 +54,11 @@ def angulo_min(inst):
     return estrategias.estrategia(inst).get("angulo_min", ANGULO_MIN)
 
 
+def angulo_max(inst):
+    """Maior angulo que o bot mira na instancia (Ultima Luta fase 2: o boss esta numa plataforma alta: ~71 graus)."""
+    return estrategias.estrategia(inst).get("angulo_max", ANGULO_MAX)
+
+
 def fator_balistico(dx, dy_up, ang):
     """F(dx, dy, angulo) em px de minimapa; None se o angulo nao alcanca o alvo."""
     t = np.radians(ang)
@@ -141,7 +146,7 @@ class Memoria:
         else:
             hist = [t["angulo"] for t in self._da(inst) if t["acertou"]]
             base = float(np.median(hist)) if hist else 35.0
-            angs = sorted({float(np.clip(base + d, angulo_min(inst), ANGULO_MAX)) for d in (0, 8, -8, 16, -16, 24, -24)})
+            angs = sorted({float(np.clip(base + d, angulo_min(inst), angulo_max(inst))) for d in (0, 8, -8, 16, -16, 24, -24)})
         melhor = None
         for ang in angs:
             ch = self._chance_por_forca(inst, dx, dy, ang, post)
@@ -228,7 +233,7 @@ class Memoria:
 
     @staticmethod
     def _limites(inst, ang, forca, origem, detalhe):
-        return {"angulo": float(np.clip(ang, angulo_min(inst), ANGULO_MAX)), "forca": float(np.clip(forca, FORCA_MIN, FORCA_MAX)),
+        return {"angulo": float(np.clip(ang, angulo_min(inst), angulo_max(inst))), "forca": float(np.clip(forca, FORCA_MIN, FORCA_MAX)),
                 "origem": origem, "detalhe": detalhe}
 
     # ---------- aprendizado ----------

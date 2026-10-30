@@ -28,10 +28,11 @@ assert c[c.index("--rota") + 1] == "ESCORPIAO_REI" and c[c.index("--cartas") + 1
 c = P.montar_comando({**base, "alvo": "PERICAO", "cartas": ["PERICAO"], "gravacao_leve": True})
 assert c[c.index("--rota") + 1] == "P" and "--gravacao-leve" in c
 assert P.montar_comando({**base, "alvo": "N"})[5] == "N"
-try:
-    P.montar_comando({**base, "alvo": "L"}); raise SystemExit("Rota Leste nao existe ainda")
-except ValueError:
-    pass
+c = P.montar_comando({**base, "alvo": "L", "cartas": ["ULTIMA_LUTA", "DEVORADORES"]})
+assert c[c.index("--rota") + 1] == "L" and c[c.index("--cartas") + 1] == "TODAS", c
+assert P.instancias_do_alvo("L") == ["ULTIMA_LUTA", "DEVORADORES"]
+c = P.montar_comando({**base, "alvo": "ULTIMA_LUTA", "cartas": ["ULTIMA_LUTA"]})
+assert c[c.index("--rota") + 1] == "ULTIMA_LUTA"
 try:
     P.montar_comando({**base, "horarios": "banana"}); raise SystemExit("horario invalido passou")
 except ValueError:

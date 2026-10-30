@@ -591,3 +591,18 @@ for esticado sem manter a proporcao, falha); zoom < 0.75 perde o minimapa; refs 
   2) plano B com orcamento de 5 s, e janela do tamanho original + tela desconhecida = modo legado na hora. Log "[TELA] calibrando...".
 - Gato Preto: os "ERROU" eram falsos (o boss se cura; ate nos tiros do usuario 41% -> 41%): estrategias.GATO_PRETO["acerto_incerto"] =
   vida que nao caiu nao vira erro na memoria. 200138: 2 lutas de ~4min10, 16 turnos, 7 B.
+
+## 30/10 madrugada: Rota Leste (gravacao 20261030_004606) - IMPLEMENTADA, NUNCA RODADA DE VERDADE
+- A Rota Leste = A ULTIMA LUTA (2 fases) + DEVORADORES (rota "L"; tambem como chefes ULTIMA_LUTA / DEVORADORES).
+- Fase 1: boss pequeno ("Boxeador") ao lado do boneco, 2 turnos (mira 12-20 graus, forca 15-20%); no fim vem um painel PEQUENO de cartas
+  (3x3, estado CARTAS_P, 1 carta); a sala volta com a FASE 2 pronta (arte "sala_ULTIMA_LUTA_FASE2": so Inicio). Instancia de batalha do
+  atirador: ULTIMA_LUTA_F1 / ULTIMA_LUTA_F2 (navegador.fase). Cartas normais (21) so no fim da fase 2.
+- Fase 2: so o boss VERDE na plataforma (minimapa ~(51,27); `alvo: mais_alto`), boneco no chao (13,62; `jogador_y_min` 50), angulo ~70, forca ~54;
+  boss pequeno volta e cobre o boneco -> `reposicionar` (anda 0.25 s para a direita, ate 2x); armadura forte (muitos turnos, `acerto_incerto`);
+  perks Z/X/C + item E + B (so com o buff) como no Gato; combo 1,4 (o usuario nunca usou o 2 aqui). Andar desfaz o buff do E.
+- Devoradores: na 2a PAGINA da lista de instancias (seta (828,367); `preparar_pagina`, `pagina_da_lista`); boneco nasce colado na borda esquerda do
+  minimapa (x ~0.7: `minimapa_x_min` 0); dragao simples (Zen'Gor), 2 turnos; confirmacao "Concordar" normal.
+- Sementes de tiro (15) em tiros_semente.json; artes cfg/sala e templates de pagina da lista em templates/.
+- Testes: test_navegador (SimLeste de ponta a ponta) passam; NADA testado no jogo.
+- O usuario continuou o projeto por conta propria (outro assistente) na pasta D:\...\ddtank\botDDTGPT; precisa subir para o GitHub
+  (branch botddtgpt) para eu comparar, corrigir e unir a esta versao.

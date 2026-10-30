@@ -38,6 +38,9 @@ FOCO_CLICK_BATALHA = (560, 230)   # clique na cena de batalha (nunca no chat/log
 MAX_SEGURANDO = 7.0           # s: trava de seguranca (a carga pode andar na METADE da velocidade; ver NOTAS.md)
 MARGEM_TEMPO_MINIMO = 0.35    # s: tolerancia da trava de tempo minimo
 PERKS_TECLAS = ["z", "x", "c"]
+MAX_PASSOS_REPOSICIONAR = 2
+TOQUE_REPOSICIONAR = 0.25     # s na seta direita (o usuario andou 0.2-0.3 s por vez)
+REPOSICIONAR_X_MAX = 30.0     # px de minimapa: mais para a direita que isso nao anda mais
 ESPERA_NUMEROS_DANO = 4.0     # s depois do tiro olhando os numeros de dano (Chefao Global): eles sobem ~1-3 s depois
 
 
@@ -108,9 +111,14 @@ class Atirador:
 
     def _candidatos(self, f):
         if hasattr(self.lei, "candidatos"):
-            return self.lei.candidatos(f)
-        az, vm = self.lei.pontos(f)               # leitor simples (testes): um ponto de cada
-        return ([az] if az else []), ([vm] if vm else [])
+            azuis, vermelhos = self.lei.candidatos(f)
+        else:
+            az, vm = self.lei.pontos(f)               # leitor simples (testes): um ponto de cada
+            azuis, vermelhos = ([az] if az else []), ([vm] if vm else [])
+        y_min = estrategias.estrategia(self.instancia()).get("jogador_y_min")
+        if y_min is not None:                         # (o canto da moldura azul da camera do minimapa parece um boneco)
+            azuis = [a for a in azuis if a[1] >= y_min]
+        return azuis, vermelhos
 
     def observar_minimapa(self, f, forcar=False):
         agora = self.agora()
@@ -143,6 +151,9 @@ class Atirador:
         if inst != self.inst_rastreada:
             self.rastreador.reiniciar()
             self.inst_rastreada = inst
+            est_i = estrategias.estrategia(inst)
+            self.rastreador.modo_boss = est_i.get("alvo")
+            L.usar_limite_x_minimapa(est_i.get("minimapa_x_min", L.MINIMAPA_X_PADRAO))
             self.avioes_na_luta, self.aviao_pendente = 0, None
         self.observar_minimapa(f)
         if self.pendente and "numeros" in self.pendente and hasattr(self.lei, "numeros_dano"):
@@ -225,6 +236,8 @@ class Atirador:
             if g is not None:
                 azul, boss, conf = self.posicoes(g)
         self.conferir_aviao(azul)
+        if estrategias.estrategia(inst).get("reposicionar") and azul and not self.sombra:
+            azul, boss, conf = self.reposicionar(f, inst, azul, boss, conf)
         hp0 = self.lei.vida(f)
         if hp0 <= 0 and self.ataques_na_luta > 0:
             # o boss ja morreu (a barra de vida sumiu) e o PASS ainda esta na tela ate a vitoria: nao gasta nada
@@ -321,6 +334,33 @@ class Atirador:
                             taxa_forca=round(self.taxa_forca, 1), jogo_em_foco=(self.io.em_foco() if hasattr(self.io, "em_foco") else None),
                             nivel_foco=getattr(self.io, "foco_nivel", None),
                             tempos={"angulo": round(t_ang, 2), "itens": round(t_itens - t_ang, 2), "carga": round(t_tiro - t_itens, 2)})
+
+    def reposicionar(self, f, inst, azul, boss, conf):
+        """Ultima Luta fase 2: o boss pequeno (que vem atrapalhar) fica com a hitbox em cima do boneco e come o tiro. Se algum ponto
+        vermelho que NAO e o alvo esta colado no boneco, anda um pouco para a direita (como o usuario fez) e le o minimapa de novo.
+        (Andar desfaz o buff do item E: o proximo passo do turno aperta E de novo.)"""
+        for _ in range(MAX_PASSOS_REPOSICIONAR):
+            outros = [c for c in self.rastreador.vermelhos if not boss or abs(c[0] - boss[0]) + abs(c[1] - boss[1]) > 4]
+            perto = [c for c in outros if abs(c[0] - azul[0]) <= 4.5 and abs(c[1] - azul[1]) <= 6]
+            if not perto or azul[0] > REPOSICIONAR_X_MAX:
+                break
+            self.log(f"   [MOVER] o boss pequeno {tuple(round(v) for v in perto[0][:2])} esta em cima do boneco {tuple(round(v) for v in azul)}: "
+                     f"andando para a direita")
+            if hasattr(self.io, "preparar_teclas"):
+                self.io.preparar_teclas()
+            self.io.tecla("direita", TOQUE_REPOSICIONAR)
+            self.dormir(0.6)
+            self.rastreador.reiniciar()
+            for _i in range(4):
+                g = self.ver()
+                if g is not None:
+                    self.observar_minimapa(g, forcar=True)
+                self.dormir(0.25)
+            novo, nconf = self.rastreador.jogador()
+            if not novo:
+                break
+            azul, boss, conf = novo, self.rastreador.boss or boss, nconf
+        return azul, boss, conf
 
     # ------------------------------------------------------------------ virar / aviao
     def lado(self, f):

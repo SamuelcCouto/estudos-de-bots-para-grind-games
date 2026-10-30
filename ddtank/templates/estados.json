@@ -265,6 +265,21 @@
      "y": 384
     }
    ]
+  },
+  "CARTAS_P": {
+   "limiar": 0.8,
+   "patches": [
+    {
+     "arquivo": "CARTAS_P_0.png",
+     "x": 812,
+     "y": 172
+    },
+    {
+     "arquivo": "CARTAS_P_1.png",
+     "x": 869,
+     "y": 478
+    }
+   ]
   }
  }
 }

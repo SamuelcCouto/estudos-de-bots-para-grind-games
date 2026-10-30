@@ -88,6 +88,17 @@ INSTANCIA_NA_CONFIG = {
 # o Chefao Global fica na aba "Instancia do evento" (1o quadro). A janela pode abrir na ultima aba usada: o bot confere
 # a aba ativa (a clara) e clica na certa antes do quadro.
 INSTANCIA_NA_CONFIG["PERICAO"] = (500, 320)
+# Rota Leste (gravacao 20261030_004606): A Ultima Luta (2 fases) e Devoradores. Os Devoradores ficam na 2a "pagina" da lista da aba
+# normal (a lista rola de 2 em 2 linhas): clica a seta para baixo antes e confere pelo desenho do quadro.
+INSTANCIA_NA_CONFIG["DEVORADORES"] = (518, 345)
+PAGINA_NA_CONFIG = {"DEVORADORES": 2}            # as outras: pagina 1
+LISTA_SETA = {"baixo": (828, 367), "cima": (828, 312)}
+LISTA_SETA_ALTERNATIVA = (821, 325)              # onde o usuario clicou para rolar (funcionou)
+LISTA_PAGINA_REGIAO = {1: (479, 301, 539, 325), 2: (488, 333, 548, 357)}   # quadro da 1a coluna/linha: Fantasma (p1) x Devoradores (p2)
+LISTA_PAGINA_LIMIAR = 0.7
+CARTAS_P_POS = [(x, y) for y in (256, 374, 493) for x in (738, 826, 913)]    # painel PEQUENO (3x3) da fase 1 da Ultima Luta
+CARTAS_P_REPETIR_APOS = 3.0
+CARTAS_ESTADOS = ("CARTAS", "POPUP_CARTA", "CARTAS_P")
 ABAS_CONFIG = {"normal": (495, 284), "especial": (562, 284), "evento": (630, 284), "avancada": (698, 284)}
 ABA_DA_INSTANCIA = {"PERICAO": "evento"}         # as outras: "normal"
 BRILHO_ABA_ATIVA = 135                           # aba ativa ~161-163 (creme); as outras ~100 (marrom)
@@ -100,15 +111,16 @@ ROTAS = {
 ROTAS["T"] = ("Norte + Sul", ROTAS["N"][1] + ROTAS["S"][1])
 CHEFE = "PERICAO"
 ROTAS["C"] = ("Chefao Global", [CHEFE])
+ROTAS["L"] = ("Rota Leste", ["ULTIMA_LUTA", "DEVORADORES"])
 ROTAS["P"] = ("Pericao (comum, fora do horario do Chefao Global)", [CHEFE])
 # 28/10: o boneco ja esta completo com os drops da Rota Norte -> N e T ficam DESABILITADAS no menu (nao apagadas:
 # continuam funcionando com --rota N / --rota T). O menu oferece so o que esta em uso:
-ROTAS_NO_MENU = ("S", "P", "C")
+ROTAS_NO_MENU = ("S", "L", "P", "C")
 ROTA_PADRAO_MENU = "S"
 # cartas que interessam por rota (as outras so completam a missao da rota: o bot nao abre as cartas delas)
 CARTAS_DE_INTERESSE = {"S": ["RAINHA_LIRIS"]}
 APELIDOS_ROTA = {"1": "N", "2": "S", "NORTE": "N", "SUL": "S", "TODAS": "T", "TUDO": "T", "AMBAS": "T",
-                 "CHEFE": "C", "CHEFAO": "C", "PERICAO": "C", "COMUM": "P"}
+                 "CHEFE": "C", "CHEFAO": "C", "PERICAO": "C", "COMUM": "P", "LESTE": "L"}
 # horarios do Chefao Global (relogio do PC): (inicio, fim). Mude aqui ou com --horarios-chefe 12:00-13:00,21:00-22:00
 HORARIOS_CHEFE = [((12, 0), (13, 0)), ((21, 0), (22, 0))]
 CHEFE_DERROTAS_FORA_DO_HORARIO = 3   # opcao C aberta fora do horario: tenta assim mesmo; depois disso, espera o horario
@@ -399,6 +411,30 @@ def instancia_na_sala(f):
     return _melhor_modelo(f, _TPL_SALA, SALA_ARTE, SALA_ARTE_LIMIAR)
 
 
+_TPL_LISTA = {}
+
+
+def pagina_da_lista(f):
+    """Pagina da lista de instancias aberta na configuracao (1 = Fantasma..., 2 = Devoradores...), pelo desenho do 1o quadro; None
+    se nao der para saber (janela nao e a de configuracao / carregando)."""
+    if not _TPL_LISTA:
+        for n in (1, 2):
+            t = cv2.imread(os.path.join(config.PASTA_TEMPLATES, f"lista_p{n}.png"), cv2.IMREAD_GRAYSCALE)
+            if t is not None:
+                _TPL_LISTA[n] = t.astype(np.float32)
+    g = _cinza(f)
+    melhor, nota = None, 0.0
+    for n, t in _TPL_LISTA.items():
+        x0, y0, x1, y1 = LISTA_PAGINA_REGIAO[n]
+        roi = g[y0 - 6:y1 + 6, x0 - 6:x1 + 6]
+        if roi.shape[0] < t.shape[0] or roi.shape[1] < t.shape[1]:
+            continue
+        v = float(cv2.matchTemplate(roi, t, cv2.TM_CCOEFF_NORMED).max())
+        if v > nota:
+            melhor, nota = n, v
+    return melhor if nota >= LISTA_PAGINA_LIMIAR else None
+
+
 def evitar_suspensao():
     """Windows: enquanto o bot roda, o PC nao entra em suspensao (de madrugada ele parava com o PC dormindo). A tela pode
     apagar. Volta ao normal quando o programa fecha."""
@@ -561,6 +597,9 @@ class Navegador:
         self.chefe_tentativas_marcar = 0
         self.chefe_aviso = -1e9
         self.tentativas_aba = 0
+        self.tentativas_pagina = 0
+        self.fase = 1                     # A Ultima Luta tem 2 fases (a 2a comeca depois do painel pequeno de cartas)
+        self.cartas_p_clicadas, self.cartas_p_em = 0, None
         self.metr = metricas              # metricas.Metricas (cronometro de lutas/instancias/voltas) ou None
         self.luta_ativa = False
         self.rng = random.Random()
@@ -604,6 +643,8 @@ class Navegador:
     # ---------- estado da rota ----------
     def novo_ciclo(self):
         self.idx = 0
+        self.fase = 1
+        self.cartas_p_clicadas, self.cartas_p_em = 0, None
         self.run_completa = False
         self.tarefas_ok = False
         self.cartas_vistas = False
@@ -625,6 +666,13 @@ class Navegador:
     @property
     def instancia_batalha(self):
         """Nome da instancia para o atirador/metricas: o Pericao fora do horario e um chefe COMUM (vida propria)."""
+        if self.instancia == "ULTIMA_LUTA":
+            return f"ULTIMA_LUTA_F{self.fase}"
+        return "PERICAO_COMUM" if self.instancia == CHEFE and not self.no_chefe else self.instancia
+
+    @property
+    def instancia_metr(self):
+        """Nome da instancia para o cronometro de INSTANCIA (menus + luta + cartas): so a base (as fases entram na mesma)."""
         return "PERICAO_COMUM" if self.instancia == CHEFE and not self.no_chefe else self.instancia
 
     # ---------- Chefao Global ----------
@@ -678,6 +726,25 @@ class Navegador:
                  (f"; voltando para a rota ({self.rota[min(self.idx, len(self.rota) - 1)]})" if self.chefe_modo == "horarios" else ""))
         self.no_chefe = self.chefe_forcado = False
         self.chefe_feito_em = self.relogio()
+
+    def preparar_pagina(self, f):
+        """A lista de instancias da aba normal rola: os Devoradores ficam na pagina 2. Clica a seta ate a pagina certa (confere pelo
+        desenho do 1o quadro); True = rolou (o quadro certo so aparece depois)."""
+        quer = PAGINA_NA_CONFIG.get(self.instancia, 1)
+        atual = pagina_da_lista(f) if f is not None else None
+        if atual is None or atual == quer:
+            self.tentativas_pagina = 0
+            return False
+        self.tentativas_pagina += 1
+        if self.tentativas_pagina > 6:
+            self.log(f"   ! nao consegui rolar a lista para a pagina {quer}; sigo assim mesmo")
+            self.tentativas_pagina = 0
+            return False
+        ponto = LISTA_SETA["baixo" if quer > atual else "cima"] if self.tentativas_pagina % 2 else LISTA_SETA_ALTERNATIVA
+        self.log(f"[CONFIG] lista na pagina {atual}; {self.instancia} fica na pagina {quer} -> clicando em {ponto}")
+        self.clicar(ponto)
+        self.dormir(0.8)
+        return True
 
     def abrir_aba(self, f):
         """Na configuracao: a aba da instancia desejada (normal / do evento) esta aberta? Se nao, clica nela e devolve
@@ -858,6 +925,7 @@ class Navegador:
         self.idx += 1
         if self.metr:
             self.metr.instancia_fim("PERICAO_COMUM" if antes == CHEFE else antes)
+        self.fase = 1
         if self.idx >= len(self.rota):
             self.run_completa = True
             self.log(f"*** {antes} concluida: rota completa ({self.voltas + 1}a volta). Falta coletar as tarefas. ***")
@@ -870,7 +938,7 @@ class Navegador:
     def agir(self, estado):
         if estado != self.tela_atual:
             self.tela_atual, self.tela_desde, self.preso_vezes = estado, self.agora(), 0
-        elif estado not in ("BATALHA", "CARTAS", "POPUP_CARTA", "TAREFA", "CLIQUE_JOGO"):
+        elif estado not in ("BATALHA", "CARTAS", "POPUP_CARTA", "CARTAS_P", "TAREFA", "CLIQUE_JOGO"):
             self.vigiar(estado, self.tela_desde)
         if self.reg and estado != self.ultimo_estado_reg:
             self.reg.evento("estado", [self.reg.frame(self.ultimo_quadro, "estado_" + estado)], estado=estado,
@@ -881,10 +949,10 @@ class Navegador:
         if self.luta_ativa and estado not in ("BATALHA", "CLIQUE_JOGO"):
             self.luta_ativa = False
             if self.metr:
-                self.metr.batalha_fim(venceu=estado in ("CARTAS", "POPUP_CARTA"))
+                self.metr.batalha_fim(venceu=estado in CARTAS_ESTADOS)
             if self.estat:
-                self.estat.luta(self.instancia_batalha, estado in ("CARTAS", "POPUP_CARTA"))
-        if estado not in ("CARTAS", "POPUP_CARTA", "BATALHA", "CLIQUE_JOGO"):
+                self.estat.luta(self.instancia_batalha, estado in CARTAS_ESTADOS)
+        if estado not in ("CARTAS", "POPUP_CARTA", "CARTAS_P", "BATALHA", "CLIQUE_JOGO"):
             self.finalizar_instancia()
             if self.atualizar_chefe(estado):
                 return                    # opcao C fora do horario: esperando
@@ -893,7 +961,7 @@ class Navegador:
 
         sala = estado in ("SALA_VAZIA", "SALA") or estado.startswith("PRONTA_")
         if self.metr and (not self.run_completa or self.no_chefe) and (sala or estado.startswith("CONFIG")):
-            self.metr.instancia_inicio(self.instancia_batalha, self.voltas)
+            self.metr.instancia_inicio(self.instancia_metr, self.voltas)
         if sala and self.run_completa and not self.no_chefe:
             # a rota acabou: coleta as tarefas e so entao comeca outra volta (a sala pode continuar mostrando a
             # ultima instancia - antes o bot "aceitava" essa sala e repetia o Minhocao sem parar)
@@ -950,7 +1018,7 @@ class Navegador:
         elif estado == "CONFIG_VAZIA":
             self.adotar_primeira = False
             self.dificuldade_clicada = False
-            if self.abrir_aba(self.ultimo_quadro):
+            if self.abrir_aba(self.ultimo_quadro) or self.preparar_pagina(self.ultimo_quadro):
                 return
             if self.no_chefe:
                 self.chefe_tentativas_marcar += 1
@@ -989,7 +1057,7 @@ class Navegador:
                 if sel is None and self.tentativas_cfg <= 3:
                     self.dormir(0.7)                       # a arte pode ainda estar carregando
                     return
-                if self.abrir_aba(f):
+                if self.abrir_aba(f) or self.preparar_pagina(f):
                     return
                 if self.no_chefe:
                     self.chefe_tentativas_marcar += 1
@@ -1006,6 +1074,11 @@ class Navegador:
             # aprendida; se acabamos de confirmar a instancia na configuracao, e ela -> aprende a arte
             f, _e = self.ver()
             nome = instancia_na_sala(f) if f is not None else None
+            if nome and nome.endswith("_FASE2"):
+                nome = nome[:-6]                          # a sala da Ultima Luta ja com a 2a fase pronta (so da Inicio)
+                if nome == self.instancia and self.fase != 2:
+                    self.log(f"[FASE] sala de {nome} com a 2a fase pronta")
+                    self.fase = 2
             if nome is None and f is not None and self.confirmada == self.instancia:
                 self.dormir(1.0)                          # a arte pode estar terminando de carregar
                 f, achadas = self.ver()
@@ -1021,7 +1094,20 @@ class Navegador:
             self.sala_pronta(estado, nome)
         elif estado.startswith("PRONTA_"):
             self.sala_pronta(estado, estado.split("_", 1)[1])
+        elif estado == "CARTAS_P":
+            # painel PEQUENO (3x3, fase 1 da Ultima Luta): 1 carta; depois a sala volta com a 2a fase pronta
+            self.lutou = False
+            self.fase = 2
+            agora = self.agora()
+            if self.cartas_p_clicadas < 3 and (self.cartas_p_em is None or agora - self.cartas_p_em >= CARTAS_P_REPETIR_APOS):
+                p = self.rng.choice(CARTAS_P_POS)
+                self.log(f"[CARTAS] painel pequeno (fase 1): abrindo a carta {p}")
+                self.clicar(p)
+                self.cartas_p_clicadas += 1
+                self.cartas_p_em = agora
+            self.dormir(0.5)
         elif estado == "CARTAS":
+            self.cartas_p_clicadas, self.cartas_p_em = 0, None
             self.cartas_vistas = True
             if self.cartas_em is not None and self.instancia not in self.cartas_em and not self.no_chefe:
                 if not self.cartas_puladas:
@@ -1169,7 +1255,8 @@ class Navegador:
             self.clicar(abertos[0])
             self.dormir(0.9)
             return
-        if estrategias.estrategia(self.instancia_batalha).get("perks") and f is not None and self.repor_perks(f):
+        est_sala = estrategias.estrategia(self.instancia_batalha)
+        if (est_sala.get("repor_perks") or est_sala.get("perks")) and f is not None and self.repor_perks(f):
             return
         self.perks_tentativas = 0
         self.clicar_e_verificar(estado, SALA_INICIO, descricao=f"Inicio ({nome})", espera=6.0)
@@ -1274,12 +1361,12 @@ class Navegador:
                 return
             agora = self.agora()
             self.fora_da_batalha_desde = self.fora_da_batalha_desde or agora
-            if agora - self.fora_da_batalha_desde < 3.0 and not (achadas and achadas[0] in ("CARTAS", "POPUP_CARTA")):
+            if agora - self.fora_da_batalha_desde < 3.0 and not (achadas and achadas[0] in CARTAS_ESTADOS):
                 self.dormir(0.15)
                 return
             self.em_batalha = False
             self.fora_da_batalha_desde = None
-            self.atirador.fim_da_batalha(venceu=bool(achadas and achadas[0] in ("CARTAS", "POPUP_CARTA")),
+            self.atirador.fim_da_batalha(venceu=bool(achadas and achadas[0] in CARTAS_ESTADOS),
                                          duracao=(agora - self.batalha_desde) if self.batalha_desde else None)
         estado = self.estado_estavel()
         if estado is None:

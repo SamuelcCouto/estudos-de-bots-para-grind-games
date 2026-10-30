@@ -22,6 +22,7 @@ MINIMAPA_X_LIM = (3.5, 101.5)        # fora: molduras dos lados
 MINIMAPA_PONTO_MAX = 7               # px: o nucleo de um ponto (jogador/boss) cabe num quadrado 7x7
 _CRUZ = cv2.getStructuringElement(cv2.MORPH_CROSS, (3, 3))
 PONTO_TAMANHO_CHEIO = 8           # nucleo (px) a partir do qual um ponto conta "inteiro" no rastreador
+MINIMAPA_X_PADRAO = 3.5              # limite esquerdo do minimapa (moldura); os Devoradores tem o boneco colado na borda: usa 0
 LEITURAS_MUDOU = 5                  # leituras seguidas sem o ponto antigo (e com um novo) = o boneco mudou de lugar
 VIDA_BOSS = (725, 812, 185, 191)     # barra de vida do boss (topo): cheia termina em ~811, comeca em ~725
 RETRATO_BOSS = (692, 176, 720, 200)  # x0, y0, x1, y1: retrato do boss a esquerda da barra (cinza = morto)
@@ -135,6 +136,13 @@ def _pontos_redondos(mk):
     return sorted(out, key=lambda c: -c[2])
 
 
+def usar_limite_x_minimapa(x_min):
+    """Muda o limite esquerdo aceito para pontos do minimapa (por instancia: Devoradores nasce em x ~ 0.7)."""
+    global MINIMAPA_X_LIM
+    if MINIMAPA_X_LIM[0] != x_min:
+        MINIMAPA_X_LIM = (x_min, MINIMAPA_X_LIM[1])
+
+
 def _pontos_pequenos(mk):
     """Plano B (so quando o leitor normal nao achou nada): pontos MUITO pequenos (Gato Preto: o boneco com o buff do pet tem
     um circulo claro em volta e o miolo azul fica com ~3 px, que a erosao em cruz apaga). Componentes sem erosao, 3 a 30 px,
@@ -191,16 +199,21 @@ class RastreadorMinimapa:
         self.janela, self.raio = janela, raio
         self.azuis = []          # uma lista de candidatos (x, y) por leitura, mais antiga primeiro
         self.boss = None
+        self.modo_boss = None    # None: o maior ponto vermelho; "mais_alto": o de menor y (Ultima Luta fase 2: o boss da plataforma,
+                                 # e nao o boss pequeno que anda perto do boneco)
+        self.vermelhos = []      # pontos vermelhos do ultimo quadro [(x, y, tamanho)]
 
     def reiniciar(self):
-        self.azuis, self.boss = [], None
+        self.azuis, self.boss, self.vermelhos = [], None, []
 
     def observar(self, azuis, vermelhos):
         """azuis/vermelhos: listas de (x, y[, tamanho]) de UM quadro."""
         self.azuis.append([(c[0], c[1], c[2] if len(c) > 2 else PONTO_TAMANHO_CHEIO) for c in azuis[:4]])
         del self.azuis[:-self.janela]
+        self.vermelhos = [tuple(v) for v in vermelhos]
         if vermelhos:
-            self.boss = tuple(vermelhos[0][:2])
+            alvo = min(vermelhos, key=lambda v: v[1]) if self.modo_boss == "mais_alto" else vermelhos[0]
+            self.boss = tuple(alvo[:2])
 
     def _mais_frequente(self, leituras):
         """(ponto, em quantas das leituras ele aparece) - nota = soma do tamanho de cada aparicao (ate
