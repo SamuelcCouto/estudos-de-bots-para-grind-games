@@ -53,6 +53,10 @@ Eu so leio TEXTO (titulo/descricao/legenda), nao vejo imagem nem escuto audio. P
   1 a cada 3 tiros). Forca agora pelas **tabelas EstrAng** (`pvp.forca_tabela`, ajuste nas 4 tabelas; escala padrao 4 px/unidade, editavel por mapa em `dados/pvp_mapas/indice.json` campo "escala").
   A vez tem **histerese de 1,5 s** (a nota do PASS cai a 0.45 no voo do tiro: antes o bot achava que era outro turno e atirava 2x). Angulos em rodizio 45-75 (mapa m003 tem uma cabana no meio:
   tiros baixos batem no cenario, quebram o terreno e o boneco afunda).
+- **Gravacao manual do usuario 20261031_051743 (8,7 min, 15 tiros; frames em 1922 px, NAO 1280)**: o texto "PASS" e translucido e em mapas de fundo claro a nota cai a 0.40-0.53 mesmo com o usuario
+  atirando -> o bot nao via a vez. **Sinal novo e robusto: o numero vermelho do contador** (`pvp.contador_da_vez`: componente vermelho/laranja em (596,205,662,262) com altura>=14 e area>=100; 100% dos quadros da vez,
+  0% fora, em 1552 quadros). Angulos do usuario 30-76 graus (e leitura 97 no tiro com F: a arma passa de 90); o F foi usado em 4 turnos (as vezes no meio da carga; tiros de F carregados ~5 s = forca maxima), o E em 2,
+  itens [3,4x7], [4,6], [2]; anda bastante (14 toques para cada lado). Hit/miss dos 15 tiros ainda NAO rotulado.
 - **Proximo passo**: o usuario roda `PVP.bat` por ~1 h (so ha bots fracos de madrugada) e envia; eu rotulo acertos pelos prints do voo, calibro vento/distancia
   e transformo os acertos em sementes (`tiros_semente.json`, instancia "PVP").
 

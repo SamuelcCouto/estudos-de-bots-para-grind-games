@@ -45,6 +45,7 @@ BATIMENTO_QUADRO_S = 20.0           # s entre prints de diagnostico durante a ba
 MAX_QUADROS_DIAG = 150              # trava por sessao (cada print ~100 KB)
 LIMITE_BUSCA_S = 600.0              # busca de partida parada ha mais que isso: cancela e busca de novo
 PASS_LIMIAR_PVP = 0.55              # o PASS e um texto translucido sobre o mapa: em fundos claros a nota cai (com PASS 0.7-0.9; sem 0.0-0.5)
+JANELA_VEZ_S = 11.0                 # a vez confirmada vale por esse tempo desde o inicio (o PASS some no meio do turno em alguns mapas)
 HOLD_VEZ_S = 1.5                    # a nota do PASS oscila no voo do tiro (0.45-0.9): so e "fim da vez" depois de 1,5 s sem PASS
 ESCALA_PADRAO = 4.0                 # px de minimapa por unidade de distancia (a "caixa" de 10 unidades tem 35-48 px; ajustar por mapa em indice.json)
 A_TAB, C_TAB = 6.0663e-03, -2.5415e-05   # fisica das tabelas EstrAng 20/30/50/65: distancia = (A*F^2 + C*F^3) * sen(2*angulo)
@@ -192,13 +193,20 @@ class LeitorPvp(atirador_mod.LeitorReal):
     def __init__(self, agora=None):
         self.agora = agora or time.time
         self.ultima_vez = -1e9
+        self.inicio_vez = -1e9
 
     def minha_vez(self, f):
+        """True na sua vez. A nota do PASS cai a 0.3-0.4 no meio do turno em alguns mapas/posicoes (texto translucido sobre fundo
+        claro): depois que a vez foi confirmada (nota >= limiar), ela vale por JANELA_VEZ_S desde o inicio, mesmo sem PASS."""
         t = self.agora()
-        if pontuacao_pass(f) >= PASS_LIMIAR_PVP:
+        if pontuacao_pass(f) >= PASS_LIMIAR_PVP or contador_da_vez(f):
+            if t - self.ultima_vez > HOLD_VEZ_S:
+                self.inicio_vez = t                       # PASS reapareceu depois de sumir: vez nova
             self.ultima_vez = t
             return True
-        return t - self.ultima_vez < HOLD_VEZ_S
+        if t - self.ultima_vez < HOLD_VEZ_S:
+            return True
+        return self.ultima_vez > -1e8 and t - self.inicio_vez < JANELA_VEZ_S
 
 
 def distancia_tabela(forca, ang):
@@ -232,6 +240,27 @@ def pontuacao_pass(f):
     x, y = L.PASS_POS
     roi = g[y - 6:y + th + 6, x - 8:x + tw + 8]
     return float(cv2.matchTemplate(roi, t, cv2.TM_CCOEFF_NORMED).max())
+
+
+CONTADOR_CAIXA = (596, 205, 662, 262)     # numero vermelho do contador do turno (acima do "PASS"): so existe na sua vez
+CONTADOR_ALTURA_MIN, CONTADOR_AREA_MIN = 14, 100
+
+
+def contador_da_vez(f):
+    """True se o numero vermelho/laranja do contador do turno esta na tela. Muito mais robusto que o texto "PASS" (translucido: em
+    mapas de fundo claro a nota cai a 0.4-0.5 mesmo com voce atirando). Medido em 1552 quadros de batalha: acerta 100% dos quadros
+    da sua vez (incl. os 6 do mapa claro) e 0% dos de fora."""
+    if f is None or f.ndim != 3 or f.shape[0] < CONTADOR_CAIXA[3]:
+        return False
+    x0, y0, x1, y1 = CONTADOR_CAIXA
+    h = cv2.cvtColor(f[y0:y1, x0:x1], cv2.COLOR_BGR2HSV)
+    m = (((h[..., 0] <= 18) | (h[..., 0] >= 170)) & (h[..., 1] >= 150) & (h[..., 2] >= 170)).astype(np.uint8)
+    m = cv2.morphologyEx(m, cv2.MORPH_CLOSE, np.ones((3, 3), np.uint8))
+    n, _lb, st, _c = cv2.connectedComponentsWithStats(m, connectivity=8)
+    if n < 2:
+        return False
+    i = 1 + int(np.argmax(st[1:, 4]))
+    return bool(st[i, 3] >= CONTADOR_ALTURA_MIN and st[i, 4] >= CONTADOR_AREA_MIN)
 
 
 def votar_vento(leituras):
@@ -474,6 +503,7 @@ class Laco:
         self.melhor_mapa = None            # (contraste, quadro) da tela VS (o fade-in deixa os primeiros quadros escuros)
         self.parar = False
         self.nota_pass = 0.0
+        self.contador = False
         self.vez_desde = None              # quando o PASS apareceu (None = sem PASS)
         self.vezes_curtas = 0
         self.ultimo_quadro_diag = -1e9
@@ -515,7 +545,7 @@ class Laco:
             self.vez_desde = agora
             if agora - self.ultimo_quadro_diag >= 5.0:
                 self.ultimo_quadro_diag = agora
-                self._diag(f, "vez", nota_pass=round(self.nota_pass, 2))
+                self._diag(f, "vez", nota_pass=round(self.nota_pass, 2), contador=self.contador)
         elif not vez and self.vez_desde is not None:
             dur = agora - self.vez_desde
             self.vez_desde = None
@@ -539,6 +569,7 @@ class Laco:
         estado = achadas[0] if achadas else None
         nota = pontuacao_pass(f)
         lei = getattr(self.at, "lei", None)
+        self.contador = contador_da_vez(f)
         vez = bool(lei.minha_vez(f)) if lei is not None else nota >= PASS_LIMIAR_PVP     # com histerese (ver LeitorPvp)
         self.nota_pass = nota
         agora = self.agora()
@@ -560,7 +591,7 @@ class Laco:
                 self.ultima_vez = None
             self.em_batalha, self.fora_desde = True, None
             if vez != self.ultima_vez:
-                self.log(f"(SUA VEZ; PASS {nota:.2f})" if vez else f"(vez do adversario: espero; PASS {nota:.2f})")
+                self.log(f"(SUA VEZ; PASS {nota:.2f}, contador {'sim' if self.contador else 'nao'})" if vez else f"(vez do adversario: espero; PASS {nota:.2f})")
                 self.ultima_vez = vez
             if agora - self.ultimo_batimento >= BATIMENTO_S:
                 self.ultimo_batimento = agora

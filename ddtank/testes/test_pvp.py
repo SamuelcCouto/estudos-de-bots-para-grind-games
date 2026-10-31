@@ -226,7 +226,11 @@ try:
     relogio[0] += 0.5
     assert lp.minha_vez(None), "uma queda curta da nota NAO e o fim da vez (era o que fazia atirar 2x no mesmo turno)"
     relogio[0] += P.HOLD_VEZ_S
+    assert lp.minha_vez(None), "o PASS some no meio do turno em alguns mapas: a vez confirmada vale por JANELA_VEZ_S"
+    relogio[0] += P.JANELA_VEZ_S
     assert not lp.minha_vez(None)
+    notas["n"] = 0.9                                         # PASS volta (vez nova): a janela recomeca
+    assert lp.minha_vez(None) and lp.inicio_vez == relogio[0]
 finally:
     P.pontuacao_pass = orig_nota
 print("vez com histerese OK")
@@ -272,4 +276,15 @@ assert at2.ordem == list(P.ORDENS_PVP[0]) and at2.itens_ultimo, (at2.ordem, at2.
 linhas2 = [json.loads(l) for l in open(os.path.join(tmp2, "t.jsonl"), encoding="utf-8")]
 assert linhas2 and linhas2[0]["itens"] == at2.itens_ultimo and 2 in linhas2[0]["itens"], linhas2
 print("E (so com o slot verde) e itens por turno gravados OK")
+# ------------------------------------------------------------ 7) vez pelo contador vermelho (mapa de fundo claro: o PASS some)
+import cv2
+q_vez = cv2.imread(os.path.join(AQUI, "frames", "PVP_VEZ_CLARO.jpg"))
+q_fora = cv2.imread(os.path.join(AQUI, "frames", "PVP_FORA_DA_VEZ.jpg"))
+assert P.pontuacao_pass(q_vez) < P.PASS_LIMIAR_PVP, "o quadro de teste e justamente o caso em que o PASS falha (nota ~0.47)"
+assert P.contador_da_vez(q_vez) and not P.contador_da_vez(q_fora)
+lp2 = P.LeitorPvp(agora=lambda: 5.0)
+assert lp2.minha_vez(q_vez), "sua vez no mapa claro: o contador salva"
+lp3 = P.LeitorPvp(agora=lambda: 5.0)
+assert not lp3.minha_vez(q_fora)
+print("vez pelo contador vermelho (mapa claro, onde o PASS falha) OK")
 print("\npvp OK")
