@@ -629,3 +629,12 @@ nao reconhecia (nota 0.85 < 0.873 do POPUP_SOZINHO antigo).
 - Gravacao do bot: icone verde do buff nunca detectado -> B nunca saia e o E era apertado todo turno.
 - Novo `leitura.e_disponivel` (slot E da barra de itens verde = disponivel). O E e apertado so quando aceso e so 1x por luta (`pet_ok`);
   o B passa a valer depois do E usado (nao depende mais do icone do buff). Item 2 (combo "2,3,4") de volta; depois do B nao se aperta o 2.
+
+## Analise das gravacoes de 31/10 (Gato Preto, Rota Leste, Super Rota, PvP)
+- Gato Preto (fix de E/B/item 2): E 1x, B saiu (3x), item 2 usado; 69%->37% no B. OK. Ainda perde turno quando E+B+itens comem o tempo ('vez_acabou').
+- Rota Leste/Super Rota: N+S da Super Rota perfeitas (~3 min cada, cupons 90k em 6min28s). Devoradores NUNCA abriu: a lista da config rola so
+  alguns pixels por clique na seta; o detector de pagina (`pagina_da_lista`) devolve None no meio da rolagem e o bot clicava no 2o quadro
+  (Dragao Gelado) para sempre. Fix: continua clicando na seta ate a pagina certa (`PAGINA_MAX_CLIQUES`).
+- Ultima Luta fase 2: o boneco nasce em x~13 (acerta), x~27 (errava 25x o mesmo tiro 74/47) ou x~78 (do outro lado do boss; derrotas por morte).
+  Fix: boss com vida 100% que nao cai 2x = erro; fase 2 com `erro_apos_sem_queda: 3` (3 tiros sem queda = erro) para a memoria corrigir a mira.
+- PvP (011716 e 020551, gravacao manual): a pagina do jogo tem, nas laterais, tabelas "EstrAng 30/50/65/80" (distancia x forca). Ainda nao analisado a fundo.

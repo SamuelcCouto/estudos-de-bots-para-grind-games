@@ -96,6 +96,7 @@ LISTA_SETA = {"baixo": (828, 367), "cima": (828, 312)}
 LISTA_SETA_ALTERNATIVA = (821, 325)              # onde o usuario clicou para rolar (funcionou)
 LISTA_PAGINA_REGIAO = {1: (479, 301, 539, 325), 2: (488, 333, 548, 357)}   # quadro da 1a coluna/linha: Fantasma (p1) x Devoradores (p2)
 LISTA_PAGINA_LIMIAR = 0.7
+PAGINA_MAX_CLIQUES = 16                          # cliques na seta ate desistir de rolar a lista
 CARTAS_P_POS = [(x, y) for y in (256, 374, 493) for x in (738, 826, 913)]    # painel PEQUENO (3x3) da fase 1 da Ultima Luta
 CARTAS_P_REPETIR_APOS = 3.0
 CARTAS_ESTADOS = ("CARTAS", "POPUP_CARTA", "CARTAS_P")
@@ -794,18 +795,23 @@ class Navegador:
         desenho do 1o quadro); True = rolou (o quadro certo so aparece depois)."""
         quer = PAGINA_NA_CONFIG.get(self.instancia, 1)
         atual = pagina_da_lista(f) if f is not None else None
+        if atual is None and self.tentativas_pagina > 0 and f is not None:
+            # a lista esta no meio da rolagem (cada clique na seta anda so alguns pixels): o desenho nao bate com nenhuma
+            # pagina -> continua clicando na seta ate a pagina certa aparecer (gravacao 31/10: o bot parava no 1o clique
+            # e escolhia o Dragao Gelado no lugar dos Devoradores, para sempre)
+            atual = 1 if quer > 1 else 2
         if atual is None or atual == quer:
             self.tentativas_pagina = 0
             return False
         self.tentativas_pagina += 1
-        if self.tentativas_pagina > 6:
+        if self.tentativas_pagina > PAGINA_MAX_CLIQUES:
             self.log(f"   ! nao consegui rolar a lista para a pagina {quer}; sigo assim mesmo")
             self.tentativas_pagina = 0
             return False
-        ponto = LISTA_SETA["baixo" if quer > atual else "cima"] if self.tentativas_pagina % 2 else LISTA_SETA_ALTERNATIVA
+        ponto = LISTA_SETA["baixo" if quer > atual else "cima"]
         self.log(f"[CONFIG] lista na pagina {atual}; {self.instancia} fica na pagina {quer} -> clicando em {ponto}")
         self.clicar(ponto)
-        self.dormir(0.8)
+        self.dormir(0.5)
         return True
 
     def abrir_aba(self, f):

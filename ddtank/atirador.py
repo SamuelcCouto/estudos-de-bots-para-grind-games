@@ -95,6 +95,8 @@ class Atirador:
         self.inst_luta = None
         self.rastreador = L.RastreadorMinimapa()
         self.avioes_na_luta = 0
+        self.sem_queda_seg = 0                    # tiros seguidos sem queda (so com `erro_apos_sem_queda`)
+        self.sem_queda_cheia = 0                  # tiros seguidos sem tirar vida de um boss com 100%
         self.pet_ok = False                       # item E ja usado nesta luta (so 1x: o buff dura a luta toda)
         self.perks_usados = 0                     # perks Z/X/C ja usados nesta luta (Gato Preto)
         self.aviao_pendente = None                # {"de": (x, y)} do ultimo voo: confere no turno seguinte se andou
@@ -214,6 +216,8 @@ class Atirador:
         self.avioes_na_luta, self.aviao_pendente = 0, None
         self.perks_usados = 0
         self.pet_ok = False
+        self.sem_queda_cheia = 0
+        self.sem_queda_seg = 0
 
     # ------------------------------------------------------------------ um turno
     def devolver_foco(self):
@@ -683,6 +687,21 @@ class Atirador:
         hp1 = self.lei.vida(f)
         incerto = estrategias.estrategia(p["inst"]).get("acerto_incerto")
         acertou = hp1 < p["hp0"] - (2 if incerto else 3)
+        if incerto and acertou or hp1 < 99:
+            self.sem_queda_cheia = 0
+        seguidos = estrategias.estrategia(p["inst"]).get("erro_apos_sem_queda")
+        if incerto and not acertou and seguidos:
+            self.sem_queda_seg += 1
+            if self.sem_queda_seg >= seguidos:
+                incerto = False                   # o mesmo tiro varias vezes sem tirar vida: a mira esta errada (gravacao 31/10)
+        else:
+            self.sem_queda_seg = 0
+        if incerto and not acertou and p["hp0"] >= 99 and hp1 >= 99:
+            # boss com a vida CHEIA nao tem o que curar: 100% -> 100% varias vezes seguidas e erro de verdade (gravacao 31/10: 25 tiros
+            # iguais, 6 minutos, porque nenhum virava "erro" e a memoria nunca mudava a mira)
+            self.sem_queda_cheia += 1
+            if self.sem_queda_cheia >= 2:
+                incerto = False
         if incerto and not acertou:
             self.log(f"   [tiro] vida do boss {p['hp0']:.0f}% -> {hp1:.0f}%: nao caiu (o boss se cura): nao conto como erro")
             if self.metricas:

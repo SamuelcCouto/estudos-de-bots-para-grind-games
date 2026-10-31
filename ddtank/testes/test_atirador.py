@@ -506,3 +506,16 @@ rodar(at, w, ate=16); w.novo_turno(w.t + 1.0, w.t + 9.0); rodar(at, w, ate=w.t +
 assert not [t for t in mem.tiros if t.get("origem") == "bot"], "nenhum erro falso registrado"
 assert any("nao conto como erro" in l for l in logs)
 print("Gato Preto: sem erros falsos OK")
+
+
+# ---- boss com a vida cheia que nao cai: 2 vezes seguidas = erro de verdade (nao "o boss se cura")
+class _LeitorCheio(Leitor):
+    vida = staticmethod(lambda f: 100.0)
+w = MundoGato(); logs = []
+tmp = tempfile.NamedTemporaryFile("w", suffix=".json", delete=False); tmp.close(); os.unlink(tmp.name)
+at = A.Atirador(w, M.Memoria(arq_aprendizado=tmp.name), lambda: "ULTIMA_LUTA_F2", leitor=_LeitorCheio(), dormir=w.dormir, agora=lambda: w.t, log=logs.append, combos=CB.Combos(arq=None))
+for _ in range(3):
+    at.pendente = {"inst": "ULTIMA_LUTA_F2", "azul": (13, 62), "boss": (52, 27), "angulo": 70.0, "forca": 54.0, "hp0": 100.0}
+    at.concluir_tiro(None)
+assert sum("ERROU" in l for l in logs) == 2 and sum("nao caiu" in l for l in logs) == 1, logs
+print("vida cheia que nao cai vira erro OK")

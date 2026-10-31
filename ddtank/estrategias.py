@@ -59,6 +59,7 @@ ESTRATEGIAS = {
         "pet_e": True,                # (andar desfaz o buff: aperta E de novo no proximo turno)
         "usar_pow": True, "pow_exige_buff": True,
         "acerto_incerto": True,       # armadura: tiros com 0-1% de dano sao normais e nao viram "erro"
+        "erro_apos_sem_queda": 3,     # 3 tiros seguidos sem tirar vida = a mira esta errada (nascimentos fora de x~13-17 repetiam 25x o mesmo tiro)
     },
     "DEVORADORES": {                  # dragao simples (Zen'Gor): 2 turnos. O boneco nasce colado na borda esquerda do minimapa (x ~ 0.7)
         "minimapa_x_min": 0.0,
