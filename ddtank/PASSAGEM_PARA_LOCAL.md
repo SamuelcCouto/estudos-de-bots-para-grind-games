@@ -34,6 +34,23 @@ Pasta `social_empires/` na raiz: manter (estudo futuro, nao mexer). Historico do
 Eu so leio TEXTO (titulo/descricao/legenda), nao vejo imagem nem escuto audio. Pedir ao usuario para colar a transcricao de cada video
 (YouTube: "...mais" > "Mostrar transcricao") ou liberar youtube.com na rede do ambiente. Depois: extrair formulas/tabelas/regras de vento e comparar com o que o bot medir.
 
+## 0b. PVP v1 (31/10, sessao local) - leia antes do resto
+- **`PVP.bat`** (`pvp.py`): o bot joga e GRAVA as tentativas (~60 min, `--minutos`); F10 / PARAR do painel param. Deixar o jogo na sala do PVP; na sala clica
+  Inicio (`--sem-inicio` desliga); pop-up "Clique no jogo" -> clique neutro. Usa o mesmo `Atirador` (so mira + forca, SEM itens, `LeitorPvp`: vida 100 fixa).
+  NAO aprende (sem barra de vida de boss no PVP nao ha resultado do tiro): so grava; o resultado se confere nos prints do voo.
+  Grava por tiro: evento `pvp_tiro` em `sessoes/<...>_pvp/eventos.jsonl` (angulo, forca, vento, azul/inimigo no minimapa, prints turno/voo/pos_tiro;
+  `empacotar.py` manda todos) e a linha em `dados/pvp_tentativas.jsonl` (so local). Evento `partida` por partida.
+- **`vento.py`**: le o painel "Forca Vento" (seta + "N.d"; o "0.0" rosa so contorno entre rodadas = None). kNN em `templates/vento_amostras.npz`
+  (330 recortes rotulados a mao das gravacoes 011716/020551). Medido deixando cada trecho de vento de fora: 71% do vento inteiro, direcao 99%, 1o
+  digito 99%, 2o digito ~78% (6/8 se confundem). Leituras duvidosas -> `dados/pvp_vento_duvidoso/*.png` (rotular e `vento.adicionar_amostra`).
+- **Regras dos 5 videos**: `PVP_REGRAS_VIDEOS.md` (full: forca 95 e angulo = 90 - dist; semi full: 90 - 2*dist e forca ~60-64; vento 0.5 = 1 grau;
+  sobra do vento vai na forca). Conferidas contra as tabelas EstrAng (20/30/50/65 graus, `testes/test_pvp_tabelas.py`).
+- **Ainda NAO feito**: usar vento/distancia em unidades na decisao do tiro (v1 usa a fisica do `Memoria`, R=prior); detectar a caixa do minimapa
+  (= 10 unidades; cor muda por mapa: verde/vermelha/azul; as primeiras tentativas de deteccao por cor falharam); fluxo Salao de jogos -> criar sala.
+  Entrada vista na gravacao 020551: Mapa -> Salao de jogos -> Procura/Criar sala (clique ~(773,489) em 1280) -> sala "Combate Livre" -> Inicio (934,473).
+- **Proximo passo**: o usuario roda `PVP.bat` por ~1 h (so ha bots fracos de madrugada) e envia; eu rotulo acertos pelos prints do voo, calibro vento/distancia
+  e transformo os acertos em sementes (`tiros_semente.json`, instancia "PVP").
+
 ## 1. Estado atual (funciona / ja feito)
 - Bot automatico (PrintWindow + PostMessage), painel tkinter (`BotDDT.bat` = git pull + painel), versao desenvolvedor e versao amigos (so aba Relatorio).
 - Rotas: Sul (S), Norte (N, fora do menu), Leste (L) e Super Rota (U), Norte+Sul (T), Chefes (um chefe repetido), Pericao comum (P), Chefao Global (12h-13h e 21h-22h).

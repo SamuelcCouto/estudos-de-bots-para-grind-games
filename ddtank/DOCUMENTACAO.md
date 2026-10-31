@@ -109,6 +109,11 @@ Dados do usuario (fora do git): `logs/`, `sessoes/` (guarda as 3 ultimas), `dado
    **aboboras** (Medalha de abobora / Brilho da Abobora) vem nas CARTAS -> `templates/drops/*.png` + linha "Aboboras" no relatorio;
    (h) diagnostico "LUTA LONGA" em `metricas`. Entrada pela aba normal (GATO_PRETO (765,357)), cartas todas abertas (padrao de chefe unico).
    Duvidas: vento (0-2.8, parece nao mandar), se a forca/angulo das sementes serve para todos os nascimentos (o bot aprende), vigor para os perks.
+   **Roteiro do teste do Gato Preto (31/10, local):** jogo no mapa/sala sem janelinhas; `BotDDT.bat` > Chefes > Gato Preto (cartas todas abertas);
+   Desenvolvedor: gravacao completa + enviar ao parar; INICIAR e deixar 3-4 voltas (F8 pausa, F10 sai); PARAR > "Enviar gravacao"; usuario aperta
+   F9 em: usou o E, B saiu, item 2 bateu no chao, errou, morreu; anotar se o canhao do pet aparece. Conferir na analise: (1) E so 1x (slot E verde,
+   `leitura.e_disponivel`); (2) B depois do E; (3) item 2 sem bater no chao (se bater: subir angulo minimo so com o 2 e recalcular a forca com
+   `mem.forca_para`); (4) duvida aberta: o canhao do pet nao apareceu nas gravacoes do bot mesmo apos E - confirmar se o E ativa de fato.
 2. **Empacotamento facil** (BotDDT.exe sem Python): scaffold pronto, **falta gerar/testar no Windows** (secao 9).
 3. **Cupons por minuto**: cada rota/instancia da X cupons; objetivo = descobrir qual rende mais cupons por minuto corrido (rota mais
    rapida repetida pode ganhar da mais cara e lenta). Falta: usuario informar os cupons de cada instancia/rota; o `metricas.py` ja da

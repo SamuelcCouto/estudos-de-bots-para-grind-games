@@ -27,6 +27,7 @@ LIMITE = 20 * 1024 * 1024
 MINUTOS_COMPLETOS = 15
 SEGUNDOS_ANTES_DO_PROBLEMA = 25
 EVENTOS_TURNO = {"turno", "turno_aviao", "turno_sombra", "turno_pulado"}
+EVENTOS_PVP = {"pvp_tiro", "partida"}      # PVP (pvp.py): todos os prints de cada tentativa (turno, voo, depois do tiro) vao no envio
 EVENTOS_PROBLEMA = {"ordem_sem_cartas", "cartas_incompletas", "recuperacao", "desconhecida", "clique_sem_efeito",
                     "turno_pulado"}
 
@@ -47,7 +48,7 @@ def selecionar_prints(sessao):
     for e in evs:
         t = e.get("t", 0)
         fr = e.get("frames") or []
-        if (t <= MINUTOS_COMPLETOS * 60 or e.get("tipo") in EVENTOS_PROBLEMA
+        if (t <= MINUTOS_COMPLETOS * 60 or e.get("tipo") in EVENTOS_PROBLEMA or e.get("tipo") in EVENTOS_PVP
                 or any(0 <= p - t <= SEGUNDOS_ANTES_DO_PROBLEMA for p in problemas)):
             sel.update(fr)
         elif e.get("tipo") in EVENTOS_TURNO:
