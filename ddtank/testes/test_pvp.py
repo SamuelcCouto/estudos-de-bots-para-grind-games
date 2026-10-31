@@ -77,8 +77,13 @@ class DetFalso:
     def detectar(self, g): return [self.estado] if self.estado else []
 
 class IOFalso:
-    def __init__(self): self.cliques = []
-    def capturar(self): return np.zeros((688, 1280, 3), np.uint8)
+    def __init__(self): self.cliques = []; self.livre = True
+    def capturar(self):
+        img = np.zeros((688, 1280, 3), np.uint8)
+        if self.livre:                                       # seta azul do "Mesmo servidor" = sala livre (Inicio); cinza = buscando
+            x0, y0, x1, y1 = P.SETA_SERVIDOR
+            img[y0 + 5:y1 - 5, x0 + 5:x1 - 5] = (255, 80, 0)
+        return img
     def clicar_ref(self, x, y, modo="top"): self.cliques.append((x, y))
 
 class AtFalso:
@@ -96,6 +101,16 @@ assert len(io.cliques) == 1, "nao pode clicar Inicio de novo antes de INTERVALO_
 t[0] += P.INTERVALO_INICIO + 1
 laco.passo()
 assert len(io.cliques) == 2
+io.livre = False                                          # clicou em Inicio e o botao virou "Cancele": buscando partida
+t[0] += 3 * P.INTERVALO_INICIO
+for _ in range(5):
+    laco.passo()
+assert len(io.cliques) == 2, "enquanto busca partida NAO pode clicar (clicar em Cancele cancela a busca)"
+assert laco.buscando_desde is not None
+io.livre = True                                           # busca terminou/cancelada: volta a Inicio
+t[0] += P.INTERVALO_INICIO + 1
+laco.passo()
+assert len(io.cliques) == 3 and laco.buscando_desde is None
 det.estado = "CLIQUE_JOGO"; laco.passo()
 assert io.cliques[-1] == P.FOCO_PONTO_PADRAO
 det.estado = "BATALHA"

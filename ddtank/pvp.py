@@ -39,8 +39,27 @@ LEITURAS_VENTO = 3                  # leituras do painel no comeco do turno (vot
 INTERVALO_VOO = 0.8                 # s entre prints do voo do tiro
 MAX_PRINTS_VOO = 6
 INTERVALO_INICIO = 12.0             # s entre dois cliques em Inicio na sala
+SETA_SERVIDOR = (885, 455, 925, 495)   # seta do botao "Mesmo servidor" (ao lado do Inicio): AZUL com a sala livre, CINZA enquanto busca partida
+SETA_AZUL_LIVRE = 60                   # pixels azuis: livre ~114; buscando 0 (medido na gravacao 020551)
+SETA_AZUL_BUSCANDO = 20
+AVISO_BUSCA = 120.0                    # s entre avisos no log enquanto espera achar partida
 SAIDA_BATALHA = 4                   # leituras seguidas fora da BATALHA = a partida acabou
 PRINTS_DO_PVP = ("turno_inicio", "tiro_dado", "turno_pulado", "voo", "pos_tiro", "partida_fim", "desconhecida")
+
+
+def pixels_azuis_seta(f):
+    x0, y0, x1, y1 = SETA_SERVIDOR
+    h = cv2.cvtColor(f[y0:y1, x0:x1], cv2.COLOR_BGR2HSV)
+    return int(((h[..., 0] > 95) & (h[..., 0] < 125) & (h[..., 1] > 120) & (h[..., 2] > 120)).sum())
+
+
+def sala_livre(f):
+    """True: o botao e "Inicio" (da para clicar). False: virou "Cancele" (esta buscando partida - clicar CANCELA a busca) ou duvida."""
+    return pixels_azuis_seta(f) >= SETA_AZUL_LIVRE
+
+
+def sala_buscando(f):
+    return pixels_azuis_seta(f) <= SETA_AZUL_BUSCANDO
 
 
 class RegistroPvp(registro_mod.Registro):
@@ -191,6 +210,8 @@ class Laco:
         self.em_batalha = False
         self.fora = 0
         self.ultimo_inicio = -1e9
+        self.buscando_desde = None
+        self.ultimo_aviso = 0.0
         self.ultimo_estado = None
         self.parar = False
 
@@ -217,11 +238,22 @@ class Laco:
             por_baixo = next((e for e in achadas if e != "CLIQUE_JOGO"), None)
             self.io.clicar_ref(*FOCO_PONTO_NEUTRO.get(por_baixo, FOCO_PONTO_PADRAO))
             self.dormir(1.0)
-        elif estado == "SALA" and self.clicar_inicio and self.agora() - self.ultimo_inicio >= INTERVALO_INICIO:
-            self.ultimo_inicio = self.agora()
-            self.log("(sala: clicando em Inicio)")
-            self.io.clicar_ref(*SALA_INICIO)
-            self.dormir(2.0)
+        elif estado == "SALA" and self.clicar_inicio:
+            if sala_livre(f):
+                self.buscando_desde = None
+                if self.agora() - self.ultimo_inicio >= INTERVALO_INICIO:
+                    self.ultimo_inicio = self.agora()
+                    self.log("(sala: clicando em Inicio para buscar partida)")
+                    self.io.clicar_ref(*SALA_INICIO)
+                    self.dormir(2.0)
+            elif sala_buscando(f):
+                agora = self.agora()
+                if self.buscando_desde is None:
+                    self.buscando_desde, self.ultimo_aviso = agora, agora
+                    self.log("(buscando partida: o botao virou Cancele - NAO clico; espero achar)")
+                elif agora - self.ultimo_aviso >= AVISO_BUSCA:
+                    self.ultimo_aviso = agora
+                    self.log(f"(ainda buscando partida ha {(agora - self.buscando_desde) / 60:.0f} min; continuo esperando)")
 
     def rodar(self, ate=None, arquivo_parar=ARQUIVO_PARAR):
         while not self.parar:
