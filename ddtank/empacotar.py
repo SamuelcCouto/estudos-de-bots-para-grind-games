@@ -27,7 +27,7 @@ LIMITE = 20 * 1024 * 1024
 MINUTOS_COMPLETOS = 15
 SEGUNDOS_ANTES_DO_PROBLEMA = 25
 EVENTOS_TURNO = {"turno", "turno_aviao", "turno_sombra", "turno_pulado"}
-EVENTOS_PVP = {"pvp_tiro", "partida"}      # PVP (pvp.py): todos os prints de cada tentativa (turno, voo, depois do tiro) vao no envio
+EVENTOS_PVP = {"pvp_tiro", "partida", "mapa", "pvp_diag"}      # PVP (pvp.py): todos os prints de cada tentativa (turno, voo, depois do tiro) vao no envio
 EVENTOS_PROBLEMA = {"ordem_sem_cartas", "cartas_incompletas", "recuperacao", "desconhecida", "clique_sem_efeito",
                     "turno_pulado"}
 

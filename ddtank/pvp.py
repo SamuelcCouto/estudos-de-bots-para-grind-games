@@ -39,6 +39,13 @@ PASTA_VENTO_DUVIDOSO = os.path.join(config.PASTA, "dados", "pvp_vento_duvidoso")
 LEITURAS_VENTO = 3                  # leituras do painel no comeco do turno (vota o valor mais comum)
 INTERVALO_VOO = 0.8                 # s entre prints do voo do tiro
 MAX_PRINTS_VOO = 6
+VEZ_CURTA_S = 2.0                   # a sua vez que dura menos que isso nao deu para agir (PASS so piscou)
+VEZES_CURTAS_ALERTA = 3             # tantas vezes curtas seguidas = algo errado com o seu boneco (congelado? morto? sem vez?)
+BATIMENTO_QUADRO_S = 20.0           # s entre prints de diagnostico durante a batalha
+MAX_QUADROS_DIAG = 150              # trava por sessao (cada print ~100 KB)
+LIMITE_BUSCA_S = 600.0              # busca de partida parada ha mais que isso: cancela e busca de novo
+PASS_LIMIAR_PVP = 0.55              # o PASS e um texto translucido sobre o mapa: em fundos claros a nota cai (com PASS 0.7-0.9; sem 0.0-0.5)
+PRESO_S = 120.0                     # s em tela desconhecida fora da batalha: clica numa area neutra e avisa
 INTERVALO_INICIO = 12.0             # s entre dois cliques em Inicio na sala
 SETA_SERVIDOR = (885, 455, 925, 495)   # seta do botao "Mesmo servidor" (ao lado do Inicio): AZUL com a sala livre, CINZA enquanto busca partida
 SETA_AZUL_LIVRE = 60                   # pixels azuis: livre ~114; buscando 0 (medido na gravacao 020551)
@@ -50,7 +57,7 @@ MAPA_RECORTE = (638, 494, 834, 552)  # miniatura do mapa na tela VS (canto de ba
 MAPA_NOME_RECORTE = (636, 458, 840, 556)
 MAPA_DIST_MAX = 10                  # bits de diferenca (de 64) para ser o mesmo mapa
 PASTA_MAPAS = os.path.join(config.PASTA, "dados", "pvp_mapas")
-PRINTS_DO_PVP = ("turno_inicio", "tiro_dado", "turno_pulado", "voo", "pos_tiro", "partida_fim", "desconhecida", "mapa")
+PRINTS_DO_PVP = ("turno_inicio", "tiro_dado", "turno_pulado", "voo", "pos_tiro", "partida_fim", "desconhecida", "mapa", "vez", "batalha", "preso")
 
 
 def pixels_azuis_seta(f):
@@ -113,6 +120,26 @@ class CatalogoMapas:
         return mid, novo, self.mapas[mid]["vistas"]
 
 
+ANGULOS_PVP = (35.0, 50.0, 62.0, 45.0, 28.0, 56.0)      # angulos alternados: variedade ajuda a calibrar a fisica (o resultado se confere nos prints)
+
+
+class MemoriaPvp(memoria_mod.Memoria):
+    """Escolhe o angulo em rodizio e a forca pela fisica (R: a escala do minimapa, prior das tabelas EstrAng). Nao aprende
+    com o resultado (o PVP nao o conhece): so grava; os acertos entram depois, pela analise dos prints."""
+    def __init__(self, *a, **kw):
+        super().__init__(*a, **kw)
+        self.n_pvp = 0
+
+    def prever(self, inst, azul, boss):
+        if azul and boss and abs(boss[0] - azul[0]) >= memoria_mod.DX_MINIMO:
+            ang = ANGULOS_PVP[self.n_pvp % len(ANGULOS_PVP)]
+            self.n_pvp += 1
+            mt = self.melhor_tiro(inst, abs(boss[0] - azul[0]), azul[1] - boss[1], angulo=ang)
+            if mt:
+                return self._limites(inst, ang, mt[1], "pvp-variado", f"angulo {ang:.0f} em rodizio; forca pela fisica (chance ~{mt[2]:.0%})")
+        return super().prever(inst, azul, boss)
+
+
 class RegistroPvp(registro_mod.Registro):
     """Como o Registro, mas so grava os prints do PVP (turno, voo, depois do tiro): uma hora inteira fica em dezenas de MB."""
     def frame(self, img, rotulo):
@@ -131,6 +158,22 @@ class LeitorPvp(atirador_mod.LeitorReal):
     e_disponivel = staticmethod(lambda f: False)
     numeros_dano = staticmethod(lambda f: 0)
     vento = staticmethod(vento_mod.ler_vento)
+    minha_vez = staticmethod(lambda f: pontuacao_pass(f) >= PASS_LIMIAR_PVP)
+
+
+_TPL_PASS = []
+
+
+def pontuacao_pass(f):
+    """Nota (0-1) do "PASS" da sua vez no quadro - a mesma leitura de leitura.minha_vez, mas devolvendo a nota."""
+    if not _TPL_PASS:
+        _TPL_PASS.append(cv2.imread(os.path.join(config.PASTA_TEMPLATES, "pass.png"), cv2.IMREAD_GRAYSCALE))
+    t = _TPL_PASS[0]
+    th, tw = t.shape
+    g = cv2.GaussianBlur(cv2.cvtColor(f, cv2.COLOR_BGR2GRAY), (3, 3), 0)
+    x, y = L.PASS_POS
+    roi = g[y - 6:y + th + 6, x - 8:x + tw + 8]
+    return float(cv2.matchTemplate(roi, t, cv2.TM_CCOEFF_NORMED).max())
 
 
 def votar_vento(leituras):
@@ -159,6 +202,7 @@ class AtiradorPvp(atirador_mod.Atirador):
         self._voo_n, self._voo_t = 0, -99.0
         self.vento_duvidoso_salvos = 0
         self.mapa = None
+        self.turnos_feitos_na_vez = 0
 
     # ------------------------------------------------------------------ vento
     def ler_vento(self, f):
@@ -191,6 +235,7 @@ class AtiradorPvp(atirador_mod.Atirador):
         self.log(f"   [vento] {'?' if v is None else f'{v:+.1f}'} (confianca {conf:.2f}, {votos} leitura(s) iguais)"
                  f"{'' if v is None or vento_mod.confiavel(conf) else ' - DUVIDOSO: recorte salvo para rotular'}")
         antes = self.turnos
+        self.turnos_feitos_na_vez += 1
         super().turno(f)
         if self.pendente is not None and self.turnos > antes:
             self.pendente["vento"] = self.vento_turno
@@ -270,6 +315,13 @@ class Laco:
         self.ultimo_batimento = 0.0
         self.melhor_mapa = None            # (contraste, quadro) da tela VS (o fade-in deixa os primeiros quadros escuros)
         self.parar = False
+        self.nota_pass = 0.0
+        self.vez_desde = None              # quando o PASS apareceu (None = sem PASS)
+        self.vezes_curtas = 0
+        self.ultimo_quadro_diag = -1e9
+        self.quadros_diag = 0
+        self.desconhecida_desde = None
+        self.ultimo_preso = -1e9
 
     def _guardar_mapa(self, f):
         c = contraste_mapa(f)
@@ -290,6 +342,34 @@ class Laco:
         if self.reg:
             self.reg.evento("mapa", [self.reg.frame(f, "mapa")], mapa=mid, novo=novo, vistas=vistas)
 
+    def _diag(self, f, rotulo, **dados):
+        """Print de diagnostico (limitado): mostra o que o jogo esta mostrando quando algo estranho acontece."""
+        if not self.reg or f is None or self.quadros_diag >= MAX_QUADROS_DIAG:
+            return
+        self.quadros_diag += 1
+        self.reg.evento("pvp_diag", [self.reg.frame(f, rotulo)], motivo=rotulo, **dados)
+
+    def _acompanhar_vez(self, f, vez, agora):
+        """Mede quanto tempo a sua vez dura: PASS que so pisca (<2 s) nao da para jogar - guarda print e avisa se repetir."""
+        if vez and self.vez_desde is None:
+            self.vez_desde = agora
+            if agora - self.ultimo_quadro_diag >= 5.0:
+                self.ultimo_quadro_diag = agora
+                self._diag(f, "vez", nota_pass=round(self.nota_pass, 2))
+        elif not vez and self.vez_desde is not None:
+            dur = agora - self.vez_desde
+            self.vez_desde = None
+            if dur < VEZ_CURTA_S and self.at.turnos_feitos_na_vez == 0:
+                self.vezes_curtas += 1
+                self.log(f"(a sua vez durou so {dur:.1f} s e o bot nao chegou a agir ({self.vezes_curtas} seguida(s)))")
+                if self.vezes_curtas >= VEZES_CURTAS_ALERTA:
+                    self.log("ALERTA: varias vezes seguidas que acabam na hora. Seu boneco pode estar congelado/morto/sem turno. Veja o jogo.")
+                    self._diag(f, "vez", alerta=True, vezes_curtas=self.vezes_curtas)
+                    self.vezes_curtas = 0
+            else:
+                self.vezes_curtas = 0
+            self.at.turnos_feitos_na_vez = 0
+
     def passo(self):
         img = self.io.capturar()
         if img is None:
@@ -297,7 +377,9 @@ class Laco:
         f = em_1280(img)
         achadas = self.det.detectar(estados_mod.normalizar(f))
         estado = achadas[0] if achadas else None
-        vez = bool(L.minha_vez(f))
+        nota = pontuacao_pass(f)
+        vez = nota >= PASS_LIMIAR_PVP
+        self.nota_pass = nota
         agora = self.agora()
         if estado != self.ultimo_estado:
             self.log(f"(tela: {estado or 'desconhecida'})")
@@ -307,16 +389,21 @@ class Laco:
             return
         self._fechar_mapa()
         if estado == "BATALHA" or vez:
+            self.desconhecida_desde = None
+            self._acompanhar_vez(f, vez, agora)
+            if self.em_batalha and agora - self.ultimo_quadro_diag >= BATIMENTO_QUADRO_S and not vez:
+                self.ultimo_quadro_diag = agora
+                self._diag(f, "batalha", tiros=self.at.tiros_na_partida, nota_pass=round(nota, 2))
             if not self.em_batalha:
                 self.log("(partida comecou)")
                 self.ultima_vez = None
             self.em_batalha, self.fora_desde = True, None
             if vez != self.ultima_vez:
-                self.log("(SUA VEZ)" if vez else "(vez do adversario: espero)")
+                self.log(f"(SUA VEZ; PASS {nota:.2f})" if vez else f"(vez do adversario: espero; PASS {nota:.2f})")
                 self.ultima_vez = vez
             if agora - self.ultimo_batimento >= BATIMENTO_S:
                 self.ultimo_batimento = agora
-                self.log(f"(em batalha: {'sua vez' if vez else 'vez do adversario'}; tiros nesta partida: {self.at.tiros_na_partida})")
+                self.log(f"(em batalha: {'sua vez' if vez else 'vez do adversario'}; PASS {nota:.2f}; tiros nesta partida: {self.at.tiros_na_partida})")
             self.at.passo(f)
             return
         if self.em_batalha:
@@ -325,6 +412,16 @@ class Laco:
             elif agora - self.fora_desde >= SAIDA_BATALHA_S:
                 self.at.fim_da_partida(f)
                 self.em_batalha = False
+        if estado in (None, "TAREFA") and not self.em_batalha:
+            if self.desconhecida_desde is None:
+                self.desconhecida_desde = agora
+            elif agora - self.desconhecida_desde >= PRESO_S and agora - self.ultimo_preso >= PRESO_S:
+                self.ultimo_preso = agora
+                self.log(f"ALERTA: ha {(agora - self.desconhecida_desde):.0f} s em tela desconhecida fora da batalha; clicando numa area neutra")
+                self._diag(f, "preso")
+                self.io.clicar_ref(*FOCO_PONTO_PADRAO)
+        else:
+            self.desconhecida_desde = None
         if estado == "CLIQUE_JOGO":
             por_baixo = next((e for e in achadas if e != "CLIQUE_JOGO"), None)
             self.io.clicar_ref(*FOCO_PONTO_NEUTRO.get(por_baixo, FOCO_PONTO_PADRAO))
@@ -341,6 +438,11 @@ class Laco:
                 if self.buscando_desde is None:
                     self.buscando_desde, self.ultimo_aviso = agora, agora
                     self.log("(buscando partida: o botao virou Cancele - NAO clico; espero achar)")
+                elif agora - self.buscando_desde >= LIMITE_BUSCA_S:
+                    self.log("ALERTA: busca de partida parada ha mais de 10 min: cancelo e busco de novo")
+                    self.io.clicar_ref(*SALA_INICIO)
+                    self.buscando_desde, self.ultimo_inicio = None, agora
+                    self.dormir(2.0)
                 elif agora - self.ultimo_aviso >= AVISO_BUSCA:
                     self.ultimo_aviso = agora
                     self.log(f"(ainda buscando partida ha {(agora - self.buscando_desde) / 60:.0f} min; continuo esperando)")
@@ -360,7 +462,20 @@ class Laco:
             if hasattr(self.io, "tecla_apertada") and self.io.tecla_apertada(VK_F10):
                 self.log("F10: parando.")
                 break
-            self.passo()
+            try:
+                self.passo()
+            except KeyboardInterrupt:
+                raise
+            except Exception as e:                       # uma falha inesperada NAO derruba uma gravacao de 1 hora
+                import traceback
+                agora = self.agora()
+                self.erros = [t for t in getattr(self, "erros", []) if agora - t < 600] + [agora]
+                self.log(f"[ERRO] {type(e).__name__}: {e} ({len(self.erros)} nos ultimos 10 min)")
+                self.log(traceback.format_exc().strip().splitlines()[-3])
+                if len(self.erros) >= 12:
+                    self.log("Muitos erros seguidos: parando.")
+                    break
+                self.dormir(1.0)
             self.dormir(0.25)
 
 
@@ -398,7 +513,7 @@ def main():
     io.log = log
     reg = RegistroPvp("pvp")
     log(f"PVP: gravando em {reg.pasta} e em {ARQ_TENTATIVAS}. Janela: {janela.descrever_janela(hwnd)}")
-    at = AtiradorPvp(io, memoria_mod.Memoria(), lambda: INSTANCIA, sombra=args.sombra, log=log, reg=reg)
+    at = AtiradorPvp(io, MemoriaPvp(), lambda: INSTANCIA, sombra=args.sombra, log=log, reg=reg)
     laco = Laco(io, det, at, log=log, clicar_inicio=not args.sem_inicio, catalogo=CatalogoMapas(), reg=reg)
     ate = time.time() + args.minutos * 60 if args.minutos else None
     try:

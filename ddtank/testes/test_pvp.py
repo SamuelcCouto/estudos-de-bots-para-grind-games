@@ -87,7 +87,7 @@ class IOFalso:
     def clicar_ref(self, x, y, modo="top"): self.cliques.append((x, y))
 
 class AtFalso:
-    def __init__(self): self.passos = 0; self.fins = 0; self.tiros_na_partida = 0; self.mapa = None
+    def __init__(self): self.passos = 0; self.fins = 0; self.tiros_na_partida = 0; self.mapa = None; self.turnos_feitos_na_vez = 0
     def passo(self, f): self.passos += 1
     def fim_da_partida(self, f=None): self.fins += 1
 
@@ -152,4 +152,54 @@ laco3.passo(); laco3.passo()
 laco3.det.estado = "BATALHA"; laco3.io.capturar = lambda: base; laco3.passo()
 assert laco3.at.mapa == m1, laco3.at.mapa
 print("mapas (id estavel mesmo com fade, miniatura guardada, ligado a partida) OK")
+# ------------------------------------------------------------ 5) vigias: vez que so pisca, tela desconhecida, busca eterna, angulos em rodizio
+import estados as E
+import leitura as LE
+vez_real = {"v": False}
+orig_vez = P.pontuacao_pass
+P.pontuacao_pass = lambda f: 0.9 if vez_real["v"] else 0.1
+try:
+    logs5 = []
+    io5, det5, at5 = IOFalso(), DetFalso(), AtFalso()
+    t5 = [0.0]
+    l5 = P.Laco(io5, det5, at5, log=logs5.append, agora=lambda: t5[0], dormir=lambda s: t5.__setitem__(0, t5[0] + s))
+    det5.estado = "BATALHA"
+    for _ in range(P.VEZES_CURTAS_ALERTA):                 # PASS pisca e some, o bot nunca chega a agir
+        vez_real["v"] = True; l5.passo(); t5[0] += 0.4
+        vez_real["v"] = False; l5.passo(); t5[0] += 5
+    assert any("ALERTA: varias vezes" in m for m in logs5), logs5
+    # tela desconhecida por muito tempo fora da batalha -> clique neutro
+    l6 = P.Laco(IOFalso(), DetFalso(), AtFalso(), log=lambda m: None, agora=lambda: t5[0], dormir=lambda s: None)
+    l6.det.estado = None
+    l6.passo()
+    t5[0] += P.PRESO_S + 1
+    l6.passo()
+    assert l6.io.cliques == [P.FOCO_PONTO_PADRAO], l6.io.cliques
+    # busca parada por mais de 10 min -> cancela (clique no botao) e volta a buscar
+    io7 = IOFalso(); io7.livre = False
+    l7 = P.Laco(io7, DetFalso(), AtFalso(), log=lambda m: None, agora=lambda: t5[0], dormir=lambda s: None)
+    l7.passo()
+    assert io7.cliques == []
+    t5[0] += P.LIMITE_BUSCA_S + 1
+    l7.passo()
+    assert io7.cliques == [P.SALA_INICIO] and l7.buscando_desde is None
+finally:
+    P.pontuacao_pass = orig_vez
+mp = P.MemoriaPvp(arq_aprendizado=None)
+angs = [mp.prever("PVP", (74.0, 56.0), (13.0, 54.0))["angulo"] for _ in range(len(P.ANGULOS_PVP))]
+assert angs == list(P.ANGULOS_PVP), angs
+assert all(8 <= mp.prever("PVP", (74.0, 56.0), (13.0, 54.0))["forca"] <= 95 for _ in range(6))
+print("vigias (vez curta, tela desconhecida, busca eterna) e angulos em rodizio OK")
+# erro inesperado no passo nao derruba o laco
+class LacoQuebrado(P.Laco):
+    n = 0
+    def passo(self):
+        LacoQuebrado.n += 1
+        if LacoQuebrado.n <= 3:
+            raise ValueError("falha de teste")
+        self.parar = True
+lq = LacoQuebrado(IOFalso(), DetFalso(), AtFalso(), log=lambda m: None, agora=lambda: 0.0, dormir=lambda s: None)
+lq.rodar(arquivo_parar=None)
+assert LacoQuebrado.n == 4, "deveria sobreviver a 3 erros e seguir"
+print("falha inesperada nao derruba o laco OK")
 print("\npvp OK")
