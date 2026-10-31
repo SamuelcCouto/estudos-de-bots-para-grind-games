@@ -77,6 +77,9 @@ ESTRATEGIAS = {
         "acerto_incerto": True,       # o boss se cura e a barra mal mexe com 1 tiro (41% -> 41% ate nos tiros do usuario): vida que
                                       # nao caiu NAO conta como erro (nao suja a memoria); so acertos (queda >= 2%) sao aprendidos
     },
+    "PVP": {                            # Combate Livre (pvp.py): mira de 15 a 80 graus; E/F/itens sao do AtiradorPvp
+        "angulo_min": 15.0, "angulo_max": 80.0,
+    },
     "PERICAO": {
         "chefe_global": True,         # vida do servidor; acerto pelos numeros de dano; vitoria = o chefao morreu para todos
         "angulo_min": 0.0,            # mira quase reta (o ponteiro le 7); nas outras o minimo e 15

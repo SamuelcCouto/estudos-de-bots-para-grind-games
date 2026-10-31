@@ -48,6 +48,11 @@ Eu so leio TEXTO (titulo/descricao/legenda), nao vejo imagem nem escuto audio. P
 - **Ainda NAO feito**: usar vento/distancia em unidades na decisao do tiro (v1 usa a fisica do `Memoria`, R=prior); detectar a caixa do minimapa
   (= 10 unidades; cor muda por mapa: verde/vermelha/azul; as primeiras tentativas de deteccao por cor falharam); fluxo Salao de jogos -> criar sala.
   Entrada vista na gravacao 020551: Mapa -> Salao de jogos -> Procura/Criar sala (clique ~(773,489) em 1280) -> sala "Combate Livre" -> Inicio (934,473).
+- **PVP v1.1 (31/10 ~05h)**: itens 1-8 (ordem por turno alternando 2 e 1, so os com energia), **E** (protege o terreno; so com o slot verde, `leitura.e_disponivel`; o icone de buff do
+  pet fica sempre "ligado" no PVP e nao serve), **F** (aviao: usado quando o chao cede (y do boneco +8 no minimapa), o angulo bate no limite da arma ou o inimigo esta a >58 px; ate 4/partida,
+  1 a cada 3 tiros). Forca agora pelas **tabelas EstrAng** (`pvp.forca_tabela`, ajuste nas 4 tabelas; escala padrao 4 px/unidade, editavel por mapa em `dados/pvp_mapas/indice.json` campo "escala").
+  A vez tem **histerese de 1,5 s** (a nota do PASS cai a 0.45 no voo do tiro: antes o bot achava que era outro turno e atirava 2x). Angulos em rodizio 45-75 (mapa m003 tem uma cabana no meio:
+  tiros baixos batem no cenario, quebram o terreno e o boneco afunda).
 - **Proximo passo**: o usuario roda `PVP.bat` por ~1 h (so ha bots fracos de madrugada) e envia; eu rotulo acertos pelos prints do voo, calibro vento/distancia
   e transformo os acertos em sementes (`tiros_semente.json`, instancia "PVP").
 

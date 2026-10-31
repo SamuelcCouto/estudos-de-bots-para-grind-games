@@ -202,4 +202,74 @@ lq = LacoQuebrado(IOFalso(), DetFalso(), AtFalso(), log=lambda m: None, agora=la
 lq.rodar(arquivo_parar=None)
 assert LacoQuebrado.n == 4, "deveria sobreviver a 3 erros e seguir"
 print("falha inesperada nao derruba o laco OK")
+# ------------------------------------------------------------ 6) fisica das tabelas, histerese da vez, E/F/itens
+for ang, d, f_tab in ((50, 12, 53), (30, 10, 47), (65, 5, 37), (50, 20, 72), (30, 3, 24)):
+    assert abs(P.forca_tabela(d, ang) - f_tab) <= 4, (ang, d, P.forca_tabela(d, ang), f_tab)
+mp = P.MemoriaPvp(arq_aprendizado=None)
+pr = mp.prever("PVP", (20.0, 50.0), (68.0, 50.0))        # inimigo no mesmo nivel, 48 px = 12 unidades (escala 4)
+assert pr["origem"] == "pvp-tabela" and 45 <= pr["forca"] <= 70, pr
+mais_baixo = mp.melhor_tiro("PVP", 48.0, -20.0, angulo=45.0)[1]
+plano = mp.melhor_tiro("PVP", 48.0, 0.0, angulo=45.0)[1]
+assert mais_baixo < plano, "alvo mais baixo pede menos forca"
+mp.escala = 3.0
+assert mp.melhor_tiro("PVP", 48.0, 0.0, angulo=45.0)[1] > plano, "escala menor (mapa 'apertado') = mais unidades = mais forca"
+print("fisica das tabelas (forca por distancia/angulo, alvo mais baixo, escala por mapa) OK")
+
+relogio = [100.0]
+notas = {"n": 0.9}
+orig_nota = P.pontuacao_pass
+P.pontuacao_pass = lambda f: notas["n"]
+try:
+    lp = P.LeitorPvp(agora=lambda: relogio[0])
+    assert lp.minha_vez(None)
+    notas["n"] = 0.45                                        # a nota cai por 1 quadro no voo do tiro
+    relogio[0] += 0.5
+    assert lp.minha_vez(None), "uma queda curta da nota NAO e o fim da vez (era o que fazia atirar 2x no mesmo turno)"
+    relogio[0] += P.HOLD_VEZ_S
+    assert not lp.minha_vez(None)
+finally:
+    P.pontuacao_pass = orig_nota
+print("vez com histerese OK")
+
+w = MundoComThread()
+at, mem, logs, tmp = novo(w)
+at.rastreador.boss = (80.0, 50.0)
+assert at.plano_aviao("PVP", (30.0, 50.0), 100.0) is None and at.y_ref == 50.0          # nada de errado: atira normal
+assert at.plano_aviao("PVP", (30.0, 59.0), 100.0)[0] > 30.0 and at.motivo_aviao == "chao cedeu"    # desceu 9 px: aviao para o lado do inimigo
+at.rastreador.boss = (10.0, 50.0)
+dest = at.plano_aviao("PVP", (30.0, 59.0), 100.0)
+assert dest and dest[0] < 30.0, "inimigo a esquerda: voa para a esquerda"
+at.ultimo_aviao_tiro, at.tiros_na_partida = 5, 6
+assert at.plano_aviao("PVP", (30.0, 59.0), 100.0) is None, "espera INTERVALO_AVIAO_TIROS tiros entre avioes"
+at.tiros_na_partida = 9
+at.y_ref = 59.0
+at.limite_recente = True
+assert at.plano_aviao("PVP", (30.0, 59.0), 100.0) and at.motivo_aviao == "angulo no limite"
+at.y_ref = 59.0
+at.rastreador.boss = (95.0, 59.0)
+assert at.plano_aviao("PVP", (30.0, 59.0), 100.0) and at.motivo_aviao == "inimigo longe"
+at.aviao_indisponivel = True
+assert at.plano_aviao("PVP", (30.0, 59.0), 100.0) is None
+print("aviao F (chao cedeu / angulo no limite / inimigo longe, intervalo, desistir) OK")
+
+class LeitorItens(LeitorT):
+    itens = staticmethod(lambda f: [True] * 8)
+    e_disponivel = staticmethod(lambda f: not w2.e_apertado)
+w2 = MundoComThread()
+w2.e_apertado = False
+orig_tecla = w2.tecla
+def tecla_e(nome, dur=0.05):
+    if nome == "e":
+        w2.e_apertado = True
+    orig_tecla(nome, dur)
+w2.tecla = tecla_e
+at2, mem2, logs2, tmp2 = novo(w2)
+at2.lei = LeitorItens()
+while w2.t < 16.0:
+    at2.passo(); w2.avancar(0.1)
+assert at2.e_usos == 1 and any("[E] usado" in l for l in logs2), logs2
+assert at2.ordem == list(P.ORDENS_PVP[0]) and at2.itens_ultimo, (at2.ordem, at2.itens_ultimo)
+linhas2 = [json.loads(l) for l in open(os.path.join(tmp2, "t.jsonl"), encoding="utf-8")]
+assert linhas2 and linhas2[0]["itens"] == at2.itens_ultimo and 2 in linhas2[0]["itens"], linhas2
+print("E (so com o slot verde) e itens por turno gravados OK")
 print("\npvp OK")
