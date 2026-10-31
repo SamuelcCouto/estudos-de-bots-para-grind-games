@@ -87,7 +87,7 @@ class IOFalso:
     def clicar_ref(self, x, y, modo="top"): self.cliques.append((x, y))
 
 class AtFalso:
-    def __init__(self): self.passos = 0; self.fins = 0
+    def __init__(self): self.passos = 0; self.fins = 0; self.tiros_na_partida = 0; self.mapa = None
     def passo(self, f): self.passos += 1
     def fim_da_partida(self, f=None): self.fins += 1
 
@@ -117,10 +117,39 @@ det.estado = "BATALHA"
 for _ in range(3): laco.passo()
 assert at.passos == 3 and laco.em_batalha
 det.estado = "CARTAS_P"
-for _ in range(P.SAIDA_BATALHA): laco.passo()
+laco.passo()
+assert at.fins == 0, "uma tela estranha de 1 s no meio da luta NAO e fim de partida"
+det.estado = None; laco.passo(); det.estado = "BATALHA"; laco.passo()
+assert at.fins == 0 and laco.fora_desde is None
+det.estado = "CARTAS_P"
+for _ in range(int(P.SAIDA_BATALHA_S / 0.25) + 3):
+    laco.passo(); t[0] += 0.25
 assert at.fins == 1 and not laco.em_batalha
 laco2 = P.Laco(io, DetFalso(), AtFalso(), log=lambda m: None, clicar_inicio=False, agora=lambda: 1e6, dormir=lambda s: None)
 n = len(io.cliques); laco2.passo()
 assert len(io.cliques) == n, "--sem-inicio nao clica"
 print("laco (Inicio com intervalo, pop-up, batalha, fim de partida, --sem-inicio) OK")
+# ------------------------------------------------------------ 4) mapa da tela VS: id estavel, mesmo mapa com fade-in, outro mapa = outro id
+import cv2
+cat = P.CatalogoMapas(pasta=os.path.join(tempfile.mkdtemp(), "mapas"))
+base = np.full((688, 1280, 3), 40, np.uint8)
+x0, y0, x1, y1 = P.MAPA_RECORTE
+rng = np.random.default_rng(1)
+miniatura = cv2.GaussianBlur(rng.integers(0, 255, (y1 - y0, x1 - x0, 3), dtype=np.uint8), (0, 0), 3)
+outra = cv2.GaussianBlur(rng.integers(0, 255, (y1 - y0, x1 - x0, 3), dtype=np.uint8), (0, 0), 3)
+q1 = base.copy(); q1[y0:y1, x0:x1] = miniatura
+q_escuro = base.copy(); q_escuro[y0:y1, x0:x1] = (miniatura * 0.45).astype(np.uint8)     # fade-in da tela
+q2 = base.copy(); q2[y0:y1, x0:x1] = outra
+m1, novo1, _ = cat.identificar(q1)
+m1b, novo1b, v = cat.identificar(q_escuro)
+m2, novo2, _ = cat.identificar(q2)
+assert novo1 and m1b == m1 and not novo1b and v == 2, (m1, m1b)
+assert novo2 and m2 != m1
+assert os.path.exists(os.path.join(cat.pasta, m1 + ".png")) and P.CatalogoMapas(pasta=cat.pasta).mapas[m1]["vistas"] == 2
+laco3 = P.Laco(IOFalso(), DetFalso(), AtFalso(), log=lambda m: None, catalogo=cat, agora=lambda: 0.0, dormir=lambda s: None)
+laco3.det.estado = "VS_PVP"; laco3.io.capturar = lambda: q1
+laco3.passo(); laco3.passo()
+laco3.det.estado = "BATALHA"; laco3.io.capturar = lambda: base; laco3.passo()
+assert laco3.at.mapa == m1, laco3.at.mapa
+print("mapas (id estavel mesmo com fade, miniatura guardada, ligado a partida) OK")
 print("\npvp OK")

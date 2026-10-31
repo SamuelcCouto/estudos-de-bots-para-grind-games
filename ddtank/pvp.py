@@ -21,6 +21,7 @@ import sys
 import time
 
 import cv2
+import numpy as np
 
 import atirador as atirador_mod
 import config
@@ -43,8 +44,13 @@ SETA_SERVIDOR = (885, 455, 925, 495)   # seta do botao "Mesmo servidor" (ao lado
 SETA_AZUL_LIVRE = 60                   # pixels azuis: livre ~114; buscando 0 (medido na gravacao 020551)
 SETA_AZUL_BUSCANDO = 20
 AVISO_BUSCA = 120.0                    # s entre avisos no log enquanto espera achar partida
-SAIDA_BATALHA = 4                   # leituras seguidas fora da BATALHA = a partida acabou
-PRINTS_DO_PVP = ("turno_inicio", "tiro_dado", "turno_pulado", "voo", "pos_tiro", "partida_fim", "desconhecida")
+SAIDA_BATALHA_S = 6.0               # s seguidos fora da batalha (e sem a sua vez) = a partida acabou (a tela pisca "desconhecida" no meio da luta)
+BATIMENTO_S = 30.0                  # s entre linhas de status do log durante a batalha
+MAPA_RECORTE = (638, 494, 834, 552)  # miniatura do mapa na tela VS (canto de baixo, "Arena"); (636, 458, 840, 556) inclui o nome
+MAPA_NOME_RECORTE = (636, 458, 840, 556)
+MAPA_DIST_MAX = 10                  # bits de diferenca (de 64) para ser o mesmo mapa
+PASTA_MAPAS = os.path.join(config.PASTA, "dados", "pvp_mapas")
+PRINTS_DO_PVP = ("turno_inicio", "tiro_dado", "turno_pulado", "voo", "pos_tiro", "partida_fim", "desconhecida", "mapa")
 
 
 def pixels_azuis_seta(f):
@@ -60,6 +66,51 @@ def sala_livre(f):
 
 def sala_buscando(f):
     return pixels_azuis_seta(f) <= SETA_AZUL_BUSCANDO
+
+
+def hash_mapa(f):
+    """dHash de 64 bits da miniatura do mapa (tela VS): parecido mesmo com o fade-in da tela."""
+    x0, y0, x1, y1 = MAPA_RECORTE
+    g = cv2.cvtColor(f[y0:y1, x0:x1], cv2.COLOR_BGR2GRAY)
+    p = cv2.resize(g, (9, 8), interpolation=cv2.INTER_AREA).astype(np.int16)
+    bits = (p[:, 1:] > p[:, :-1]).ravel()
+    return int("".join("1" if b else "0" for b in bits), 2)
+
+
+def contraste_mapa(f):
+    x0, y0, x1, y1 = MAPA_RECORTE
+    return float(cv2.cvtColor(f[y0:y1, x0:x1], cv2.COLOR_BGR2GRAY).std())
+
+
+class CatalogoMapas:
+    """Mapas do PVP vistos na tela VS: cada um vira um id (m001, m002...) com a miniatura guardada em dados/pvp_mapas/.
+    O nome do mapa a gente descobre depois olhando o PNG (e escreve em indice.json, campo "nome")."""
+    def __init__(self, pasta=PASTA_MAPAS):
+        self.pasta = pasta
+        self.arq = os.path.join(pasta, "indice.json")
+        self.mapas = json.load(open(self.arq, encoding="utf-8")) if os.path.exists(self.arq) else {}
+
+    def identificar(self, f):
+        """(id, novo?, quantas vezes ja visto) - registra o mapa se for novo."""
+        h = hash_mapa(f)
+        melhor = min(self.mapas.items(), key=lambda kv: bin(int(kv[1]["hash"], 16) ^ h).count("1"), default=None)
+        if melhor and bin(int(melhor[1]["hash"], 16) ^ h).count("1") <= MAPA_DIST_MAX:
+            mid = melhor[0]
+            self.mapas[mid]["vistas"] += 1
+            novo = False
+        else:
+            mid = f"m{len(self.mapas) + 1:03d}"
+            self.mapas[mid] = {"hash": f"{h:016x}", "vistas": 1, "nome": None, "png": mid + ".png"}
+            novo = True
+            os.makedirs(self.pasta, exist_ok=True)
+            x0, y0, x1, y1 = MAPA_NOME_RECORTE
+            cv2.imwrite(os.path.join(self.pasta, mid + ".png"), f[y0:y1, x0:x1])
+        try:
+            os.makedirs(self.pasta, exist_ok=True)
+            json.dump(self.mapas, open(self.arq, "w", encoding="utf-8"), ensure_ascii=False, indent=1)
+        except OSError:
+            pass
+        return mid, novo, self.mapas[mid]["vistas"]
 
 
 class RegistroPvp(registro_mod.Registro):
@@ -107,6 +158,7 @@ class AtiradorPvp(atirador_mod.Atirador):
         self.inicio_partida = None
         self._voo_n, self._voo_t = 0, -99.0
         self.vento_duvidoso_salvos = 0
+        self.mapa = None
 
     # ------------------------------------------------------------------ vento
     def ler_vento(self, f):
@@ -171,7 +223,7 @@ class AtiradorPvp(atirador_mod.Atirador):
         self.tiros_na_partida += 1
         v, conf, votos = p.get("vento", (None, 0.0, 0))
         linha = {"quando": p.get("quando"), "sessao": getattr(self.reg, "pasta", None) and os.path.basename(self.reg.pasta),
-                 "partida": self.partidas + 1, "tiro": self.tiros_na_partida, "angulo": round(float(p["angulo"]), 1),
+                 "partida": self.partidas + 1, "mapa": self.mapa, "tiro": self.tiros_na_partida, "angulo": round(float(p["angulo"]), 1),
                  "forca": round(float(p["forca"]), 1), "vento": v, "vento_conf": round(conf, 2), "vento_votos": votos,
                  "azul": p.get("azul"), "boss": p.get("boss"), "voo": p.get("voo", []), "pos_tiro": pos,
                  "origem_previsao": None}
@@ -194,7 +246,7 @@ class AtiradorPvp(atirador_mod.Atirador):
         self.partidas += 1
         self.log(f"=== partida {self.partidas} acabou: {self.tiros_na_partida} tiro(s), {0 if dur is None else dur:.0f}s ===")
         if self.reg:
-            self.reg.evento("partida", [self.reg.frame(f, "partida_fim")] if f is not None else [], numero=self.partidas,
+            self.reg.evento("partida", [self.reg.frame(f, "partida_fim")] if f is not None else [], numero=self.partidas, mapa=self.mapa,
                             tiros=self.tiros_na_partida, duracao_s=None if dur is None else round(dur, 1))
         self.tiros_na_partida, self.inicio_partida = 0, None
         self.fim_da_batalha(venceu=False)             # zera rastreador/estado (venceu=False: nao registra acerto)
@@ -202,18 +254,41 @@ class AtiradorPvp(atirador_mod.Atirador):
 
 # ------------------------------------------------------------------------------------------------------ laco principal
 class Laco:
-    def __init__(self, io, det, atirador, log=print, clicar_inicio=True, agora=None, dormir=None):
+    def __init__(self, io, det, atirador, log=print, clicar_inicio=True, agora=None, dormir=None, catalogo=None, reg=None):
         self.io, self.det, self.at, self.log = io, det, atirador, log
         self.clicar_inicio = clicar_inicio
+        self.catalogo, self.reg = catalogo, reg
         self.agora = agora or time.time
         self.dormir = dormir or time.sleep
         self.em_batalha = False
-        self.fora = 0
+        self.fora_desde = None
         self.ultimo_inicio = -1e9
         self.buscando_desde = None
         self.ultimo_aviso = 0.0
         self.ultimo_estado = None
+        self.ultima_vez = None
+        self.ultimo_batimento = 0.0
+        self.melhor_mapa = None            # (contraste, quadro) da tela VS (o fade-in deixa os primeiros quadros escuros)
         self.parar = False
+
+    def _guardar_mapa(self, f):
+        c = contraste_mapa(f)
+        if self.melhor_mapa is None or c > self.melhor_mapa[0]:
+            self.melhor_mapa = (c, f.copy())
+
+    def _fechar_mapa(self):
+        """Saiu da tela VS: identifica o mapa pelo melhor quadro e avisa o atirador."""
+        if self.melhor_mapa is None:
+            return
+        _c, f = self.melhor_mapa
+        self.melhor_mapa = None
+        if self.catalogo is None:
+            return
+        mid, novo, vistas = self.catalogo.identificar(f)
+        self.at.mapa = mid
+        self.log(f"(mapa {mid}: {'NOVO, miniatura guardada em dados/pvp_mapas' if novo else f'ja visto {vistas}x'})")
+        if self.reg:
+            self.reg.evento("mapa", [self.reg.frame(f, "mapa")], mapa=mid, novo=novo, vistas=vistas)
 
     def passo(self):
         img = self.io.capturar()
@@ -222,16 +297,32 @@ class Laco:
         f = em_1280(img)
         achadas = self.det.detectar(estados_mod.normalizar(f))
         estado = achadas[0] if achadas else None
+        vez = bool(L.minha_vez(f))
+        agora = self.agora()
         if estado != self.ultimo_estado:
             self.log(f"(tela: {estado or 'desconhecida'})")
             self.ultimo_estado = estado
-        if estado == "BATALHA" or (estado is None and L.minha_vez(f)):
-            self.em_batalha, self.fora = True, 0
+        if estado == "VS_PVP":
+            self._guardar_mapa(f)
+            return
+        self._fechar_mapa()
+        if estado == "BATALHA" or vez:
+            if not self.em_batalha:
+                self.log("(partida comecou)")
+                self.ultima_vez = None
+            self.em_batalha, self.fora_desde = True, None
+            if vez != self.ultima_vez:
+                self.log("(SUA VEZ)" if vez else "(vez do adversario: espero)")
+                self.ultima_vez = vez
+            if agora - self.ultimo_batimento >= BATIMENTO_S:
+                self.ultimo_batimento = agora
+                self.log(f"(em batalha: {'sua vez' if vez else 'vez do adversario'}; tiros nesta partida: {self.at.tiros_na_partida})")
             self.at.passo(f)
             return
         if self.em_batalha:
-            self.fora += 1
-            if self.fora >= SAIDA_BATALHA:
+            if self.fora_desde is None:
+                self.fora_desde = agora
+            elif agora - self.fora_desde >= SAIDA_BATALHA_S:
                 self.at.fim_da_partida(f)
                 self.em_batalha = False
         if estado == "CLIQUE_JOGO":
@@ -241,13 +332,12 @@ class Laco:
         elif estado == "SALA" and self.clicar_inicio:
             if sala_livre(f):
                 self.buscando_desde = None
-                if self.agora() - self.ultimo_inicio >= INTERVALO_INICIO:
-                    self.ultimo_inicio = self.agora()
+                if agora - self.ultimo_inicio >= INTERVALO_INICIO:
+                    self.ultimo_inicio = agora
                     self.log("(sala: clicando em Inicio para buscar partida)")
                     self.io.clicar_ref(*SALA_INICIO)
                     self.dormir(2.0)
             elif sala_buscando(f):
-                agora = self.agora()
                 if self.buscando_desde is None:
                     self.buscando_desde, self.ultimo_aviso = agora, agora
                     self.log("(buscando partida: o botao virou Cancele - NAO clico; espero achar)")
@@ -309,7 +399,7 @@ def main():
     reg = RegistroPvp("pvp")
     log(f"PVP: gravando em {reg.pasta} e em {ARQ_TENTATIVAS}. Janela: {janela.descrever_janela(hwnd)}")
     at = AtiradorPvp(io, memoria_mod.Memoria(), lambda: INSTANCIA, sombra=args.sombra, log=log, reg=reg)
-    laco = Laco(io, det, at, log=log, clicar_inicio=not args.sem_inicio)
+    laco = Laco(io, det, at, log=log, clicar_inicio=not args.sem_inicio, catalogo=CatalogoMapas(), reg=reg)
     ate = time.time() + args.minutos * 60 if args.minutos else None
     try:
         laco.rodar(ate=ate)

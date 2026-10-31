@@ -295,6 +295,21 @@
      "y": 392
     }
    ]
+  },
+  "VS_PVP": {
+   "limiar": 0.6,
+   "patches": [
+    {
+     "arquivo": "VS_PVP_0.png",
+     "x": 590,
+     "y": 190
+    },
+    {
+     "arquivo": "VS_PVP_1.png",
+     "x": 596,
+     "y": 296
+    }
+   ]
   }
  }
 }
