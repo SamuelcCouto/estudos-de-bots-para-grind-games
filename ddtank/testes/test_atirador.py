@@ -484,9 +484,9 @@ t2 = list(w.ordem)
 print("turno 2:", t2)
 assert w.buff and w.especiais == 1, (w.buff, w.especiais)
 assert t2.index("e") < t2.index("x") < t2.index("b"), "E, depois o 2o perk, e so entao o B (buff ativo)"
-assert "2" not in t1, "Gato Preto: sem o tridente (item 2)"
+assert "2" in t1, "Gato Preto: usa o tridente (item 2) antes do B"
 assert "2" not in t2 and "3" in t2 and "4" in t2, "depois do B nao se aperta o item 2"
-assert any("[PET] item E usado" in l for l in logs) and any("[PERK] Z" in l for l in logs)
+assert any("[PET] item E usado UMA vez" in l for l in logs) and any("[PERK] Z" in l for l in logs)
 # turno 3: buff ativo, perk C (o POW ainda vazio) e nada de E de novo
 w.ordem.clear(); w.novo_turno(w.t + 1.0, w.t + 9.0)
 rodar(at, w, ate=w.t + 14)
@@ -494,7 +494,7 @@ t3 = list(w.ordem)
 assert "e" not in t3 and "c" in t3 and "b" not in t3 and "3" in t3, t3
 # nova luta: os perks voltam a contar
 at.fim_da_batalha(venceu=True, duracao=60.0)
-assert at.perks_usados == 0
+assert at.perks_usados == 0 and not at.pet_ok
 print("Gato Preto (E, perks, B depois do buff) OK")
 
 # ---- Gato Preto: a vida que nao cai (o boss se cura) nao vira "erro" na memoria

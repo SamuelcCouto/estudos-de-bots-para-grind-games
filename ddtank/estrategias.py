@@ -72,9 +72,7 @@ ESTRATEGIAS = {
                                       # boneco, mais dano, dura a luta toda) e confirmado pelo icone verde na barra de itens
         "usar_pow": True,             # B (especial: tirou ~27-34% da vida do boss de uma vez) ...
         "pow_exige_buff": True,       # ... sempre DEPOIS do buff do E ativo
-        "combo": "3,4",               # SEM o item 2 (tridente): a mira baixa (4-12 graus) faz 1 das 3 balas bater no chao antes do
-                                      # boss (o usuario viu 2 de 3 acertarem = o mesmo dano de 1 bala boa). Testar depois com o
-                                      # combos/relatorio se "2,3,4" compensa. Depois do B tambem nao se aperta o 2.
+        "combo": "2,3,4",             # item 2 (tridente) de volta a pedido do usuario; depois do B nao se aperta o 2
         "acerto_incerto": True,       # o boss se cura e a barra mal mexe com 1 tiro (41% -> 41% ate nos tiros do usuario): vida que
                                       # nao caiu NAO conta como erro (nao suja a memoria); so acertos (queda >= 2%) sao aprendidos
     },

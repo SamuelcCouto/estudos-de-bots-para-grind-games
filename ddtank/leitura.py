@@ -307,6 +307,17 @@ BUFF_PET_CAIXA = (438, 498, 472, 532)   # icone VERDE que aparece na barra de it
 BUFF_PET_MIN = 25                # px verdes (ativo ~81-92; sem o buff 0-2)
 
 
+E_SLOT_CAIXA = (816, 492, 840, 516)     # slot "E" da barra de itens: fica VERDE quando o item do pet esta disponivel
+E_SLOT_MIN = 60                  # px verdes (aceso ~113-139; apagado 0)
+
+
+def e_disponivel(f):
+    """O item E do pet pode ser usado agora (slot verde na barra de itens)? Apos apertar, o slot fica cinza."""
+    x0, y0, x1, y1 = E_SLOT_CAIXA
+    h = cv2.cvtColor(f[y0:y1, x0:x1], cv2.COLOR_BGR2HSV)
+    return int(((h[..., 0] >= 65) & (h[..., 0] <= 100) & (h[..., 1] > 90) & (h[..., 2] > 90)).sum()) >= E_SLOT_MIN
+
+
 def perks_cheios(f):
     """{'Z': bool, 'X': bool, 'C': bool}: o quadro tem um perk (icone vermelho "POW") ou esta vazio (quadrado verde)?"""
     hsv = cv2.cvtColor(f, cv2.COLOR_BGR2HSV)

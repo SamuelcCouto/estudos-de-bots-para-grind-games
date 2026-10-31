@@ -58,6 +58,7 @@ class LeitorReal:
     numeros_dano = staticmethod(L.numeros_de_dano)
     pow_cheio = staticmethod(L.pow_cheio)
     buff_pet = staticmethod(L.buff_pet)
+    e_disponivel = staticmethod(L.e_disponivel)
 
 
 class Atirador:
@@ -94,6 +95,7 @@ class Atirador:
         self.inst_luta = None
         self.rastreador = L.RastreadorMinimapa()
         self.avioes_na_luta = 0
+        self.pet_ok = False                       # item E ja usado nesta luta (so 1x: o buff dura a luta toda)
         self.perks_usados = 0                     # perks Z/X/C ja usados nesta luta (Gato Preto)
         self.aviao_pendente = None                # {"de": (x, y)} do ultimo voo: confere no turno seguinte se andou
         self.falhas_aviao = 0
@@ -211,6 +213,7 @@ class Atirador:
         self.rastreador.reiniciar()               # proxima batalha: spawn novo
         self.avioes_na_luta, self.aviao_pendente = 0, None
         self.perks_usados = 0
+        self.pet_ok = False
 
     # ------------------------------------------------------------------ um turno
     def devolver_foco(self):
@@ -525,14 +528,18 @@ class Atirador:
         apertou B."""
         if est.get("pet_e"):
             f = self.ver()
-            if f is not None and self.lei.minha_vez(f) and hasattr(self.lei, "buff_pet") and not self.lei.buff_pet(f):
-                self.io.tecla("e", 0.08)
-                self.dormir(0.5)
-                g = self.ver()
-                if g is not None and self.lei.buff_pet(g):
-                    self.log("   [PET] item E usado: buff ativo (o boneco fica parado; so angulo e tiro)")
-                else:
-                    self.log("   [PET] apertei E (ainda nao liberado ou sem efeito: tento de novo no proximo turno)")
+            if f is not None and not self.pet_ok and self.lei.minha_vez(f) and hasattr(self.lei, "buff_pet"):
+                if self.lei.buff_pet(f):
+                    self.pet_ok = True
+                elif not hasattr(self.lei, "e_disponivel") or self.lei.e_disponivel(f):
+                    self.io.tecla("e", 0.08)
+                    self.dormir(0.5)
+                    g = self.ver()
+                    if g is not None and (self.lei.buff_pet(g) or (hasattr(self.lei, "e_disponivel") and not self.lei.e_disponivel(g))):
+                        self.pet_ok = True
+                        self.log("   [PET] item E usado UMA vez (o boneco fica parado; so angulo e tiro)")
+                    else:
+                        self.log("   [PET] apertei E (ainda nao liberado ou sem efeito: tento de novo no proximo turno)")
         if est.get("perks") and self.perks_usados < len(PERKS_TECLAS):
             f = self.ver()
             if f is not None and self.lei.minha_vez(f) and not (hasattr(self.lei, "pow_cheio") and self.lei.pow_cheio(f)):
@@ -544,7 +551,7 @@ class Atirador:
         if not est.get("usar_pow"):
             return False
         f = self.ver()
-        if f is not None and est.get("pow_exige_buff") and not (hasattr(self.lei, "buff_pet") and self.lei.buff_pet(f)):
+        if f is not None and est.get("pow_exige_buff") and not self.pet_ok and not (hasattr(self.lei, "buff_pet") and self.lei.buff_pet(f)):
             return False                              # o B espera o buff do E
         return self.usar_pow()
 

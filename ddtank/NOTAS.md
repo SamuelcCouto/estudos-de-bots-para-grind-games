@@ -624,3 +624,8 @@ versao com fase interna (`navegador.fase`), CARTAS_P, `minimapa_x_min` e Gato se
 botDDTGPT/envio (so no historico do git, .git ficou ~5 GB); o ideal e limpar o historico.
 Novo estado POPUP_SOZINHO3: a confirmacao "A instancia apresenta mais desafios" do Pericao em OUTRO desenho (frame POPUP_DICAS_PERICAO), que o detector
 nao reconhecia (nota 0.85 < 0.873 do POPUP_SOZINHO antigo).
+
+## Gato Preto: E uma vez so, B, item 2 (31/10)
+- Gravacao do bot: icone verde do buff nunca detectado -> B nunca saia e o E era apertado todo turno.
+- Novo `leitura.e_disponivel` (slot E da barra de itens verde = disponivel). O E e apertado so quando aceso e so 1x por luta (`pet_ok`);
+  o B passa a valer depois do E usado (nao depende mais do icone do buff). Item 2 (combo "2,3,4") de volta; depois do B nao se aperta o 2.
