@@ -1,8 +1,38 @@
-# DDTank Bot - passagem para a sessao LOCAL (31/10/2026)
+# DDTank Bot - passagem para a sessao LOCAL (atualizado 31/10/2026, apos a analise das gravacoes)
 
 Leia este arquivo primeiro, depois `DOCUMENTACAO.md` (arquitetura e combinados) e `NOTAS.md` (historico tecnico).
 Repo `samuelccouto/estudos-de-bots-para-grind-games`, branch `claude/wonderful-rubin-3oyqi3`, pasta local `D:\estudos-de-bots-para-grind-games\ddtank`.
 Pasta `social_empires/` na raiz: manter (estudo futuro, nao mexer). Historico do git foi limpo (gravacoes antigas removidas).
+
+## 0. ATUALIZACAO (31/10, sessao em nuvem) - leia antes do resto
+**Feito hoje (commits ate 298694b):**
+- Gato Preto: E 1x (slot E verde `leitura.e_disponivel`), B apos o E, item 2 de volta (combo 2,3,4). Confirmado nas gravacoes: E 1x, B 3x, item 2 usado.
+- Super Rota: Norte+Sul rodaram perfeitos (~3 min cada; 90k cupons em 6min28s).
+- Devoradores (Rota Leste) nunca abria: clique na seta da lista rola so alguns pixels e `pagina_da_lista` devolvia None no meio da rolagem
+  (bot clicava no Dragao Gelado para sempre). Fix em `navegador.preparar_pagina` (`PAGINA_MAX_CLIQUES`). NAO testado no jogo.
+- Ultima Luta fase 2: boneco nasce em x~13 (acerta), x~27 (errava 25x o mesmo tiro) ou x~78 (do outro lado do boss; derrotas por morte do boneco).
+  Fix: boss com 100% que nao cai 2x = erro; `erro_apos_sem_queda: 3` na estrategia da fase 2. NAO testado no jogo.
+- Pasta `social_empires/` fica (estudo futuro).
+
+**O usuario esta testando as rotas no local agora** e vai mandar logs/gravacoes (Rota Leste, Devoradores, fase 2).
+
+**PvP (prioridade nova):** ideia = bot "jogador perfeito" que calcula tudo (o usuario nao calcula; as gravacoes manuais tem varios erros).
+- Gravacoes manuais em `envio/`: `20261031_011716` (14 min), `20261031_020551` (10 min) e `20261031_011707` (pequena). So vi por cima (mapas
+  variados, VS "Combate Livre", mensagem "Nao tem forca fisica suficiente"). Analise de tiros, vento e posicoes ainda NAO feita; manter os zips ate analisar.
+- A pagina do jogo tem nas laterais tabelas **"EstrAng 30/50/65/80"** (distancia x forca, distancia 1..20): ex. 30 graus: dist1=14, 2=20, 3=24, 4=28, 5=32,
+  6=35, 7=38, 8=41, 9=44, 10=47, 11=50, 12=52, 13=55, 14=57, 15=60, 16=62, 17=65, 18=67, 19=69, 20=72; 50 graus: 14,20,24,28,32,35,39,42,44,48 (1-10),
+  50,53,55,58,60,63,65,68,70,72 (11-20). (A tabela direita nao foi lida; os de 65 e 80 tambem nao.) Servem de semente para o modelo de fisica.
+- Plano: modelo de fisica unico (gravidade, escala da forca, efeito do vento) + correcao a cada tiro; ler vento, posicao dos dois bonecos e angulo na tela.
+  Confirmar que a gravacao salva o vento de cada tiro.
+
+**VIDEOS DE CALCULO (estudar na sessao LOCAL; a nuvem nao acessa o YouTube - `www.youtube.com` bloqueado pela rede do ambiente):**
+1. https://www.youtube.com/watch?v=FdiKX0I-QBI
+2. https://www.youtube.com/watch?v=abftaNKei1s
+3. https://www.youtube.com/watch?v=Y8rP5YC0hDs
+4. https://www.youtube.com/watch?v=U-kf1nhN-zo
+5. https://www.youtube.com/watch?v=S1vYDCy2MFA
+Eu so leio TEXTO (titulo/descricao/legenda), nao vejo imagem nem escuto audio. Pedir ao usuario para colar a transcricao de cada video
+(YouTube: "...mais" > "Mostrar transcricao") ou liberar youtube.com na rede do ambiente. Depois: extrair formulas/tabelas/regras de vento e comparar com o que o bot medir.
 
 ## 1. Estado atual (funciona / ja feito)
 - Bot automatico (PrintWindow + PostMessage), painel tkinter (`BotDDT.bat` = git pull + painel), versao desenvolvedor e versao amigos (so aba Relatorio).

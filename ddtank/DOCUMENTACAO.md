@@ -2,7 +2,7 @@
 
 Atualizado em 29/10/2026. Pasta do projeto: `ddtank/` (repositorio `samuelccouto/estudos-de-bots-para-grind-games`,
 branch de trabalho `claude/wonderful-rubin-3oyqi3`; na maquina do usuario: `D:\estudos-de-bots-para-grind-games\ddtank`).
-Passagem para a sessao local e pendencias atuais: `PASSAGEM_PARA_LOCAL.md`.
+Passagem para a sessao local, pendencias e links dos videos de calculo (PvP): `PASSAGEM_PARA_LOCAL.md` (secao 0 = mais recente).
 Historico tecnico detalhado (cada sessao, medicoes, bugs): `NOTAS.md`. Uso rapido: `LEIA-ME.txt`.
 
 ## 1. O que e e para que serve
