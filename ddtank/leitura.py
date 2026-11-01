@@ -333,3 +333,68 @@ def buff_pet(f):
     x0, y0, x1, y1 = BUFF_PET_CAIXA
     h = cv2.cvtColor(f[y0:y1, x0:x1], cv2.COLOR_BGR2HSV)
     return int(((h[..., 0] >= 45) & (h[..., 0] <= 85) & (h[..., 1] > 120) & (h[..., 2] > 110)).sum()) >= BUFF_PET_MIN
+
+
+# ---------------------------------------------------------------------------------------------- angulo pelos DIGITOS
+# O mostrador mostra o angulo exato em digitos (ciano) no centro. A leitura pelo ponteiro erra 1-3 graus: na fase 2 da Ultima Luta
+# (parabola alta) o bot passava do alvo e voltava (75 -> 69 -> 70 -> 67 no mostrador; 5 s mirando, 01/11). Os digitos conhecidos
+# estao em templates/angulo_digitos.npz (de capturas reais); sem confianca, ou longe do ponteiro, vale o ponteiro.
+ANGULO_DIGITOS_CAIXA = (330, 530, 364, 548)   # x0, y0, x1, y1 (quadro de 1280)
+_TPL_ANG = {}
+
+
+def _mascara_ciano(c):
+    h = cv2.cvtColor(c, cv2.COLOR_BGR2HSV)
+    return ((h[..., 0] >= 80) & (h[..., 0] <= 105) & (h[..., 1] >= 90) & (h[..., 2] >= 150)).astype(np.uint8)
+
+
+def _separar_digitos(m):
+    cols = m.sum(0)
+    xs = np.where(cols > 0)[0]
+    if len(xs) < 4:
+        return []
+    a, b = xs.min(), xs.max() + 1
+    w = b - a
+    lo, hi = a + int(w * 0.3), a + int(w * 0.7)
+    corte = lo + int(np.argmin(cols[lo:hi])) if hi > lo else a + w // 2
+    saida = []
+    for x0, x1 in ((a, corte), (corte, b)):
+        sub = m[:, x0:x1]
+        ys, xx = np.where(sub.sum(1) > 0)[0], np.where(sub.sum(0) > 0)[0]
+        if len(ys) < 5 or len(xx) < 2:
+            return []
+        g = sub[ys.min():ys.max() + 1, xx.min():xx.max() + 1].astype(np.float32)
+        saida.append(cv2.resize(g, (8, 12), interpolation=cv2.INTER_AREA))
+    return saida
+
+
+def angulo_digitos(f):
+    """Angulo (inteiro) lido nos digitos do mostrador, ou None se nao der para ler com confianca."""
+    if not _TPL_ANG:
+        z = np.load(os.path.join(config.PASTA_TEMPLATES, "angulo_digitos.npz"))
+        _TPL_ANG.update(digitos=z["digitos"], mascaras=z["mascaras"])
+    x0, y0, x1, y1 = ANGULO_DIGITOS_CAIXA
+    ds = _separar_digitos(_mascara_ciano(f[y0:y1, x0:x1]))
+    if len(ds) != 2:
+        return None
+    valor = 0
+    for g in ds:
+        dist = np.abs(_TPL_ANG["mascaras"] - g).mean((1, 2))
+        ordem = np.argsort(dist)
+        melhor = _TPL_ANG["digitos"][ordem[0]]
+        outro = next((dist[i] for i in ordem if _TPL_ANG["digitos"][i] != melhor), 1.0)
+        if dist[ordem[0]] > 0.16 or outro - dist[ordem[0]] < 0.03:
+            return None
+        valor = valor * 10 + int(melhor)
+    return valor
+
+
+def angulo_preciso(f, **kw):
+    """Angulo pelos digitos quando confiaveis e coerentes com o ponteiro (ate 5 graus); senao, pelo ponteiro. Devolve na ESCALA DO PONTEIRO
+    (digitos - DESVIO_DIGITOS): a memoria e as sementes foram gravadas com o ponteiro, que le em media 2 graus a menos (44 quadros, 01/11)."""
+    p = angulo(f, **kw)
+    d = angulo_digitos(f)
+    return float(d) - DESVIO_DIGITOS if d is not None and abs(d - p) <= 5 else p
+
+
+DESVIO_DIGITOS = 2.0

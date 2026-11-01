@@ -60,7 +60,7 @@ class LeitorReal:
     """Transforma o quadro da janela (qualquer tamanho) nas leituras numericas."""
     def preparar(self, img): return em_1280(img)
     minha_vez = staticmethod(L.minha_vez)
-    angulo = staticmethod(L.angulo)
+    angulo = staticmethod(L.angulo_preciso)       # digitos do mostrador (estaveis); sem leitura, o ponteiro
     mira = staticmethod(L.mira)                   # (angulo, lado): lado +1 virado para a direita, -1 para a esquerda
     forca = staticmethod(L.forca)
     pontos = staticmethod(L.pontos_minimapa)
