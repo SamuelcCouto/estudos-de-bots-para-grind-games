@@ -47,6 +47,10 @@ GAP_NOVA_VEZ = 2.5            # s sem PASS para valer uma vez NOVA (o PASS pisca
 GAP_MIN_NOVA_VEZ = 0.6        # ... ou 0,6 s sem PASS se ja passaram MIN_APOS_TIRO_NOVA_VEZ desde o tiro (fase 1: o chefe joga rapido)
 MIN_APOS_TIRO_NOVA_VEZ = 4.0  # s: o "tiro fantasma" vinha ~2 s depois do tiro; uma vez de verdade, 8-10 s
 ANDAR_SEM_QUEDA_S = 1.2       # 0,3 s andava 1 px e o elite continuava em cima (01/11 15:30: dano "Perfurante" no boneco)
+TEMPO_ITENS_MAX = 3.2        # s ja gastos na vez a partir dos quais os itens sao pulados (o tiro saia com o contador em 0-1)
+ELITE_DIST_X = 7.0            # px de minimapa: ponto vermelho tao perto do azul = elite em cima do boneco
+TRAVESSIA_CURTA_PX = 16.0     # ate essa distancia do ponto de tiro: anda e atira no mesmo turno
+VELOCIDADE_ANDAR = 5.0        # px de minimapa por segundo andando (medido: 78->51 em 5,8 s com as leituras)
 TRAVESSIA_MAX_S = 5.5          # s andando no turno de travessia (a vez dura ~7 s)      # s andando quando o tiro anterior nao tirou vida (boss de elite com a hitbox em cima do boneco)
 ESPERA_NUMEROS_DANO = 4.0     # s depois do tiro olhando os numeros de dano (Chefao Global): eles sobem ~1-3 s depois
 
@@ -262,16 +266,23 @@ class Atirador:
             if g is not None:
                 azul, boss, conf = self.posicoes(g)
         alvo_x = estrategias.estrategia(inst).get("atravessar_para_x")
-        if (azul and boss and alvo_x is not None and boss[0] > alvo_x + 10 and azul[0] > alvo_x + 6 and not self.sombra
+        if (azul and boss and alvo_x is not None and boss[0] > alvo_x + 10 and azul[0] > alvo_x + 3 and not self.sombra
                 and self.travessias_na_luta < 3):
-            return self.atravessar(azul, alvo_x)      # inclui ficar parado DEBAIXO do boss (nenhum angulo alcanca)
+            if azul[0] - alvo_x > TRAVESSIA_CURTA_PX:
+                return self.atravessar(azul, alvo_x)  # longe (lado direito / debaixo do boss): o turno todo andando
+            azul, boss, conf = self.ajustar_posicao(azul, boss, conf, alvo_x)   # perto: anda e atira no mesmo turno
         if azul and boss and estrategias.estrategia(inst).get("separar_lado") and boss[0] < azul[0] - 8:
             inst = inst + "_E"                        # boss a esquerda: mira propria (ver estrategias.py, ULTIMA_LUTA_F2_E)
             self.log(f"   (boss a esquerda: uso a mira de {inst})")
         self.conferir_aviao(azul)
-        if estrategias.estrategia(inst).get("reposicionar") and azul and not self.sombra:
+        x_antes = azul[0] if azul else None
+        if estrategias.estrategia(inst).get("fugir_do_elite") and azul and boss and not self.sombra:
+            azul, boss, conf = self.fugir_do_elite(azul, boss, conf)
+        if (estrategias.estrategia(inst).get("reposicionar") and azul and not self.sombra
+                and not estrategias.estrategia(inst).get("fugir_do_elite")):
             azul, boss, conf = self.reposicionar(f, inst, azul, boss, conf)
-        if (estrategias.estrategia(inst).get("andar_se_sem_queda") and self.sem_queda_seg >= 1 and azul and boss
+        ja_andou = azul is not None and x_antes is not None and abs(azul[0] - x_antes) >= 1.0
+        if (estrategias.estrategia(inst).get("andar_se_sem_queda") and self.sem_queda_seg >= 2 and azul and boss and not ja_andou
                 and not self.sombra):
             azul, boss, conf = self.andar_para_soltar(inst, azul, boss, conf)
         hp0 = self.lei.vida(f)
@@ -330,8 +341,12 @@ class Atirador:
                 self.combo_luta = (nome_c, ordem_c)
             else:
                 self.combo_luta = (None, self.ordem)
-        especial = self.preparar_extras(est)
-        ordem_itens = [i for i in self.combo_luta[1] if i != 2] if especial else self.combo_luta[1]   # depois do B nao se aperta o 2
+        sem_tempo = self.agora() - inicio > TEMPO_ITENS_MAX
+        if sem_tempo:
+            # a vez dura ~7 s: andar + mirar ja comeram o tempo; os itens fariam o tiro sair no fim do contador (ou nao sair)
+            self.log(f"   (sem tempo para itens: {self.agora() - inicio:.1f}s gastos na vez; atiro direto)")
+        especial = False if sem_tempo else self.preparar_extras(est)
+        ordem_itens = [] if sem_tempo else ([i for i in self.combo_luta[1] if i != 2] if especial else self.combo_luta[1])   # depois do B nao se aperta o 2
         apertados = self.aplicar_itens(ordem_itens)
         t_itens = self.agora() - inicio
         if self.reg:
@@ -420,20 +435,92 @@ class Atirador:
         if self.reg:
             self.reg.evento("travessia", [self.reg.frame(self.ver(), "tiro_dado")], de=x0, ate=ultimo)
 
+    def elite_perto(self, azul, boss):
+        """Ponto vermelho (fora o boss da plataforma) colado no boneco no minimapa = boss de elite com a hitbox em cima de nos."""
+        f = self.ver()
+        if f is None or not hasattr(self.lei, "candidatos"):
+            return None
+        _az, verm = self.lei.candidatos(f)
+        perto = [v for v in verm if abs(v[0] - boss[0]) + abs(v[1] - boss[1]) > 6
+                 and abs(v[0] - azul[0]) <= ELITE_DIST_X and abs(v[1] - azul[1]) <= 6]
+        return min(perto, key=lambda v: abs(v[0] - azul[0])) if perto else None
+
+    def fugir_do_elite(self, azul, boss, conf):
+        """Fase 2: o boss de elite fica colado no boneco e o tiro explode nele E em nos (morremos assim, 01/11 16:18). Visto no minimapa
+        (ponto vermelho a <=7 px do azul): anda para o lado OPOSTO ao elite (perto da parede: o outro lado, mais tempo) e vira para o boss."""
+        el = self.elite_perto(azul, boss)
+        if el is None:
+            return azul, boss, conf
+        lado = -1 if el[0] >= azul[0] else 1
+        dur = ANDAR_SEM_QUEDA_S
+        if boss[0] > azul[0]:
+            # lado esquerdo: fica entre x~13 e ~27 (dali a mira acerta). O boneco ATRAVESSA o elite (13 -> 24 passando por ele)
+            if lado > 0 and azul[0] >= 24:
+                lado, dur = -1, 2.0                   # fugir para a direita levaria para debaixo do boss: passa pelo elite para a esquerda
+            elif lado < 0 and azul[0] <= 16:
+                lado, dur = 1, 2.0                    # parede: passa pelo elite para a direita
+        elif (lado < 0 and azul[0] < 14) or (lado > 0 and azul[0] > 88):
+            lado, dur = -lado, 2.0                    # parede: passa para o outro lado do elite
+        nome = "direita" if lado > 0 else "esquerda"
+        self.log(f"   [ELITE] ponto vermelho em x={el[0]:.0f} colado no boneco (x={azul[0]:.0f}): andando {dur:.1f}s para a {nome}")
+        if hasattr(self.io, "preparar_teclas"):
+            self.io.preparar_teclas()
+        self.io.tecla(nome, dur)
+        self.dormir(0.2)
+        para_boss = "direita" if boss[0] > azul[0] else "esquerda"
+        if para_boss != nome:
+            self.io.tecla(para_boss, 0.06)
+        self.dormir(0.15)
+        self.rastreador.reiniciar()
+        for _i in range(2):
+            g = self.ver()
+            if g is not None:
+                self.observar_minimapa(g, forcar=True)
+        novo, nconf = self.rastreador.jogador()
+        if novo:
+            self.log(f"   [ELITE] boneco de x={azul[0]:.0f} para x={novo[0]:.0f}")
+            return novo, self.rastreador.boss or boss, nconf
+        return azul, boss, conf
+
+    def ajustar_posicao(self, azul, boss, conf, alvo_x):
+        """Anda os poucos px ate o ponto de tiro (x~21 na fase 2: dali o bot acerta em sequencia; de x=27 o 1o tiro quase sempre
+        'nao caia') e vira de volta para o boss - tudo no mesmo turno, para nao perder a vez."""
+        self.travessias_na_luta += 1
+        dist = azul[0] - alvo_x
+        dur = float(np.clip(dist / VELOCIDADE_ANDAR, 0.3, 3.2))
+        self.log(f"   [POSICAO] x={azul[0]:.0f} -> ponto de tiro x~{alvo_x:.0f}: andando {dur:.1f}s para a esquerda")
+        if hasattr(self.io, "preparar_teclas"):
+            self.io.preparar_teclas()
+        self.io.tecla("esquerda", dur)
+        self.dormir(0.2)
+        self.io.tecla("direita", 0.06)                # vira de volta para o boss
+        self.dormir(0.15)
+        self.rastreador.reiniciar()
+        for _i in range(2):
+            g = self.ver()
+            if g is not None:
+                self.observar_minimapa(g, forcar=True)
+        novo, nconf = self.rastreador.jogador()
+        return (novo, self.rastreador.boss or boss, nconf) if novo else (azul, boss, conf)
+
     def andar_para_soltar(self, inst, azul, boss, conf):
         """Fase 2 da Ultima Luta: o boss da plataforma invoca um boss de ELITE que fica com a hitbox em cima do boneco (no minimapa o
         ponto dele some debaixo do azul) e come os tiros (e o dano tambem pega em nos). O tiro anterior nao tirou vida -> anda um pouco
         antes de atirar. Lado esquerdo: anda para a esquerda (x~13 e o lugar com mais acertos); lado direito: para a direita."""
         if boss[0] > azul[0]:
-            lado = -1 if azul[0] > 16 else 1          # lado esquerdo: para x~13 (o lugar com mais acertos)
+            lado = -1 if azul[0] > 20 else 1          # lado esquerdo: longe da parede (12<->18 ia-e-voltava colado nela, 01/11 15:55)
         else:
             lado = -1 if azul[0] > 80 else 1          # lado direito: para a esquerda (a parede da direita esta colada); nada de ir-e-voltar
         nome = "direita" if lado > 0 else "esquerda"
-        self.log(f"   [MOVER] o tiro anterior nao tirou vida (boss de elite em cima do boneco?): andando para a {nome} {ANDAR_SEM_QUEDA_S:.1f}s")
+        self.log(f"   [MOVER] {self.sem_queda_seg} tiros seguidos sem tirar vida (boss de elite em cima do boneco?): andando para a {nome} {ANDAR_SEM_QUEDA_S:.1f}s")
         if hasattr(self.io, "preparar_teclas"):
             self.io.preparar_teclas()
         self.io.tecla(nome, ANDAR_SEM_QUEDA_S)
-        self.dormir(0.35)                             # a vez dura ~7 s: andar nao pode comer o tempo do tiro
+        self.dormir(0.2)
+        para_boss = "direita" if boss[0] > azul[0] else "esquerda"
+        if para_boss != nome:
+            self.io.tecla(para_boss, 0.06)            # andar virou o boneco de costas para o boss: vira de volta (atirava para tras, 01/11)
+        self.dormir(0.15)                             # a vez dura ~7 s: andar nao pode comer o tempo do tiro
         self.rastreador.reiniciar()
         for _i in range(2):
             g = self.ver()
@@ -675,6 +762,8 @@ class Atirador:
         return True
 
     def aplicar_itens(self, ordem=None):
+        if ordem is not None and not ordem:
+            return []
         usados = {}
         apertados = []
         for item in (ordem or self.ordem):

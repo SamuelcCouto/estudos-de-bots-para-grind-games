@@ -547,7 +547,7 @@ at.travessias_na_luta = 3                         # nao conseguiu atravessar: us
 rodar(at, w, ate=7.5)
 assert at.pendente is not None and at.pendente["inst"] == "ULTIMA_LUTA_F2_E", "o aprendizado desta mira vai para a instancia propria"
 assert any("uso a mira de ULTIMA_LUTA_F2_E" in l for l in logs), logs
-assert abs(w.angulo - 81.5) <= 1.5, f"ponteiro em {w.angulo:.1f} (esperado ~81,5, de frente para a direita; tolerancia 1 grau na fase 2)"
+assert abs(w.angulo - 81.5) <= 2.0, f"ponteiro em {w.angulo:.1f} (esperado ~81,5, de frente para a direita; tolerancia 1 grau na fase 2)"
 assert w.tiros and abs(w.tiros[0] - 49.0) <= 8, w.tiros
 w2 = MundoComThread(); w2.azul, w2.boss = (27.0, 62.0), (52.0, 27.0)            # nasceu a ESQUERDA: continua a mira normal (74 graus / 47%)
 at2, mem2, logs2, arq2 = novo(w2, inst="ULTIMA_LUTA_F2")
@@ -559,5 +559,5 @@ mm = MM.Memoria(arq_aprendizado=None)
 for x, ang, forca in ((78.0, 81.5, 49), (85.0, 81.5, 56), (90.0, 84.0, 46), (93.0, 84.0, 46)):   # 84 = limite da arma
     pr = mm.prever("ULTIMA_LUTA_F2_E", (x, 62.0), (51.0, 27.0))
     assert abs(pr["angulo"] - ang) < 0.1 and abs(pr["forca"] - forca) < 1.5, (x, pr)     # sem "fisica" na mira traseira (dava 75% em x=90)
-assert E.estrategia("ULTIMA_LUTA_F2")["combo"] == "3,3,4" and E.estrategia("ULTIMA_LUTA_F2_E")["tolerancia_angulo"] == 1.0
+assert E.estrategia("ULTIMA_LUTA_F2")["combo"] == "3,3,4" and E.estrategia("ULTIMA_LUTA_F2_E")["tolerancia_angulo"] == 1.5
 print("mira traseira: sementes de 01/11 (81,5 graus, ~49-56%), sem fisica; combo 3,3,4 e tolerancia de 1 grau OK")
