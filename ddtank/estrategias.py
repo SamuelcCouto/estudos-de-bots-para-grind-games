@@ -53,7 +53,8 @@ ESTRATEGIAS = {
         "alvo": "mais_alto",          # o ponto vermelho de MENOR y e o boss da plataforma (o pequeno anda junto do boneco)
         "jogador_y_min": 50.0,        # o boneco fica no chao (y ~ 62): descarta cantos azuis da camera do minimapa
         "reposicionar": True,         # boss pequeno colado no boneco = tiro perdido: anda para a direita (o usuario fez 0.2-0.3 s)
-        "fugir_do_elite": True,       # ponto vermelho colado no azul (minimapa) = elite em cima: anda para o lado OPOSTO antes de atirar
+        "fugir_do_elite": True,
+        "espelhar": True,             # nasceu a direita: atira do ponto espelhado (x~83) com a mira do lado esquerdo, sem atravessar o mapa       # ponto vermelho colado no azul (minimapa) = elite em cima: anda para o lado OPOSTO antes de atirar
         "andar_se_sem_queda": True,   # boss de ELITE invocado com a hitbox em cima do boneco (o ponto some no minimapa): tiro sem queda -> anda
         "angulo_min": 0.0,
         "combo": "3,3,4",             # gravacoes 01/11: o usuario usa o item 3 (+1 ataque) DUAS vezes por turno e os buffs 4 (nunca o 1/2 aqui)

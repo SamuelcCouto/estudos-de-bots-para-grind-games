@@ -539,10 +539,16 @@ import estrategias as E
 w = MundoComThread(); w.azul, w.boss = (78.0, 62.0), (52.0, 27.0)
 at, mem, logs, arq = novo(w, inst="ULTIMA_LUTA_F2")
 rodar(at, w, ate=7.5)
-assert any("[ATRAVESSAR]" in l for l in logs) and not w.tiros, "1o turno do lado direito: atravessa a arena andando (sem atirar)"
-assert any(k[0] == "esquerda" for k in w.teclas if isinstance(k, tuple)) or "esquerda" in str(w.teclas), w.teclas
+assert any("[POSICAO]" in l and "x~83" in l for l in logs) and w.tiros, "1o turno do lado direito: anda ao ponto espelhado (x~83) e atira"
+assert at.pendente is None or at.pendente["inst"] == "ULTIMA_LUTA_F2", "do ponto espelhado usa a mira normal"
 w = MundoComThread(); w.azul, w.boss = (78.0, 62.0), (52.0, 27.0)
 at, mem, logs, arq = novo(w, inst="ULTIMA_LUTA_F2")
+at.espelho_falhas = 2
+rodar(at, w, ate=7.5)
+assert any("[ATRAVESSAR]" in l for l in logs) and not w.tiros, "o espelho falhou 2x: atravessa a arena andando (sem atirar)"
+w = MundoComThread(); w.azul, w.boss = (78.0, 62.0), (52.0, 27.0)
+at, mem, logs, arq = novo(w, inst="ULTIMA_LUTA_F2")
+at.espelho_falhas = 2
 at.travessias_na_luta = 3                         # nao conseguiu atravessar: usa a mira traseira
 rodar(at, w, ate=7.5)
 assert at.pendente is not None and at.pendente["inst"] == "ULTIMA_LUTA_F2_E", "o aprendizado desta mira vai para a instancia propria"

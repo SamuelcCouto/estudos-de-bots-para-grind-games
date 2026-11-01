@@ -112,6 +112,8 @@ class Atirador:
         self.sem_queda_seg = 0                    # tiros seguidos sem queda (so com `erro_apos_sem_queda`)
         self.sem_queda_cheia = 0                  # tiros seguidos sem tirar vida de um boss com 100%
         self.travessias_na_luta = 0
+        self.espelho_falhas = 0                   # tiros sem queda do ponto espelhado (lado direito) nesta luta
+        self.espelho_agora = False
         self.pet_ok = False                       # item E ja usado nesta luta (so 1x: o buff dura a luta toda)
         self.perks_usados = 0                     # perks Z/X/C ja usados nesta luta (Gato Preto)
         self.aviao_pendente = None                # {"de": (x, y)} do ultimo voo: confere no turno seguinte se andou
@@ -240,6 +242,7 @@ class Atirador:
         self.perks_usados = 0
         self.pet_ok = False
         self.travessias_na_luta = 0
+        self.espelho_falhas = 0
         self.sem_queda_cheia = 0
         self.sem_queda_seg = 0
 
@@ -267,12 +270,21 @@ class Atirador:
             if g is not None:
                 azul, boss, conf = self.posicoes(g)
         alvo_x = estrategias.estrategia(inst).get("atravessar_para_x")
-        if (azul and boss and alvo_x is not None and boss[0] > alvo_x + 10 and azul[0] > alvo_x + 3 and not self.sombra
+        espelho = self.espelho_agora = False
+        if (azul and boss and alvo_x is not None and boss[0] < azul[0] - 8 and not self.sombra
+                and self.espelho_falhas < 2 and estrategias.estrategia(inst).get("espelhar")):
+            # nasceu a DIREITA: o mapa e simetrico em volta do boss -> atira do ponto ESPELHADO (x~83) de frente para o boss, com a
+            # mesma mira do lado esquerdo, em vez de atravessar o mapa (2 turnos perdidos). 2 tiros sem queda daqui -> volta a atravessar
+            espelho = self.espelho_agora = True
+            alvo_esp = 2 * boss[0] - alvo_x
+            if abs(azul[0] - alvo_esp) > 3:
+                azul, boss, conf = self.ajustar_posicao(azul, boss, conf, alvo_esp)
+        elif (azul and boss and alvo_x is not None and boss[0] > alvo_x + 10 and azul[0] > alvo_x + 3 and not self.sombra
                 and self.travessias_na_luta < 3):
             if azul[0] - alvo_x > TRAVESSIA_CURTA_PX:
                 return self.atravessar(azul, alvo_x)  # longe (lado direito / debaixo do boss): o turno todo andando
             azul, boss, conf = self.ajustar_posicao(azul, boss, conf, alvo_x)   # perto: anda e atira no mesmo turno
-        if azul and boss and estrategias.estrategia(inst).get("separar_lado") and boss[0] < azul[0] - 8:
+        if azul and boss and not espelho and estrategias.estrategia(inst).get("separar_lado") and boss[0] < azul[0] - 8:
             inst = inst + "_E"                        # boss a esquerda: mira propria (ver estrategias.py, ULTIMA_LUTA_F2_E)
             self.log(f"   (boss a esquerda: uso a mira de {inst})")
         self.conferir_aviao(azul)
@@ -381,7 +393,7 @@ class Atirador:
             self.subforcas = 0
         t_tiro = self.agora() - inicio
         self.agiu = True
-        self.pendente = {"t": self.agora(), "inst": inst, "azul": azul, "boss": boss, "angulo": angulo_real,
+        self.pendente = {"t": self.agora(), "inst": inst, "espelho": self.espelho_agora, "azul": azul, "boss": boss, "angulo": angulo_real,
                          "forca": forca_real, "hp0": hp0, "combo": self.combo_luta[0], "primeiro": primeiro}
         if est.get("chefe_global"):
             self.pendente.update(numeros=0, especial=bool(especial))
@@ -488,13 +500,16 @@ class Atirador:
         'nao caia') e vira de volta para o boss - tudo no mesmo turno, para nao perder a vez."""
         self.travessias_na_luta += 1
         dist = azul[0] - alvo_x
-        dur = float(np.clip(dist / VELOCIDADE_ANDAR, 0.3, 3.2))
-        self.log(f"   [POSICAO] x={azul[0]:.0f} -> ponto de tiro x~{alvo_x:.0f}: andando {dur:.1f}s para a esquerda")
+        dur = float(np.clip(abs(dist) / VELOCIDADE_ANDAR, 0.3, 3.2))
+        anda = "esquerda" if dist > 0 else "direita"
+        self.log(f"   [POSICAO] x={azul[0]:.0f} -> ponto de tiro x~{alvo_x:.0f}: andando {dur:.1f}s para a {anda}")
         if hasattr(self.io, "preparar_teclas"):
             self.io.preparar_teclas()
-        self.io.tecla("esquerda", dur)
+        self.io.tecla(anda, dur)
         self.dormir(0.2)
-        self.io.tecla("direita", 0.06)                # vira de volta para o boss
+        para_boss = "direita" if boss[0] > alvo_x else "esquerda"
+        if para_boss != anda:
+            self.io.tecla(para_boss, 0.06)            # vira de volta para o boss
         self.dormir(ESPERA_APOS_ANDAR)
         self.rastreador.reiniciar()
         for _i in range(2):
@@ -882,6 +897,10 @@ class Atirador:
         hp1 = self.lei.vida(f)
         incerto = estrategias.estrategia(p["inst"]).get("acerto_incerto")
         acertou = hp1 < p["hp0"] - (2 if incerto else 3)
+        if p.get("espelho"):
+            self.espelho_falhas = 0 if acertou else self.espelho_falhas + 1
+            if self.espelho_falhas >= 2:
+                self.log("   [ESPELHO] 2 tiros sem tirar vida do ponto espelhado: nesta luta volto a atravessar para o lado esquerdo")
         if incerto and acertou or hp1 < 99:
             self.sem_queda_cheia = 0
         seguidos = estrategias.estrategia(p["inst"]).get("erro_apos_sem_queda")
