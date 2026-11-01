@@ -519,3 +519,45 @@ for _ in range(3):
     at.concluir_tiro(None)
 assert sum("ERROU" in l for l in logs) == 2 and sum("nao caiu" in l for l in logs) == 1, logs
 print("vida cheia que nao cai vira erro OK")
+
+# ------------------------------------------------------------ N) PASS visivel por muito tempo depois do tiro: NAO inventa um turno (Rota Leste fase 2, 31/10)
+w = MundoComThread(vez_fim=60.0); at, mem, logs, arq = novo(w)
+rodar(at, w, ate=28.0)                               # o PASS fica na tela 28 s inteiros (voo + jogada do chefe)
+assert len(w.tiros) == 1, f"so um tiro por turno: {w.tiros}"
+assert not any("novo turno" in l for l in logs), logs
+print("PASS longo depois do tiro: um turno so (sem tiro fantasma) OK")
+
+# ------------------------------------------------------------ N+1) a vez acaba antes de a barra encher: o tiro nao saiu -> nao conta (nem como erro)
+w = MundoComThread(vez_fim=2.4); at, mem, logs, arq = novo(w)
+rodar(at, w, ate=14.0)
+assert any("nao conto como tiro" in l for l in logs), logs
+assert not os.path.exists(arq) or json.load(open(arq))["tiros"] == [], "tiro que nao saiu NAO pode virar erro na memoria"
+print("tiro que nao saiu (vez acabou na carga) nao suja a memoria OK")
+
+# ------------------------------------------------------------ Ultima Luta fase 2, boneco nasce a DIREITA do boss verde: mira propria (gravacoes 01/11)
+import estrategias as E
+w = MundoComThread(); w.azul, w.boss = (78.0, 62.0), (52.0, 27.0)
+at, mem, logs, arq = novo(w, inst="ULTIMA_LUTA_F2")
+rodar(at, w, ate=7.5)
+assert any("[ATRAVESSAR]" in l for l in logs) and not w.tiros, "1o turno do lado direito: atravessa a arena andando (sem atirar)"
+assert any(k[0] == "esquerda" for k in w.teclas if isinstance(k, tuple)) or "esquerda" in str(w.teclas), w.teclas
+w = MundoComThread(); w.azul, w.boss = (78.0, 62.0), (52.0, 27.0)
+at, mem, logs, arq = novo(w, inst="ULTIMA_LUTA_F2")
+at.travessias_na_luta = 3                         # nao conseguiu atravessar: usa a mira traseira
+rodar(at, w, ate=7.5)
+assert at.pendente is not None and at.pendente["inst"] == "ULTIMA_LUTA_F2_E", "o aprendizado desta mira vai para a instancia propria"
+assert any("uso a mira de ULTIMA_LUTA_F2_E" in l for l in logs), logs
+assert abs(w.angulo - 81.5) <= 1.5, f"ponteiro em {w.angulo:.1f} (esperado ~81,5, de frente para a direita; tolerancia 1 grau na fase 2)"
+assert w.tiros and abs(w.tiros[0] - 49.0) <= 8, w.tiros
+w2 = MundoComThread(); w2.azul, w2.boss = (27.0, 62.0), (52.0, 27.0)            # nasceu a ESQUERDA: continua a mira normal (74 graus / 47%)
+at2, mem2, logs2, arq2 = novo(w2, inst="ULTIMA_LUTA_F2")
+rodar(at2, w2, ate=16.0)
+assert not any("F2_E" in l for l in logs2), logs2
+print("fase 2: boss a esquerda usa a mira propria (ponteiro ~81,5, forca ~49%), boss a direita segue a normal OK")
+import memoria as MM
+mm = MM.Memoria(arq_aprendizado=None)
+for x, ang, forca in ((78.0, 81.5, 49), (85.0, 81.5, 56), (90.0, 84.0, 46), (93.0, 84.0, 46)):   # 84 = limite da arma
+    pr = mm.prever("ULTIMA_LUTA_F2_E", (x, 62.0), (51.0, 27.0))
+    assert abs(pr["angulo"] - ang) < 0.1 and abs(pr["forca"] - forca) < 1.5, (x, pr)     # sem "fisica" na mira traseira (dava 75% em x=90)
+assert E.estrategia("ULTIMA_LUTA_F2")["combo"] == "3,3,4" and E.estrategia("ULTIMA_LUTA_F2_E")["tolerancia_angulo"] == 1.0
+print("mira traseira: sementes de 01/11 (81,5 graus, ~49-56%), sem fisica; combo 3,3,4 e tolerancia de 1 grau OK")

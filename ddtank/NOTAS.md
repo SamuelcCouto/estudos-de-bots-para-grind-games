@@ -638,3 +638,47 @@ nao reconhecia (nota 0.85 < 0.873 do POPUP_SOZINHO antigo).
 - Ultima Luta fase 2: o boneco nasce em x~13 (acerta), x~27 (errava 25x o mesmo tiro 74/47) ou x~78 (do outro lado do boss; derrotas por morte).
   Fix: boss com vida 100% que nao cai 2x = erro; fase 2 com `erro_apos_sem_queda: 3` (3 tiros sem queda = erro) para a memoria corrigir a mira.
 - PvP (011716 e 020551, gravacao manual): a pagina do jogo tem, nas laterais, tabelas "EstrAng 30/50/65/80" (distancia x forca). Ainda nao analisado a fundo.
+
+## 31/10 (manha, sessao local): Rota Leste - tiros fantasma e pausa do PVP
+- Causa dos "tiro dado: 74 graus, forca 0% ... soltou por 'vez_acabou'" na fase 2 da Ultima Luta (e do "Gato perde turno"): depois do tiro o PASS continua na tela
+  durante o voo e a jogada do chefe (~15 s). O atirador achava "novo turno" quando o PASS ficava visivel mais de 14 s DESDE O INICIO DA VEZ - exatamente na hora em que
+  o PASS some -> tiro de forca 0%, itens/perks gastos a toa (o perk X e os itens 4..8 iam na vez fantasma) e um "ERRO" falso na memoria (22 entradas de forca <= 5 removidas
+  de dados/aprendizado.json; copia em aprendizado.json.bak_antes_da_limpeza). Fix (atirador.py): DURACAO_MAX_DA_VEZ = 30 s contados DEPOIS do tiro; e se a vez acaba durante a
+  carga ('vez_acabou') o tiro NAO conta (nem erro). Testes novos em test_atirador.py.
+- Devoradores: se a mesma instancia errada ficar marcada 6x seguidas (`TENTATIVAS_CFG_QUEBRA_LISTA`), o bot rola a lista na marra (8 cliques na seta de baixo). A correcao da nuvem
+  (continuar clicando na seta ate a pagina certa) AINDA NAO foi testada no jogo: a ultima rodada da Leste (03:23) parou na fase 2.
+- PVP pausado (31/10 ~05:40): ver PASSAGEM_PARA_LOCAL.md secoes 0b (contador vermelho da vez, itens/E/F, tabelas) para retomar.
+
+## 01/11: Ultima Luta fase 2 - boneco nascendo a DIREITA do boss (mira propria)
+- Gravacoes manuais 20261101_003937/004330/004633/005140 (janela 1119x799: precisa de `tela.calibrar` + `renderizar` para ler; NAO basta redimensionar para 1280).
+- Problema: nascendo em x ~71-90 (boss verde em (52,27) a ESQUERDA) o bot virava para a esquerda e mirava 71 graus/51%: errava TODOS os tiros (3/3 na memoria e a rodada de 01/11 00:31:
+  derrota). O usuario acerta SEM virar: de frente para a DIREITA com o ponteiro em 92-99 graus (passa da vertical: parabola alta para a esquerda) e forca 50-63% (4 de 4 acertos:
+  -37%, -20%, -33%, -7% de vida). De frente para a esquerda ele precisou de 72 graus/86%.
+- Fix: instancia `ULTIMA_LUTA_F2_E` (estrategias.py): usada quando o boss esta >8 px a esquerda (`separar_lado`), `olhar_lado: 1` (vira para a direita), angulo 60-100, `so_memoria`
+  (a fisica do Memoria supoe o boneco olhando para o alvo). Sementes: 4 acertos em `dados/tiros_semente.json` (prevê 97,6 graus / 54,7% em (78,62); outros x: acerto mais parecido, forca x raiz
+  da distancia). Combo da fase 2 passou de "1,4" para "3,4" (e o que o usuario usa; 1/2 nunca).
+- Vento: o painel dessas gravacoes tem digitos de outras cores (verde/amarelo/laranja) e o leitor treinado no PVP erra (confianca ~1.0): nao usar na Leste.
+- Ainda NAO testado no jogo.
+
+## 01/11 (2a analise da fase 2): tolerancia do angulo, item 3 duas vezes e sementes novas
+- Rodada do bot 01:46 (nasceu a ESQUERDA, x=27): pediu 74,5 graus e atirou a 71 (a tolerancia de 3 graus aceitou o ponteiro onde estava): 4 tiros sem acertar com a mira que antes acertava;
+  vento fraco (0.1-0.6, a favor), nao explica. Fix: `tolerancia_angulo: 1.0` na fase 2 (parabola alta: 3 graus decidem o acerto) e `erro_apos_sem_queda: 2`.
+- 8 gravacoes manuais (so lado DIREITO; minimapa lido deslocado (-3,+6) em relacao ao bot: azul (81,56) = (78,62) do bot): de frente para a DIREITA, ponteiro 81,5 graus, carga 2,0-2,4 s
+  (~46-56%) acerta com estabilidade (-37, -38, -45% de vida; x=78..88); x=93: 85,5 graus/46%. A mira de 98 graus/56% da gravacao de 31/10 (x=78) nao se repetiu (a leitura do ponteiro parece
+  relativa a inclinacao do terreno, que muda com as crateras) - as sementes antigas foram trocadas pelas de 01/11. De frente para a esquerda (x=84, boss em (51,26)): 76 graus, 45-58% tambem acerta.
+- Item 3: o usuario usa 2x por turno (3,3,4,4...), o bot usava 1x: combo da fase 2 = "3,3,4". `so_memoria` agora tambem desliga a fisica no ramo "memoria+fisica" (dava 75% em x=90).
+- O painel de vento da fase 2 tem digitos de outras cores (leitor do PVP nao vale); o feedback por vida do boss (queda >=2%) e o unico sinal de acerto.
+
+## 01/11 tarde: teste AO VIVO da Rota Leste (prints da janela a cada 0,5 s + log)
+O que os prints mostraram e o que mudou (atirador.py / estrategias.py / memoria.py / navegador.py):
+- Boss de ELITE (invocado pelo boss da plataforma) fica com a hitbox EM CIMA do boneco: no minimapa o ponto dele some debaixo do azul; os numeros de dano ("Perfurante",
+  16698...) aparecem no boneco. Fix: `andar_se_sem_queda` - tiro sem queda de vida -> no turno seguinte anda 1,2 s (0,3 s andava 1 px e nao soltava).
+- Lado DIREITO (x~78-90): a mira "traseira" (frente para a direita, 81-86 graus) erra (tiros curtos, angulo depende do chao; limite da arma 84 em x=90) e a vez (~7 s) acabava
+  antes do tiro. Fix: `atravessar_para_x: 27` - o bot gasta 1-2 turnos ANDANDO ate x~27 (78->51->27, ~5,5 s por turno) e usa a mira do lado esquerdo (74 graus/47-51%, 69/53% em x=13).
+  `ULTIMA_LUTA_F2_E` (mira traseira) so fica como reserva se a travessia falhar 3x.
+- Tiro fantasma (2 s depois do tiro, o PASS pisca): uma vez nova so conta com 0,6 s sem PASS E >=4 s depois do tiro, ou 2,5 s sem PASS (`GAP_*`).
+- Memoria: o "+-8% de forca depois de erro" era somado uma vez POR ERRO parecido (forca ia de 46% a 80%); agora uma vez so.
+- `ajustar_angulo` aceitava 6 graus de erro no fim (atirou 71 pedindo 74); agora 2x a tolerancia da fase (2 graus na fase 2).
+- Navegador: derrota na fase 2 -> o jogo recomeca na FASE 1 (o bot seguia achando que era a 2: mira/itens errados). `--fase 2` para ligar o bot no meio da fase 2.
+- Resultado: voltas 1-3 sem derrota (2min24s-5min14s por volta); lado direito vencido com travessia (5 e 9 turnos). Devoradores abriu e venceu sempre (2 turnos).
+

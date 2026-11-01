@@ -34,6 +34,19 @@ Pasta `social_empires/` na raiz: manter (estudo futuro, nao mexer). Historico do
 Eu so leio TEXTO (titulo/descricao/legenda), nao vejo imagem nem escuto audio. Pedir ao usuario para colar a transcricao de cada video
 (YouTube: "...mais" > "Mostrar transcricao") ou liberar youtube.com na rede do ambiente. Depois: extrair formulas/tabelas/regras de vento e comparar com o que o bot medir.
 
+## 0a. (31/10 manha) PVP PAUSADO; foco na Rota Leste
+- Fix dos "tiros fantasma" (PASS visivel 14 s desde o inicio da vez => turno falso na hora que o PASS some: forca 0%, itens gastos, erro falso na memoria): ver NOTAS.md (31/10 manha).
+- Pendente: rodar a Rota Leste de verdade (Ultima Luta F1+F2 e Devoradores, cartas so da Ultima Luta) e mandar o log; Devoradores nunca abriu no jogo (fix da nuvem + quebra-lista novo).
+
+- **01/11 Ultima Luta fase 2 (boss verde)**: nascendo a direita (x ~71-90) o bot errava tudo; agora usa a mira do usuario (de frente para a DIREITA, ponteiro ~98 graus, forca ~55%): `ULTIMA_LUTA_F2_E`.
+  Combo da fase 2 = 3,4. Testar: rodar a Rota Leste e conferir "(boss a esquerda: uso a mira de ULTIMA_LUTA_F2_E)" + acertos; se errar, o Memoria alterna a forca +-8 e aprende.
+
+- **01/11 (2a analise F2)**: mira traseira agora com ponteiro ~81,5 graus/~49-56% (sementes de 8 gravacoes de 01/11), tolerancia do angulo 1 grau (o bot atirava a 71 pedindo 74,5), combo 3,3,4.
+  Ainda sem gravacao do lado ESQUERDO da arena com a mira nova: se nascer a esquerda e errar, mande o log.
+
+- **01/11 tarde - Rota Leste testada AO VIVO** (ver NOTAS.md "teste AO VIVO"): elite em cima do boneco -> anda 1,2 s; lado direito -> atravessa a arena ate x~27; tiro fantasma e
+  bug da memoria corrigidos; derrota na fase 2 volta para a fase 1. Proximo: instancia "Mago" (debuff: so perks Z/X/C/R ou E; reflete dano - critico mata) e PVP ao vivo.
+
 ## 0b. PVP v1 (31/10, sessao local) - leia antes do resto
 - **`PVP.bat`** (`pvp.py`): o bot joga e GRAVA as tentativas (~60 min, `--minutos`); F10 / PARAR do painel param. Deixar o jogo na sala do PVP; na sala clica
   Inicio (`--sem-inicio` desliga); pop-up "Clique no jogo" -> clique neutro. Usa o mesmo `Atirador` (so mira + forca, SEM itens, `LeitorPvp`: vida 100 fixa).

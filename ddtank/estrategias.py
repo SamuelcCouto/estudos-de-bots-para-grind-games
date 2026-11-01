@@ -53,13 +53,17 @@ ESTRATEGIAS = {
         "alvo": "mais_alto",          # o ponto vermelho de MENOR y e o boss da plataforma (o pequeno anda junto do boneco)
         "jogador_y_min": 50.0,        # o boneco fica no chao (y ~ 62): descarta cantos azuis da camera do minimapa
         "reposicionar": True,         # boss pequeno colado no boneco = tiro perdido: anda para a direita (o usuario fez 0.2-0.3 s)
+        "andar_se_sem_queda": True,   # boss de ELITE invocado com a hitbox em cima do boneco (o ponto some no minimapa): tiro sem queda -> anda
         "angulo_min": 0.0,
-        "combo": "1,4",               # o usuario NUNCA usou o 2 aqui: item 1 (+2 ataques) e os buffs 4; depois do B tambem o 1
+        "combo": "3,3,4",             # gravacoes 01/11: o usuario usa o item 3 (+1 ataque) DUAS vezes por turno e os buffs 4 (nunca o 1/2 aqui)
+        "tolerancia_angulo": 1.0,     # parabola alta (70-90 graus): 3 graus decidem o acerto (o bot pediu 74,5 e atirou a 71: 4 erros seguidos, 01/11)
+        "separar_lado": True,         # boss a ESQUERDA do boneco (nasceu em x~72-90) = outra mira: instancia ULTIMA_LUTA_F2_E (abaixo)
+        "atravessar_para_x": 27.0,    # ... mas antes tenta ATRAVESSAR a arena andando ate x~27 (acertos guardados: 74 graus/47%) (a mira do lado direito erra muito: 01/11)
         "perks": True, "repor_perks": True,
         "pet_e": True,                # (andar desfaz o buff: aperta E de novo no proximo turno)
         "usar_pow": True, "pow_exige_buff": True,
         "acerto_incerto": True,       # armadura: tiros com 0-1% de dano sao normais e nao viram "erro"
-        "erro_apos_sem_queda": 3,     # 3 tiros seguidos sem tirar vida = a mira esta errada (nascimentos fora de x~13-17 repetiam 25x o mesmo tiro)
+        "erro_apos_sem_queda": 2,     # 2 tiros seguidos sem tirar vida = a mira esta errada (nascimentos fora de x~13-17 repetiam 25x o mesmo tiro)
     },
     "DEVORADORES": {                  # dragao simples (Zen'Gor): 2 turnos. O boneco nasce colado na borda esquerda do minimapa (x ~ 0.7)
         "minimapa_x_min": 0.0,
@@ -89,6 +93,14 @@ ESTRATEGIAS = {
         "combo": "2,3,4",             # sempre 2, 3 e o maximo de 4 (depois 5, 6, 7, 8): dano maximo, sem testar combos
     },
 }
+
+
+# Fase 2 com o boneco nascendo no lado DIREITO (x ~72-90, boss verde em (52,27) a esquerda). Gravacoes 01/11: virando para a esquerda e mirando
+# 71 graus/51% o bot errava TODOS os tiros; o usuario acerta sem virar: de frente para a DIREITA com o ponteiro em 92-99 graus (passa da vertical:
+# o tiro sai para a esquerda, uma parabola alta) e forca 50-63%. A fisica do Memoria nao vale aqui (o boneco nao olha para o alvo): so memoria.
+ESTRATEGIAS["ULTIMA_LUTA_F2_E"] = dict(ESTRATEGIAS["ULTIMA_LUTA_F2"], separar_lado=False, olhar_lado=1, angulo_min=60.0, angulo_max=84.0,  # 84: limite da arma em x~90 (01/11)
+                                      
+                                       so_memoria=True)
 
 
 def estrategia(inst):

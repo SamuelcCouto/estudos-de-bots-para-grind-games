@@ -96,6 +96,7 @@ LISTA_SETA = {"baixo": (828, 367), "cima": (828, 312)}
 LISTA_SETA_ALTERNATIVA = (821, 325)              # onde o usuario clicou para rolar (funcionou)
 LISTA_PAGINA_REGIAO = {1: (479, 301, 539, 325), 2: (488, 333, 548, 357)}   # quadro da 1a coluna/linha: Fantasma (p1) x Devoradores (p2)
 LISTA_PAGINA_LIMIAR = 0.7
+TENTATIVAS_CFG_QUEBRA_LISTA = 6                 # marcacoes erradas seguidas ate rolar a lista na marra (Devoradores)
 PAGINA_MAX_CLIQUES = 16                          # cliques na seta ate desistir de rolar a lista
 CARTAS_P_POS = [(x, y) for y in (256, 374, 493) for x in (738, 826, 913)]    # painel PEQUENO (3x3) da fase 1 da Ultima Luta
 CARTAS_P_REPETIR_APOS = 3.0
@@ -965,6 +966,9 @@ class Navegador:
             if self.lutou:
                 self.lutou = False
                 self.log(f"   [ORDEM] ! a luta de {self.instancia} acabou SEM passar pelas cartas; repito {self.instancia}.")
+                if self.fase != 1:
+                    self.log("   [FASE] derrota na fase 2: o jogo recomeca a instancia pela fase 1")
+                    self.fase = 1
                 if self.reg:
                     self.reg.evento("ordem_sem_cartas", [self.reg.frame(self.ultimo_quadro, "sem_cartas")], instancia=self.instancia, idx=self.idx)
             return
@@ -1150,6 +1154,16 @@ class Navegador:
                     self.dormir(0.7)                       # a arte pode ainda estar carregando
                     return
                 if self.abrir_aba(f) or self.preparar_pagina(f):
+                    return
+                if self.tentativas_cfg >= TENTATIVAS_CFG_QUEBRA_LISTA and PAGINA_NA_CONFIG.get(self.instancia, 1) > 1:
+                    # a mesma instancia errada marcada varias vezes seguidas (gravacao 31/10: Dragao Gelado no lugar dos Devoradores, 100x):
+                    # a deteccao da pagina da lista nao esta funcionando; rola a lista na marra e tenta de novo
+                    self.log(f"[CONFIG] {self.tentativas_cfg} tentativas marcando a instancia errada: rolando a lista ate o fim ({LISTA_SETA['baixo']})")
+                    for _ in range(PAGINA_MAX_CLIQUES // 2):
+                        self.clicar(LISTA_SETA["baixo"])
+                        self.dormir(0.35)
+                    self.tentativas_cfg = 0
+                    self.tentativas_pagina = 0
                     return
                 if self.no_chefe:
                     self.chefe_tentativas_marcar += 1
@@ -1733,6 +1747,8 @@ def main():
     ap.add_argument("--tarefas-a-cada", type=int, default=0,
                     help="coleta as tarefas a cada N voltas (padrao: toda volta; lutando um chefe so: a cada 10)")
     ap.add_argument("--comecar-em", type=int, default=1, help="numero da instancia (1, 2, 3...) em que a rota comeca")
+    ap.add_argument("--fase", type=int, choices=(1, 2), default=1,
+                    help="A Ultima Luta: fase em que o bot comeca (2 = ja dentro da batalha/sala da 2a fase)")
     ap.add_argument("--sem-tarefas", action="store_true")
     ap.add_argument("--uma-vez", action="store_true")
     ap.add_argument("--so-ver", action="store_true", help="so mostra a tela detectada (nao clica)")
@@ -1845,6 +1861,7 @@ def main():
         nav.atirador = atirador_mod.Atirador(io, memoria_mod.Memoria(), lambda: nav.instancia_batalha, sombra=args.sombra, log=log,
                                              ordem_itens=ordem, reg=reg, metricas=metr, combos=combos)
     nav.idx = max(0, min(len(rota) - 1, args.comecar_em - 1))
+    nav.fase = args.fase
     nav.arquivo_parar = ARQUIVO_PARAR
     nav.arquivo_pausar = ARQUIVO_PAUSAR
     if os.path.exists(ARQUIVO_PAUSAR):

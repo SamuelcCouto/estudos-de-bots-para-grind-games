@@ -1456,6 +1456,74 @@
    "acertou": true,
    "origem": "gravacao 20261030_004606 (versao GPT)",
    "leitura": 2
+  },
+  {
+   "inst": "ULTIMA_LUTA_F2_E",
+   "acertou": true,
+   "leitura": 2,
+   "azul": [
+    78.0,
+    62.0
+   ],
+   "boss": [
+    51.0,
+    27.0
+   ],
+   "angulo": 81.5,
+   "forca": 49,
+   "dano": 37.0,
+   "origem": "gravacao 20261101_015241 (de frente para a direita, ponteiro 81,5; carga 2,0 s)"
+  },
+  {
+   "inst": "ULTIMA_LUTA_F2_E",
+   "acertou": true,
+   "leitura": 2,
+   "azul": [
+    78.0,
+    62.0
+   ],
+   "boss": [
+    51.0,
+    27.0
+   ],
+   "angulo": 81.5,
+   "forca": 49,
+   "dano": 38.0,
+   "origem": "gravacao 20261101_020703 (carga 2,1 s)"
+  },
+  {
+   "inst": "ULTIMA_LUTA_F2_E",
+   "acertou": true,
+   "leitura": 2,
+   "azul": [
+    85.0,
+    62.0
+   ],
+   "boss": [
+    51.0,
+    27.0
+   ],
+   "angulo": 81.5,
+   "forca": 56,
+   "dano": 45.0,
+   "origem": "gravacao 20261101_020221 (carga 2,4 s)"
+  },
+  {
+   "inst": "ULTIMA_LUTA_F2_E",
+   "acertou": true,
+   "leitura": 2,
+   "azul": [
+    90.0,
+    62.0
+   ],
+   "boss": [
+    51.0,
+    27.0
+   ],
+   "angulo": 85.5,
+   "forca": 46,
+   "dano": 38.0,
+   "origem": "gravacao 20261101_014913 (carga 2,0 s)"
   }
  ]
 }

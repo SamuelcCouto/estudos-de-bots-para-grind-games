@@ -180,7 +180,8 @@ class Memoria:
                 forca = float(np.average([t["forca"] for t in perto], weights=pesos))
                 dx_, dy_ = boss[0] - azul[0], azul[1] - boss[1]
                 r, inc = self.r_estimado(inst)
-                ch = self._chance_por_forca(inst, abs(dx_), dy_, ang) if abs(dx_) >= DX_MINIMO else None
+                so_mem = estrategias.estrategia(inst).get("so_memoria")      # mira "traseira": a fisica (boneco olhando para o alvo) nao vale
+                ch = self._chance_por_forca(inst, abs(dx_), dy_, ang) if (abs(dx_) >= DX_MINIMO and not so_mem) else None
                 if ch is not None:
                     chance_mem = float(np.interp(forca, FORCAS_GRADE, ch))
                     if chance_mem >= CHANCE_MEMORIA_OK:
@@ -198,7 +199,16 @@ class Memoria:
                 for e in erros:
                     if dist(e) <= DIST_MESMA_SITUACAO and abs(e["forca"] - forca) < 6 and abs(e["angulo"] - ang) < 5:
                         forca += 8 if (len(erros) % 2) else -8
+                        break                   # uma vez so (somava +-8 por erro parecido: a forca ia de 46% a 70%, 01/11)
                 return self._limites(inst, ang, forca, "memoria", f"{len(perto)} acerto(s) na mesma situacao (dist {melhor:.1f})")
+            if estrategias.estrategia(inst).get("so_memoria"):
+                t = ordem[0]            # a fisica supoe o boneco olhando para o alvo: aqui nao vale -> o acerto mais parecido
+                forca = t["forca"]
+                dx_t, dx_n = abs(t["boss"][0] - t["azul"][0]), abs(boss[0] - azul[0])
+                if dx_t >= 8 and dx_n >= 8:             # distancia diferente do acerto: a forca anda com a RAIZ da distancia (alcance ~ forca^2)
+                    forca *= float(np.clip((dx_n / dx_t) ** 0.5, 0.8, 1.25))
+                return self._limites(inst, t["angulo"], forca, "vizinho", f"so memoria nesta mira: acerto mais parecido (dist {melhor:.1f}; "
+                                     f"forca {t['forca']:.0f}% x raiz da distancia)")
             dx, dy = boss[0] - azul[0], azul[1] - boss[1]
             if abs(dx) >= DX_MINIMO:
                 return self._pela_fisica(inst, abs(dx), dy, f"{len(acertos)} acerto(s) e {len(erros)} erro(s) na instancia"

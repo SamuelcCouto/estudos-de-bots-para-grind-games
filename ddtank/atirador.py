@@ -24,7 +24,9 @@ ORDEM_ITENS = [2, 3, 4, 4, 4, 4, 5, 6, 7, 8]
 LIMITE_POR_TURNO = {1: 2, 2: 1, 3: 2}
 TECLA_ESPACO = "espaco"
 ESPERA_VEZ = 0.35             # s com o PASS visivel antes de agir (o jogo aceita teclas durante a faixa "Sua vez!")
-DURACAO_MAX_DA_VEZ = 14.0     # s: se o PASS nunca some, considera que comecou outro turno (o PASS fica na tela enquanto o tiro voa)
+DURACAO_MAX_DA_VEZ = 30.0     # s DEPOIS do tiro: se o PASS nunca some, considera que comecou outro turno (o PASS fica na tela enquanto o tiro
+                              # voa e o chefe joga: ~15 s. Com 14 s desde o INICIO da vez o bot "inventava" um turno na hora em que o PASS sumia:
+                              # tiro de forca 0% + itens/perks gastos a toa + "erro" falso na memoria - gravacao 31/10, Rota Leste fase 2)
 INTERVALO_LEITURA = 1.0       # s entre leituras gravadas no registro (diagnostico)
 TOQUES_VIRAR = (0.08, 0.12, 0.18)  # s: toques na seta esquerda/direita para virar (toque curto quase nao anda)
 AVIAO_MOVEU = 4.0              # px de minimapa: depois do voo o boneco tem que ter saido do lugar
@@ -41,6 +43,11 @@ PERKS_TECLAS = ["z", "x", "c"]
 MAX_PASSOS_REPOSICIONAR = 2
 TOQUE_REPOSICIONAR = 0.25     # s na seta direita (o usuario andou 0.2-0.3 s por vez)
 REPOSICIONAR_X_MAX = 30.0     # px de minimapa: mais para a direita que isso nao anda mais
+GAP_NOVA_VEZ = 2.5            # s sem PASS para valer uma vez NOVA (o PASS pisca depois do tiro: o bot atirava 2x no mesmo turno, 01/11)
+GAP_MIN_NOVA_VEZ = 0.6        # ... ou 0,6 s sem PASS se ja passaram MIN_APOS_TIRO_NOVA_VEZ desde o tiro (fase 1: o chefe joga rapido)
+MIN_APOS_TIRO_NOVA_VEZ = 4.0  # s: o "tiro fantasma" vinha ~2 s depois do tiro; uma vez de verdade, 8-10 s
+ANDAR_SEM_QUEDA_S = 1.2       # 0,3 s andava 1 px e o elite continuava em cima (01/11 15:30: dano "Perfurante" no boneco)
+TRAVESSIA_MAX_S = 5.5          # s andando no turno de travessia (a vez dura ~7 s)      # s andando quando o tiro anterior nao tirou vida (boss de elite com a hitbox em cima do boneco)
 ESPERA_NUMEROS_DANO = 4.0     # s depois do tiro olhando os numeros de dano (Chefao Global): eles sobem ~1-3 s depois
 
 
@@ -72,6 +79,8 @@ class Atirador:
         self.sombra, self.log, self.reg = sombra, log, reg
         self.ultima_leitura = -99.0
         self.acao_em = None
+        self.acao_fim = None                      # quando o ultimo turno terminou de agir (tiro dado)
+        self.sem_pass_desde = None                # desde quando o PASS sumiu (uma vez nova so depois de GAP_NOVA_VEZ)
         self.turno_abortado = False
         self.dormir = dormir or time.sleep
         self.agora = agora or time.time
@@ -97,6 +106,7 @@ class Atirador:
         self.avioes_na_luta = 0
         self.sem_queda_seg = 0                    # tiros seguidos sem queda (so com `erro_apos_sem_queda`)
         self.sem_queda_cheia = 0                  # tiros seguidos sem tirar vida de um boss com 100%
+        self.travessias_na_luta = 0
         self.pet_ok = False                       # item E ja usado nesta luta (so 1x: o buff dura a luta toda)
         self.perks_usados = 0                     # perks Z/X/C ja usados nesta luta (Gato Preto)
         self.aviao_pendente = None                # {"de": (x, y)} do ultimo voo: confere no turno seguinte se andou
@@ -170,13 +180,20 @@ class Atirador:
         if not vez:
             if self.pendente and not self.agiu_recentemente():
                 self.concluir_tiro(f)
-            self.vez_desde, self.agiu = None, False
+            if self.sem_pass_desde is None:
+                self.sem_pass_desde = agora
+            gap = agora - self.sem_pass_desde
+            depois_do_tiro = agora - (self.acao_fim or -1e9)
+            if not self.agiu or gap >= GAP_NOVA_VEZ or (gap >= GAP_MIN_NOVA_VEZ and depois_do_tiro >= MIN_APOS_TIRO_NOVA_VEZ):
+                self.vez_desde, self.agiu = None, False
             return
+        self.sem_pass_desde = None
         if self.pendente and agora - self.pendente["t"] > 7:
             self.concluir_tiro(f)
         if self.agiu:
             # o PASS nunca sumiu entre dois turnos (ex.: o boss nao joga): depois de uma vez inteira, e outro turno
-            if self.acao_em is not None and agora - self.acao_em > DURACAO_MAX_DA_VEZ:
+            ref = max(self.acao_em or 0.0, self.acao_fim or 0.0) if self.acao_em is not None else None
+            if ref is not None and agora - ref > DURACAO_MAX_DA_VEZ:
                 if self.lei.vida(f) <= 0:
                     return                            # boss morto: o PASS fica na tela ate a vitoria, nao e outro turno
                 self.log("   (o PASS continua visivel ha muito tempo: tratando como um novo turno)")
@@ -188,6 +205,7 @@ class Atirador:
         if agora - self.vez_desde < ESPERA_VEZ:
             return
         self.turno(f)
+        self.acao_fim = self.agora()
 
     def agiu_recentemente(self):
         espera = ESPERA_NUMEROS_DANO if self.pendente and "numeros" in self.pendente else 2.0
@@ -216,6 +234,7 @@ class Atirador:
         self.avioes_na_luta, self.aviao_pendente = 0, None
         self.perks_usados = 0
         self.pet_ok = False
+        self.travessias_na_luta = 0
         self.sem_queda_cheia = 0
         self.sem_queda_seg = 0
 
@@ -242,9 +261,19 @@ class Atirador:
             g = self.ver()
             if g is not None:
                 azul, boss, conf = self.posicoes(g)
+        alvo_x = estrategias.estrategia(inst).get("atravessar_para_x")
+        if (azul and boss and alvo_x is not None and boss[0] > alvo_x + 10 and azul[0] > alvo_x + 6 and not self.sombra
+                and self.travessias_na_luta < 3):
+            return self.atravessar(azul, alvo_x)      # inclui ficar parado DEBAIXO do boss (nenhum angulo alcanca)
+        if azul and boss and estrategias.estrategia(inst).get("separar_lado") and boss[0] < azul[0] - 8:
+            inst = inst + "_E"                        # boss a esquerda: mira propria (ver estrategias.py, ULTIMA_LUTA_F2_E)
+            self.log(f"   (boss a esquerda: uso a mira de {inst})")
         self.conferir_aviao(azul)
         if estrategias.estrategia(inst).get("reposicionar") and azul and not self.sombra:
             azul, boss, conf = self.reposicionar(f, inst, azul, boss, conf)
+        if (estrategias.estrategia(inst).get("andar_se_sem_queda") and self.sem_queda_seg >= 1 and azul and boss
+                and not self.sombra):
+            azul, boss, conf = self.andar_para_soltar(inst, azul, boss, conf)
         hp0 = self.lei.vida(f)
         if hp0 <= 0 and self.ataques_na_luta > 0:
             # o boss ja morreu (a barra de vida sumiu) e o PASS ainda esta na tela ate a vitoria: nao gasta nada
@@ -268,9 +297,11 @@ class Atirador:
             return
         if hasattr(self.io, "preparar_teclas"):
             self.io.preparar_teclas()            # o Chromium so entrega teclado a pagina em foco
-        if azul and boss and abs(boss[0] - azul[0]) >= 1.5:
-            self.virar_para(1 if boss[0] > azul[0] else -1)
         est = estrategias.estrategia(inst)
+        if est.get("olhar_lado"):
+            self.virar_para(est["olhar_lado"])        # mira "traseira": de frente para um lado e atirando para o outro
+        elif azul and boss and abs(boss[0] - azul[0]) >= 1.5:
+            self.virar_para(1 if boss[0] > azul[0] else -1)
         ok_ang = self.ajustar_angulo(pred["angulo"], est.get("tolerancia_angulo", TOLERANCIA_ANGULO))
         t_ang = self.agora() - inicio
         if self.reg:
@@ -314,6 +345,16 @@ class Atirador:
                 alvo_forca = alt
         forca_real, soltou, trace, segurou = self.carregar(alvo_forca)
         self.devolver_foco()
+        if soltou == "vez_acabou":
+            # a vez acabou durante a carga: o tiro provavelmente NAO saiu (ou saiu fraco, fora do plano). Nao vira ataque nem erro
+            # (sujava a memoria com "erros" de forca 0%)
+            self.log(f"   ! a vez acabou durante a carga (forca {forca_real:.0f}% de {alvo_forca:.0f}%): nao conto como tiro")
+            self.agiu = True
+            if self.metricas:
+                self.metricas.turno("pulado")
+            if self.reg:
+                self.reg.evento("turno_pulado", fr, inst=inst, motivo="vez_acabou_na_carga", previsto=pred)
+            return
         metodo_usado = self.metodo_forca
         if soltou != "vez_acabou" and alvo_forca - forca_real > 10 and forca_real < 0.75 * alvo_forca:
             self.subforcas += 1
@@ -341,6 +382,69 @@ class Atirador:
                             taxa_forca=round(self.taxa_forca, 1), jogo_em_foco=(self.io.em_foco() if hasattr(self.io, "em_foco") else None),
                             nivel_foco=getattr(self.io, "foco_nivel", None),
                             tempos={"angulo": round(t_ang, 2), "itens": round(t_itens - t_ang, 2), "carga": round(t_tiro - t_itens, 2)})
+
+    def atravessar(self, azul, alvo_x):
+        """Fase 2 nascendo a DIREITA (x~78-90): a mira daquele lado depende da inclinacao do chao e erra muito (01/11: tiros curtos de
+        82 graus). Gasta este turno andando para a esquerda ate perto de `alvo_x` (do lado esquerdo o bot acerta: 74/47%, 69/53%)."""
+        self.travessias_na_luta += 1
+        self.agiu = True
+        self.log(f"   [ATRAVESSAR] boneco em x={azul[0]:.0f} (boss a esquerda): este turno ando para a esquerda ate x~{alvo_x:.0f} em vez de atirar")
+        if hasattr(self.io, "preparar_teclas"):
+            self.io.preparar_teclas()
+        inicio, x0 = self.agora(), azul[0]
+        ultimo = azul[0]
+        parado = 0
+        while self.agora() - inicio < TRAVESSIA_MAX_S:
+            f = self.ver()
+            if f is None or not self.lei.minha_vez(f):
+                break
+            self.io.tecla("esquerda", 0.6)
+            self.rastreador.reiniciar()
+            for _i in range(2):
+                g = self.ver()
+                if g is not None:
+                    self.observar_minimapa(g, forcar=True)
+            pos, _c = self.rastreador.jogador()
+            if pos is None:
+                continue
+            if pos[0] <= alvo_x:
+                ultimo = pos[0]
+                break
+            parado = parado + 1 if abs(pos[0] - ultimo) < 0.8 else 0
+            ultimo = pos[0]
+            if parado >= 2:
+                self.log("   [ATRAVESSAR] o boneco parou de andar (sem energia? algo no caminho?)")
+                break
+        self.log(f"   [ATRAVESSAR] andou de x={x0:.0f} para x={ultimo:.0f} em {self.agora() - inicio:.1f}s")
+        self.devolver_foco()
+        if self.reg:
+            self.reg.evento("travessia", [self.reg.frame(self.ver(), "tiro_dado")], de=x0, ate=ultimo)
+
+    def andar_para_soltar(self, inst, azul, boss, conf):
+        """Fase 2 da Ultima Luta: o boss da plataforma invoca um boss de ELITE que fica com a hitbox em cima do boneco (no minimapa o
+        ponto dele some debaixo do azul) e come os tiros (e o dano tambem pega em nos). O tiro anterior nao tirou vida -> anda um pouco
+        antes de atirar. Lado esquerdo: anda para a esquerda (x~13 e o lugar com mais acertos); lado direito: para a direita."""
+        if boss[0] > azul[0]:
+            lado = -1 if azul[0] > 16 else 1          # lado esquerdo: para x~13 (o lugar com mais acertos)
+        else:
+            lado = -1 if azul[0] > 80 else 1          # lado direito: para a esquerda (a parede da direita esta colada); nada de ir-e-voltar
+        nome = "direita" if lado > 0 else "esquerda"
+        self.log(f"   [MOVER] o tiro anterior nao tirou vida (boss de elite em cima do boneco?): andando para a {nome} {ANDAR_SEM_QUEDA_S:.1f}s")
+        if hasattr(self.io, "preparar_teclas"):
+            self.io.preparar_teclas()
+        self.io.tecla(nome, ANDAR_SEM_QUEDA_S)
+        self.dormir(0.35)                             # a vez dura ~7 s: andar nao pode comer o tempo do tiro
+        self.rastreador.reiniciar()
+        for _i in range(2):
+            g = self.ver()
+            if g is not None:
+                self.observar_minimapa(g, forcar=True)
+            self.dormir(0.1)
+        novo, nconf = self.rastreador.jogador()
+        if novo:
+            self.log(f"   [MOVER] boneco de x={azul[0]:.0f} para x={novo[0]:.0f}")
+            return novo, self.rastreador.boss or boss, nconf
+        return azul, boss, conf
 
     def reposicionar(self, f, inst, azul, boss, conf):
         """Ultima Luta fase 2: o boss pequeno (que vem atrapalhar) fica com a hitbox em cima do boneco e come o tiro. Se algum ponto
@@ -506,7 +610,8 @@ class Atirador:
                 taxa = abs(mudou) / dur
                 if 5 < taxa < 120 and mudou * erro > 0:       # aprende a velocidade do angulo
                     self.taxa_angulo = 0.6 * self.taxa_angulo + 0.4 * taxa
-        return abs(alvo - self.lei.angulo(self.ver())) <= max(tol, TOLERANCIA_ANGULO) * 2
+        final = tol * 2 if tol < TOLERANCIA_ANGULO else max(tol, TOLERANCIA_ANGULO) * 2   # fase 2 (tol 1): aceitava 6 graus de erro
+        return abs(alvo - self.lei.angulo(self.ver())) <= final
 
     def _no_limite(self, tecla, a):
         """A seta nao mexeu o ponteiro: teclado sem foco, ou o angulo ja esta no LIMITE da arma (no terreno inclinado o
