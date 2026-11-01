@@ -48,6 +48,7 @@ GAP_MIN_NOVA_VEZ = 0.6        # ... ou 0,6 s sem PASS se ja passaram MIN_APOS_TI
 MIN_APOS_TIRO_NOVA_VEZ = 4.0  # s: o "tiro fantasma" vinha ~2 s depois do tiro; uma vez de verdade, 8-10 s
 ANDAR_SEM_QUEDA_S = 1.2       # 0,3 s andava 1 px e o elite continuava em cima (01/11 15:30: dano "Perfurante" no boneco)
 TEMPO_ITENS_MAX = 3.2        # s ja gastos na vez a partir dos quais os itens sao pulados (o tiro saia com o contador em 0-1)
+ESPERA_APOS_ANDAR = 0.5       # s depois de andar antes de mirar: logo apos o passo o jogo ignora as setas (mira levava 4-6 s)
 ELITE_DIST_X = 7.0            # px de minimapa: ponto vermelho tao perto do azul = elite em cima do boneco
 TRAVESSIA_CURTA_PX = 16.0     # ate essa distancia do ponto de tiro: anda e atira no mesmo turno
 VELOCIDADE_ANDAR = 5.0        # px de minimapa por segundo andando (medido: 78->51 em 5,8 s com as leituras)
@@ -470,7 +471,7 @@ class Atirador:
         para_boss = "direita" if boss[0] > azul[0] else "esquerda"
         if para_boss != nome:
             self.io.tecla(para_boss, 0.06)
-        self.dormir(0.15)
+        self.dormir(ESPERA_APOS_ANDAR)
         self.rastreador.reiniciar()
         for _i in range(2):
             g = self.ver()
@@ -494,7 +495,7 @@ class Atirador:
         self.io.tecla("esquerda", dur)
         self.dormir(0.2)
         self.io.tecla("direita", 0.06)                # vira de volta para o boss
-        self.dormir(0.15)
+        self.dormir(ESPERA_APOS_ANDAR)
         self.rastreador.reiniciar()
         for _i in range(2):
             g = self.ver()

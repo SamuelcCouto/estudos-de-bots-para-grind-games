@@ -61,6 +61,7 @@ TAREFA_FECHAR = (881, 190)
 TAREFA_BOTAO = (760, 513)
 ESPERA_CONFIRMAR_TELA = 0.3   # s entre as 2 leituras que confirmam uma tela (era 0,45: ~1 s a menos por instancia)
 MAX_ERROS_EM_10_MIN = 12       # falhas inesperadas seguidas que param o bot
+IMAGEM_PARADA_S = 40.0         # s com a imagem do jogo identica = janela nao esta sendo desenhada (minimizada/escondida)
 PRESO_APOS = 120.0             # s na mesma tela (fora de batalha) ou em tela desconhecida = "preso": tenta se soltar
 PRESO_REPETIR = 60.0           # s entre as tentativas de se soltar
 MAX_ACOES_TAREFA = 40          # cliques no painel de tarefas por fim de rota (trava de seguranca)
@@ -179,7 +180,33 @@ class IOJanela:
     k = 1.0
 
     def capturar_bruto(self):
-        return self.j.capturar(self.hwnd, "print")
+        img = self.j.capturar(self.hwnd, "print")
+        if img is not None:
+            self._vigiar_imagem_parada(img)
+        return img
+
+    def _vigiar_imagem_parada(self, img):
+        """A janela minimizada/escondida para de ser desenhada: o PrintWindow devolve SEMPRE a mesma imagem e o bot fica cego
+        enquanto o jogo segue (01/11 16:45-17:12: 300 rodadas sem jogar, o boneco morreu). Imagem identica por muito tempo ->
+        avisa e restaura a janela (se minimizada) ou a traz para a frente por um instante."""
+        agora = time.time()
+        assinatura = cv2.resize(img, (64, 36), interpolation=cv2.INTER_AREA).astype(np.int16)
+        if self._ultima_img is None or float(np.abs(assinatura - self._ultima_img).mean()) > 0.5:
+            self._ultima_img, self._img_desde = assinatura, agora
+            return
+        parada = agora - self._img_desde
+        if parada >= IMAGEM_PARADA_S and agora - self._ultimo_destravar >= IMAGEM_PARADA_S:
+            self._ultimo_destravar = agora
+            self.log(f"[ALERTA] a imagem do jogo esta IDENTICA ha {parada:.0f}s (janela minimizada ou escondida? o jogo para de "
+                     f"desenhar e o bot fica cego). Restaurando/trazendo a janela para a frente. Deixe o jogo visivel enquanto o bot roda.")
+            try:
+                self.j.foco_real(self.hwnd)
+            except Exception as e:                      # nunca derruba o bot por isso
+                self.log(f"   (nao consegui trazer a janela: {e})")
+
+    _ultima_img = None
+    _img_desde = 0.0
+    _ultimo_destravar = -1e9
 
     def pedir_calibracao(self):
         """Pede para calibrar de novo no proximo quadro (tela desconhecida por muito tempo, janela mudou...)."""
