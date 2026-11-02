@@ -589,7 +589,7 @@ class AtiradorPvp(atirador_mod.Atirador):
         esc_usada = getattr(self.mem, "escala", None)
         if acertou is not None and hasattr(self.mem, "resultado") and p.get("tela"):
             self.log(f"   [resultado] barra do inimigo {hp0:.0f} -> {hp1:.0f} px: {'ACERTOU' if acertou else 'ERROU'} (tiro medido na tela principal)")
-        elif acertou is not None and hasattr(self.mem, "resultado") and p.get("azul"):      # sem posicao no minimapa o tiro foi no padrao: nao diz nada da escala
+        elif acertou is not None and hasattr(self.mem, "resultado") and p.get("azul") and float(p.get("forca") or 0) >= 10:      # sem posicao no minimapa o tiro foi no padrao: nao diz nada da escala
             esc, ok = self.mem.resultado(acertou, curto=bool(p.get("curto")))
             self.log(f"   [resultado] barra do inimigo {hp0:.0f} -> {hp1:.0f} px: {'ACERTOU' if acertou else 'ERROU'}"
                      f"{' (o jogo avisou: tiro CURTO)' if p.get('curto') else ''}; escala do mapa "
