@@ -186,10 +186,17 @@ try:
 finally:
     P.pontuacao_pass = orig_vez
 mp = P.MemoriaPvp(arq_aprendizado=None)
-angs = [mp.prever("PVP", (74.0, 56.0), (13.0, 54.0))["angulo"] for _ in range(len(P.ANGULOS_PVP))]
-assert angs == list(P.ANGULOS_PVP), angs
+assert all(mp.prever("PVP", (74.0, 56.0), (13.0, 54.0))["angulo"] == P.ANGULO_PVP for _ in range(4)), "angulo fixo"
 assert all(8 <= mp.prever("PVP", (74.0, 56.0), (13.0, 54.0))["forca"] <= 95 for _ in range(6))
-print("vigias (vez curta, tela desconhecida, busca eterna) e angulos em rodizio OK")
+# busca da escala do mapa: erro -> proxima escala; acerto -> trava (e nao muda mais)
+mp.novo_mapa(4.0, False)
+f0 = mp.prever("PVP", (74.0, 56.0), (13.0, 54.0))["forca"]
+esc, ok = mp.resultado(False)
+assert abs(esc - 4.0 * P.MULT_ESCALA[1]) < 1e-6 and not ok
+assert mp.prever("PVP", (74.0, 56.0), (13.0, 54.0))["forca"] < f0, "escala maior = menos forca"
+esc, ok = mp.resultado(True)
+assert ok and mp.resultado(False)[0] == esc, "escala travada nao muda com erro"
+print("vigias (vez curta, tela desconhecida, busca eterna), angulo fixo e busca da escala do mapa OK")
 # erro inesperado no passo nao derruba o laco
 class LacoQuebrado(P.Laco):
     n = 0

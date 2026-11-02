@@ -53,7 +53,11 @@ AFUNDOU_PX = 8.0                    # seu boneco desceu isso no minimapa desde o
 LONGE_PX = 58.0                     # inimigo mais longe que isso: o aviao aproxima
 MAX_AVIOES_PARTIDA = 4
 INTERVALO_AVIAO_TIROS = 3           # tiros entre dois avioes
-ORDENS_PVP = ([2, 3, 4, 4, 4, 4, 5, 6, 7, 8], [1, 3, 4, 4, 4, 4, 5, 6, 7, 8])   # itens por turno (so os que tem energia): alterna 2 (tridente) e 1
+ORDENS_PVP = ([2, 3, 4, 4], [1, 3, 4, 4])   # itens por turno: so o que da dano (antes 10 itens = 2-3 s por turno e a vez acabava, 01/11)
+ANGULO_PVP = 55.0                   # angulo fixo: o resultado de cada tiro (acertou/errou) ajusta a escala do mapa, nao o angulo
+MULT_ESCALA = (1.0, 1.12, 0.89, 1.25, 0.8, 1.4, 0.7)   # busca da escala do mapa: tenta alternando para os dois lados ate acertar
+INIMIGO_BARRA = (683, 188, 722, 202)   # barra de vida VERMELHA embaixo do avatar do inimigo (x0, y0, x1, y1), quadro de 1280
+QUEDA_BARRA_PX = 3                  # a barra (~22 px) encolhendo isto ou mais = acerto
 PRESO_S = 120.0                     # s em tela desconhecida fora da batalha: clica numa area neutra e avisa
 INTERVALO_INICIO = 12.0             # s entre dois cliques em Inicio na sala
 SETA_SERVIDOR = (885, 455, 925, 495)   # seta do botao "Mesmo servidor" (ao lado do Inicio): AZUL com a sala livre, CINZA enquanto busca partida
@@ -110,6 +114,20 @@ class CatalogoMapas:
         """px de minimapa por unidade de distancia deste mapa (campo "escala" de indice.json; sem ele, ESCALA_PADRAO)."""
         return float(self.mapas.get(mid, {}).get("escala") or ESCALA_PADRAO)
 
+    def escala_travada(self, mid):
+        return bool(self.mapas.get(mid, {}).get("escala_ok"))
+
+    def definir_escala(self, mid, escala, ok):
+        """Grava a escala de um mapa (ok=True: um tiro acertou com ela; nas proximas partidas vale direto)."""
+        if mid not in self.mapas:
+            return
+        self.mapas[mid]["escala"] = round(float(escala), 3)
+        self.mapas[mid]["escala_ok"] = bool(ok)
+        try:
+            json.dump(self.mapas, open(self.arq, "w", encoding="utf-8"), ensure_ascii=False, indent=1)
+        except OSError:
+            pass
+
     def identificar(self, f):
         """(id, novo?, quantas vezes ja visto) - registra o mapa se for novo."""
         h = hash_mapa(f)
@@ -144,6 +162,22 @@ class MemoriaPvp(memoria_mod.Memoria):
         super().__init__(*a, **kw)
         self.n_pvp = 0
         self.escala = ESCALA_PADRAO
+        self.escala_base = ESCALA_PADRAO
+        self.escala_ok = False             # um tiro ja acertou com a escala atual neste mapa
+        self.i_busca = 0
+
+    def novo_mapa(self, escala, ok):
+        self.escala_base, self.escala_ok, self.i_busca = escala, ok, 0
+        self.escala = escala
+
+    def resultado(self, acertou):
+        """Acertou: trava a escala (vale para o mapa). Errou: tenta a proxima da busca (alternando para os dois lados)."""
+        if acertou:
+            self.escala_ok = True
+        elif not self.escala_ok:
+            self.i_busca = (self.i_busca + 1) % len(MULT_ESCALA)
+            self.escala = self.escala_base * MULT_ESCALA[self.i_busca]
+        return self.escala, self.escala_ok
 
     def melhor_tiro(self, inst, dx, dy, angulo=None):
         ang = 55.0 if angulo is None else float(angulo)
@@ -162,13 +196,13 @@ class MemoriaPvp(memoria_mod.Memoria):
 
     def prever(self, inst, azul, boss):
         if azul and boss and abs(boss[0] - azul[0]) >= memoria_mod.DX_MINIMO:
-            for _ in range(len(ANGULOS_PVP)):
-                ang = ANGULOS_PVP[self.n_pvp % len(ANGULOS_PVP)]
-                self.n_pvp += 1
-                mt = self.melhor_tiro(inst, abs(boss[0] - azul[0]), azul[1] - boss[1], angulo=ang)
-                if mt:
-                    return self._limites(inst, ang, mt[1], "pvp-tabela",
-                                         f"angulo {ang:.0f} em rodizio; forca pelas tabelas (escala {self.escala:.1f} px/unid)")
+            ang = ANGULO_PVP
+            self.n_pvp += 1
+            mt = self.melhor_tiro(inst, abs(boss[0] - azul[0]), azul[1] - boss[1], angulo=ang)
+            if mt:
+                estado = "TRAVADA: ja acertou neste mapa" if self.escala_ok else f"busca {self.i_busca + 1}/{len(MULT_ESCALA)}"
+                return self._limites(inst, ang, mt[1], "pvp-tabela",
+                                     f"angulo {ang:.0f}; forca pelas tabelas (escala {self.escala:.2f} px/unid, {estado})")
         return super().prever(inst, azul, boss)
 
 
@@ -189,6 +223,14 @@ class LeitorPvp(atirador_mod.LeitorReal):
     numeros_dano = staticmethod(lambda f: 0)
     buff_pet = staticmethod(lambda f: False)          # o icone do buff do pet aparece sempre "ligado" no PVP: nao serve
     vento = staticmethod(vento_mod.ler_vento)
+
+    @staticmethod
+    def vida_inimigo(f):
+        """Largura (px) da barra de vida vermelha do inimigo (~22 com a vida cheia); 0 se nao achou."""
+        x0, y0, x1, y1 = INIMIGO_BARRA
+        r = f[y0:y1, x0:x1].astype(int)
+        m = (r[..., 2] > 170) & (r[..., 1] < 110) & (r[..., 0] < 130)
+        return int(m.sum(1).max()) if m.size else 0
 
     def __init__(self, agora=None):
         self.agora = agora or time.time
@@ -296,6 +338,8 @@ class AtiradorPvp(atirador_mod.Atirador):
         self.ultimo_aviao_tiro = -99
         self.e_usos = 0
         self.motivo_aviao = ""
+        self.hp_inimigo0 = None
+        self.salvar_escala = None          # funcao (mapa, escala, ok) que grava a escala no catalogo (o Laco liga)
 
     # ------------------------------------------------------------------ vento
     def ler_vento(self, f):
@@ -417,12 +461,14 @@ class AtiradorPvp(atirador_mod.Atirador):
         self.log(f"   [vento] {'?' if v is None else f'{v:+.1f}'} (confianca {conf:.2f}, {votos} leitura(s) iguais)"
                  f"{'' if v is None or vento_mod.confiavel(conf) else ' - DUVIDOSO: recorte salvo para rotular'}")
         antes = self.turnos
+        self.hp_inimigo0 = self._ler_barra_inimigo(f)
         self.turnos_feitos_na_vez += 1
         self.ordem = list(ORDENS_PVP[self.tiros_na_partida % len(ORDENS_PVP)])
         self.combo_luta = None                       # o atirador reescolhe a ordem (sem combos): a deste turno
         self.itens_ultimo = []
         super().turno(f)
         if self.pendente is not None and self.turnos > antes:
+            self.pendente["hp_inimigo0"] = self.hp_inimigo0
             self.pendente["vento"] = self.vento_turno
             self.pendente["itens"] = list(self.itens_ultimo)
             self.pendente["quando"] = datetime.datetime.now().isoformat(timespec="seconds")
@@ -445,11 +491,36 @@ class AtiradorPvp(atirador_mod.Atirador):
             self._voo_n += 1
             self._voo_t = self.agora()
 
+    def _ler_barra_inimigo(self, f, n=3):
+        """Mediana de n leituras da barra de vida do inimigo (o JPEG/anti-alias varia +-2 px)."""
+        ler = getattr(self.lei, "vida_inimigo", None)
+        if ler is None:
+            return None
+        vals = [ler(f)] if f is not None else []
+        for _ in range(n - 1):
+            self.dormir(0.1)
+            g = self.ver()
+            if g is not None:
+                vals.append(ler(g))
+        vals = [v for v in vals if v > 0]
+        return float(np.median(vals)) if vals else None
+
     def concluir_tiro(self, f):
-        """Sem barra de vida no PVP nao da para saber o resultado aqui: so grava a tentativa (a analise confere nos prints)."""
+        """Resultado do tiro pela barra de vida do inimigo (encolheu >= QUEDA_BARRA_PX = acerto). Acerto trava a escala do mapa; erro
+        passa para a proxima da busca (MULT_ESCALA)."""
         p, self.pendente = self.pendente, None
         if p is None:
             return
+        hp0, hp1 = p.get("hp_inimigo0"), self._ler_barra_inimigo(f)
+        acertou = None if hp0 is None or hp1 is None else (hp0 - hp1) >= QUEDA_BARRA_PX
+        esc_usada = getattr(self.mem, "escala", None)
+        if acertou is not None and hasattr(self.mem, "resultado"):
+            esc, ok = self.mem.resultado(acertou)
+            self.log(f"   [resultado] barra do inimigo {hp0:.0f} -> {hp1:.0f} px: {'ACERTOU' if acertou else 'ERROU'}; escala do mapa "
+                     f"{esc_usada:.2f} -> {esc:.2f}{' (travada)' if ok else ''}")
+            if self.salvar_escala and self.mapa:
+                self.salvar_escala(self.mapa, esc_usada if acertou else esc, ok)
+        p["acertou"], p["escala"] = acertou, esc_usada
         pos = self.reg.frame(f, "pos_tiro") if (self.reg and f is not None) else None
         self.tiros_na_partida += 1
         v, conf, votos = p.get("vento", (None, 0.0, 0))
@@ -457,7 +528,8 @@ class AtiradorPvp(atirador_mod.Atirador):
                  "partida": self.partidas + 1, "mapa": self.mapa, "tiro": self.tiros_na_partida, "angulo": round(float(p["angulo"]), 1),
                  "forca": round(float(p["forca"]), 1), "vento": v, "vento_conf": round(conf, 2), "vento_votos": votos,
                  "itens": p.get("itens", []), "azul": p.get("azul"), "boss": p.get("boss"), "voo": p.get("voo", []), "pos_tiro": pos,
-                 "origem_previsao": None}
+                 "origem_previsao": None, "acertou": p.get("acertou"), "escala": p.get("escala"),
+                 "barra_inimigo": [p.get("hp_inimigo0"), hp1]}
         self.log(f"   [tentativa {self.partidas + 1}.{self.tiros_na_partida}] {linha['angulo']:.0f} graus, forca {linha['forca']:.0f}%, "
                  f"vento {'?' if v is None else f'{v:+.1f}'}, voce {p.get('azul')} inimigo {p.get('boss')} (resultado: ver os prints)")
         try:
@@ -527,7 +599,8 @@ class Laco:
         mid, novo, vistas = self.catalogo.identificar(f)
         self.at.mapa = mid
         if hasattr(getattr(self.at, "mem", None), "escala"):
-            self.at.mem.escala = self.catalogo.escala(mid)
+            self.at.mem.novo_mapa(self.catalogo.escala(mid), self.catalogo.escala_travada(mid))
+            self.at.salvar_escala = self.catalogo.definir_escala
         self.log(f"(mapa {mid}: {'NOVO, miniatura guardada em dados/pvp_mapas' if novo else f'ja visto {vistas}x'})")
         if self.reg:
             self.reg.evento("mapa", [self.reg.frame(f, "mapa")], mapa=mid, novo=novo, vistas=vistas)
