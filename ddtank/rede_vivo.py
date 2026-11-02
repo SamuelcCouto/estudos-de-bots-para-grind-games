@@ -39,7 +39,8 @@ PASTA = os.path.dirname(os.path.abspath(__file__))
 PASTA_LOGS = os.path.join(PASTA, "capturas_rede")
 CAMINHOS_JOGO = (r"D:\DDTBETEL\BetelTank.exe", r"C:\DDTBETEL\BetelTank.exe", r"C:\Program Files\DDTBETEL\BetelTank.exe",
                  r"C:\Program Files (x86)\DDTBETEL\BetelTank.exe")
-MIN_BYTES_CHAVE = {"servidor": 3000, "cliente": 500}   # o cliente manda pouco: com 500 bytes ja da para achar a chave dele
+MIN_BYTES_CHAVE = {"servidor": 3000, "cliente": 500}   # no meio do fluxo (captura): bytes antes de tentar achar a chave
+MIN_BYTES_CONEXAO = {"servidor": 3000, "cliente": 4000}    # desde a conexao: a chave sai do servidor (manda muito logo apos o login)
 _MIN_BYTES_ANTIGO = 3000          # bytes acumulados antes de tentar achar a chave (servidor: ~1-3 s de jogo)
 
 
@@ -86,12 +87,21 @@ class MontadorTCP:
 # ------------------------------------------------------------------------------------------------ decifrador incremental
 class Decifrador:
     """Recebe os bytes cifrados de um sentido conforme chegam; acha a chave quando ha dados suficientes e depois devolve os pacotes
-    decifrados [(codigo, clientId, extend1, extend2, corpo)]."""
-    def __init__(self, minimo=3000):
+    decifrados [(codigo, clientId, extend1, extend2, corpo)].
+
+    Desde a conexao (registro do Chromium): o cliente manda o LOGIN com a CHAVE PADRAO fixa do jogo (ByteSocket.KEY) e logo depois
+    os dois lados passam a usar a chave sorteada (setKey: a MESMA chave inicial nos dois sentidos). O servidor manda muito logo apos o
+    login, entao a chave sai do lado do servidor em ~2 s (comecando no byte 0) e e repassada ao cliente (dar_chave).
+    No meio do fluxo (captura .pcapng): procura o 1o pacote inteiro e a chave so pelo trafego (mais lento)."""
+    def __init__(self, minimo=3000, desde_conexao=False, chave_inicial=None):
         self.buf = bytearray()
-        self.K = None
-        self.tentativa = 0
         self.minimo = minimo
+        self.tentativa = 0
+        self.K = list(chave_inicial) if chave_inicial else None
+        self.usando_padrao = chave_inicial is not None
+        self.inicio_sessao = desde_conexao and chave_inicial is None   # o buffer comeca EXATAMENTE no inicio da sessao
+        self.max_inicio = 1 if self.inicio_sessao else 4096
+        self.chave_sessao = None                           # estado da chave no INICIO da sessao (para o outro lado)
 
     def alimentar(self, dados):
         self.buf += dados
@@ -100,20 +110,28 @@ class Decifrador:
                 return []
             self.tentativa = len(self.buf)
             try:
-                ini, K, _cad = R.recuperar_chave(bytes(self.buf))
+                ini, K, _cad = R.recuperar_chave(bytes(self.buf), max_inicio=self.max_inicio)
             except (ValueError, IndexError):
-                if len(self.buf) > 200_000:
-                    del self.buf[:100_000]                      # nao achou: descarta o comeco e tenta de novo depois
+                if self.max_inicio < 4096 and len(self.buf) > 200_000:
+                    self.max_inicio, self.inicio_sessao = 4096, False   # nao era inicio de pacote: procura mais longe (lento)
+                if len(self.buf) > 600_000:
+                    del self.buf[:300_000]                      # nao achou: descarta o comeco e tenta de novo depois
                     self.tentativa = 0
                 return []
             del self.buf[:ini]
             self.K = K
+            if self.inicio_sessao and ini == 0:
+                self.chave_sessao = list(K)
+            self.inicio_sessao = False
         saida = []
         while len(self.buf) >= R.CAB:
             Kc = list(self.K)
             m, L = struct.unpack(">HH", R.decifrar(self.buf, Kc, 0, 4))
-            if m != R.MAGIC or L < R.CAB:                       # perdeu a sincronia (pacote perdido): recomeca a busca da chave
-                self.K, self.tentativa = None, 0
+            if m != R.MAGIC or L < R.CAB:
+                # fim do LOGIN (chave padrao -> chave da sessao) ou pacote perdido: o buffer comeca num inicio de pacote
+                self.inicio_sessao = self.usando_padrao
+                self.usando_padrao = False
+                self.K, self.tentativa, self.max_inicio = None, 0, 1 if self.inicio_sessao else 64
                 break
             if L > len(self.buf):
                 break
@@ -123,6 +141,13 @@ class Decifrador:
                 _m, _l, _ck, cod, cid, e1, e2 = struct.unpack(">HHHhiii", p[:R.CAB])
                 saida.append((cod, cid, e1, e2, p[R.CAB:]))
         return saida
+
+    def dar_chave(self, K):
+        """Recebe a chave inicial da sessao achada no OUTRO sentido (vale aqui se o buffer ainda esta no inicio da sessao)."""
+        if self.K is None and self.inicio_sessao:
+            self.K, self.chave_sessao, self.inicio_sessao = list(K), list(K), False
+            return self.alimentar(b"")
+        return []
 
 
 # ------------------------------------------------------------------------------------------------ estado da partida
@@ -141,6 +166,7 @@ class Estado:
         self.pacotes = {"servidor": 0, "cliente": 0}
         self.chave_ok = {"servidor": False, "cliente": False}
         self.eventos = 0
+        self.t_rede = None          # quando chegou o ultimo pedaco lido (relogio do registro de rede)
 
     def copia(self):
         with self.lock:
@@ -332,6 +358,7 @@ def fonte_netlog(caminho, parar, porta=R.PORTA_JOGO, seguir=True):
             if i < 0:
                 continue
             const = json.loads(texto[:texto.rfind(",", 0, i)] + "}")["constants"]
+            offset_ms = float(const.get("timeTickOffset") or 0)        # "time" do evento + isto = relogio de parede (ms)
             ev = const.get("logEventTypes", {})
             tipos = {ev.get("SOCKET_BYTES_RECEIVED"): "servidor", ev.get("SOCKET_BYTES_SENT"): "cliente"}
             continue
@@ -345,10 +372,14 @@ def fonte_netlog(caminho, parar, porta=R.PORTA_JOGO, seguir=True):
         params, fonte = e.get("params") or {}, (e.get("source") or {}).get("id")
         lado = tipos.get(e.get("type"))
         if lado and fonte == atual:
+            try:
+                t_evento = (float(e.get("time", 0)) + offset_ms) / 1000.0      # quando o pacote CHEGOU (para medir o atraso)
+            except (TypeError, ValueError):
+                t_evento = None
             if params.get("bytes"):                             # Chromium 76: base64 no campo "bytes"
-                yield lado, None, base64.b64decode(params["bytes"])
+                yield lado, None, base64.b64decode(params["bytes"]), t_evento
             elif params.get("hex_encoded_bytes"):               # versoes mais novas: hexadecimal
-                yield lado, None, bytes.fromhex(params["hex_encoded_bytes"])
+                yield lado, None, bytes.fromhex(params["hex_encoded_bytes"]), t_evento
         elif fonte != atual and params:
             for k in ("address", "address_list", "remote_address", "host_and_port"):
                 v = params.get(k)
@@ -430,10 +461,14 @@ class LeitorAoVivo:
         self.dec = {lado: Decifrador(MIN_BYTES_CHAVE[lado]) for lado in ("servidor", "cliente")}
 
     def consumir(self, gerador):
-        for lado, seq, pl in gerador:
+        for item in gerador:
+            lado, seq, pl = item[:3]
+            if len(item) > 3 and item[3]:
+                self.estado.t_rede = item[3]                    # instante em que o pacote chegou no PC
             if lado == "reset":                                 # conexao nova (login de novo): chave e fluxo novos
                 self.tcp = {"servidor": MontadorTCP(), "cliente": MontadorTCP()}
-                self.dec = {lado: Decifrador(MIN_BYTES_CHAVE[lado]) for lado in ("servidor", "cliente")}
+                self.dec = {"servidor": Decifrador(MIN_BYTES_CONEXAO["servidor"], desde_conexao=True),
+                            "cliente": Decifrador(MIN_BYTES_CONEXAO["cliente"], desde_conexao=True, chave_inicial=R.KEY_PADRAO)}
                 self.estado.chave_ok = {"servidor": False, "cliente": False}
                 continue
             self.segmentos += 1
@@ -443,6 +478,12 @@ class LeitorAoVivo:
             for pac in self.dec[lado].alimentar(dados):
                 self.estado.chave_ok[lado] = True
                 self.estado.processar(lado, pac, self.ao_mudar)
+            for de, para in (("servidor", "cliente"), ("cliente", "servidor")):   # mesma chave inicial nos dois sentidos
+                a, b = self.dec[de], self.dec[para]
+                if a.chave_sessao and b.K is None and b.inicio_sessao:
+                    for pac in b.dar_chave(a.chave_sessao):
+                        self.estado.chave_ok[para] = True
+                        self.estado.processar(para, pac, self.ao_mudar)
 
     def _rodar(self):
         try:
@@ -462,10 +503,14 @@ class LeitorAoVivo:
 
 def _imprimir(evento, est):
     tipo, d = evento
+    agora = time.time()
+    atraso = agora - est.t_rede if est.t_rede and 0 <= agora - est.t_rede < 120 else None
+    print(time.strftime("%H:%M:%S", time.localtime(est.t_rede or agora)), end=" ")
     if tipo == "vez":
         quem = "EU" if d["quem"] == est.eu else str(d["quem"])
         pos = "  ".join(f"{v['id']}:({v['x']},{v['y']}){'' if v['vivo'] else ' morto'}" for v in d["vivos"])
-        print(f"[vez {d['turno']}] joga: {quem}  vento {d['vento']:+.1f}  | {pos}")
+        print(f"[vez {d['turno']}] joga: {quem}  vento {d['vento']:+.1f}  | {pos}"
+              f"{f'   (o bot soube {atraso:.1f}s depois do servidor)' if atraso is not None else ''}")
     elif tipo == "tiro":
         for b in d["bombas"]:
             bomba = next((a for a in b["acoes"] if a["tipo"] == "BOMB"), None)

@@ -15,6 +15,18 @@ import struct
 from collections import Counter
 
 PORTA_JOGO = 25565
+# Codigos validos de pacote (ddt.data.socket.ePackageType do cliente): filtro forte para achar a chave (K6/K7) sem forca bruta
+CODIGOS_PACOTE = frozenset((0, 1, 2, 3, 4, 5, 6, 7, 8, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 24, 25, 26, 27, 28, 29, 30, 31, 32,
+    33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66,
+    67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80, 81, 82, 83, 84, 85, 86, 87, 89, 90, 91, 92, 93, 94, 95, 96, 97, 98, 99, 100,
+    101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127,
+    128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 142, 143, 144, 145, 146, 147, 148, 149, 150, 151, 152, 153, 154, 155,
+    156, 157, 158, 159, 160, 161, 162, 163, 164, 165, 166, 167, 168, 169, 170, 171, 172, 173, 174, 175, 176, 177, 178, 179, 180, 181, 182,
+    183, 184, 185, 186, 187, 188, 189, 190, 191, 192, 193, 194, 195, 196, 197, 198, 199, 200, 201, 202, 203, 205, 206, 207, 208, 209, 210,
+    211, 212, 213, 214, 215, 216, 217, 218, 219, 220, 221, 222, 223, 224, 225, 226, 227, 228, 229, 230, 231, 232, 233, 234, 235, 236, 237,
+    238, 239, 240, 241, 242, 243, 244, 245, 246, 247, 248, 249, 250, 251, 252, 253, 254, 255, 257, 258, 259, 265, 272, 275, 278, 279, 286,
+    288, 290, 297, 327, 328, 345, 352, 360, 373, 402, 403, 404, 405, 456, 478, 493, 765))
+KEY_PADRAO = [174, 191, 86, 120, 171, 205, 239, 241]   # ByteSocket.KEY: chave fixa usada ate o login (depois, a sorteada)
 MAGIC = 0x71AB
 CAB = 20
 
@@ -222,33 +234,35 @@ def _somas_byte(c, cadeia, j, n_pac):
 
 
 def _k4567_pelo_checksum(c, cadeia, k03, n_pac=40):
-    """K4..K7 exatos pelo checksum ((119 + soma(bytes 6..fim)) & 0x7F7F == bytes 4-5). A soma separa por byte da chave, entao:
-    K6 = byte alto do codigo (quase sempre 0), depois K4 x K5 x K7 (16 milhoes) testados de uma vez com numpy."""
+    """K4..K7 exatos. 1) K6/K7: o codigo do pacote (bytes 6-7) tem que ser um codigo VALIDO do jogo (CODIGOS_PACOTE) em quase todos os
+    pacotes -> sobram 1-2 pares. 2) K4/K5 pelo checksum ((119 + soma(bytes 6..fim)) & 0x7F7F == bytes 4-5), que separa por byte da
+    chave: 65 mil pares testados de uma vez com numpy. (Antes: 16 milhoes x ate 118 candidatos = 1,5 min.)"""
     import numpy as np
     n_pac = min(n_pac, len(cadeia))
     s4, b4 = _somas_byte(c, cadeia, 4, n_pac)
     s5, b5 = _somas_byte(c, cadeia, 5, n_pac)
     s6, b6 = _somas_byte(c, cadeia, 6, n_pac)
-    s7, _b7 = _somas_byte(c, cadeia, 7, n_pac)
-    # parte conhecida: bytes com i%8 em 0..3 e i>=6
+    s7, b7 = _somas_byte(c, cadeia, 7, n_pac)
     base = np.zeros(n_pac, np.int64)
     K = list(k03) + [0, 0, 0, 0]
     for n, (ini, L) in enumerate(cadeia[:n_pac]):
         p = decifrar(c, K, ini, L)
         base[n] = 119 + sum(p[i] for i in range(6, L) if (i & 7) < 4)
-    k6s = [k for k in range(256) if (b6[k] == 0).mean() > 0.9] or list(range(256))
-    for k6 in k6s:
-        resto = base + s6[k6]                                            # [n]
-        alvo = (b4[:, None, :] << 8) | b5[None, :, :]                    # [k4, k5, n]
-        ok = np.ones((256, 256, 256), bool)
-        for n in range(min(n_pac, 6)):
-            x = resto[n] + s4[:, None, None, n] + s5[None, :, None, n] + s7[None, None, :, n]
-            ok &= (x & 0x7F7F) == alvo[:, :, None, n]
+    validos = np.zeros(65536, bool)
+    validos[list(CODIGOS_PACOTE)] = True
+    codigos = (b6[:, None, :] << 8) | b7[None, :, :]                   # [k6, k7, pacote]
+    frac = validos[codigos].mean(axis=2)
+    pares = sorted(((float(frac[a, b]), int(a), int(b)) for a, b in np.argwhere(frac >= 0.9)), reverse=True)
+    if not pares:                                                       # protocolo diferente: codigos desconhecidos
+        pares = [(0.0, int(a), int(b)) for a in range(256) for b in range(256)]
+    alvo = (b4[:, None, :] << 8) | b5[None, :, :]                        # [k4, k5, pacote]
+    for _f, k6, k7 in pares:
+        x = (base + s6[k6] + s7[k7])[None, None, :] + s4[:, None, :] + s5[None, :, :]
+        ok = (((x & 0x7F7F) == alvo).mean(axis=2)) > 0.99
         cand = np.argwhere(ok)
-        for k4, k5, k7 in cand:
-            x = resto + s4[k4] + s5[k5] + s7[k7]
-            if (((x & 0x7F7F) == ((b4[k4] << 8) | b5[k5])).mean()) > 0.99:
-                return [int(k4), int(k5), int(k6), int(k7)]
+        if len(cand):
+            k4, k5 = cand[0]
+            return [int(k4), int(k5), k6, k7]
     raise ValueError("checksum nao fechou para nenhum K4..K7")
 
 
