@@ -879,3 +879,14 @@ assert sim.setas >= 1 and any("lista na pagina 1" in l for l in logs), "rola a l
 assert nav.voltas >= 1 and not any("SEM passar pelas cartas" in l for l in logs), [l for l in logs if "SEM passar" in l]
 assert any("[FASE]" in l for l in logs) is False or True
 print("Rota Leste: Ultima Luta (2 fases) + Devoradores navegados OK")
+
+# ---- missao "Matar 15 Fantasmas" (rota so do Fantasma): o popup de recompensa escolhe o Bilhete Bigodao (o unico icone roxo)
+_pasta_frames = os.path.join(os.path.dirname(os.path.abspath(__file__)), "frames")
+_fb = cv2.imread(os.path.join(_pasta_frames, "TAREFA_FANTASMA_BIGODAO.png"))
+_pb = N.popup_escolha_recompensa(_fb)
+assert _pb is not None, "o popup 'Escolha uma recompensa' do print do usuario e reconhecido"
+_ponto = N.posicao_bilhete_bigodao(_fb, _pb)
+assert _ponto is not None and abs(_ponto[0] - 544) <= 6 and abs(_ponto[1] - 312) <= 6, _ponto
+_fl = cv2.imread(os.path.join(_pasta_frames, "TAREFA_LESTE_ESCOLHA.png"))
+assert N.posicao_bilhete_bigodao(_fl, N.popup_escolha_recompensa(_fl)) is None, "popup do Leste (materiais) nao tem o bilhete: nao escolhe nada"
+print("Fantasma: Bilhete Bigodao achado pela cor roxa no popup (e ausente no popup do Leste) OK")

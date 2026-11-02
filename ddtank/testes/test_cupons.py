@@ -23,7 +23,7 @@ norte = cv2.imread(os.path.join(N.config.PASTA, "testes", "frames", "TAREFA_SUPE
 assert not N.tarefa_exige_escolha(norte) and N.painel_tarefa_visivel(norte)
 leste_popup = cv2.imread(os.path.join(N.config.PASTA, "testes", "frames", "TAREFA_LESTE_ESCOLHA.png"))
 popup = N.popup_escolha_recompensa(leste_popup)
-assert popup == {"opcao": (588, 321), "confirmar": (642, 404), "fechar": (745, 275)}
+assert {k: v for k, v in popup.items() if k != "ancora"} == {"opcao": (588, 321), "confirmar": (642, 404), "fechar": (745, 275)}
 assert N.tarefa_leste_selecionada(leste_popup)
 assert N.popup_escolha_recompensa(norte) is None and not N.tarefa_leste_selecionada(norte)
 

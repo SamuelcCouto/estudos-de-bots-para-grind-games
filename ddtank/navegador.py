@@ -550,7 +550,25 @@ def popup_escolha_recompensa(f):
     if nota < 0.82:
         return None
     x, y = x + 450, y + 220
-    return {"opcao": (x + 63, y + 54), "confirmar": (x + 117, y + 137), "fechar": (x + 220, y + 8)}
+    return {"opcao": (x + 63, y + 54), "confirmar": (x + 117, y + 137), "fechar": (x + 220, y + 8), "ancora": (x, y)}
+
+BILHETE_MIN_PX = 40      # px roxos do icone (medido: ~96 no quadro canonico; as outras 3 opcoes dao 0)
+
+def posicao_bilhete_bigodao(f, popup):
+    """Centro do icone do Bilhete Bigodao no popup 'Escolha uma recompensa' (o unico icone ROXO: Moeda das Orbes e dourada, Cristal da Luta
+    verde, Pedra de potencial vermelha), ou None. Vale a cor, nao a posicao: a ordem das opcoes pode mudar."""
+    if f is None or popup is None:
+        return None
+    x, y = popup["ancora"]
+    reg = f[y + 20:y + 140, x - 4:x + 241]
+    if reg.size == 0:
+        return None
+    h = cv2.cvtColor(reg, cv2.COLOR_BGR2HSV)
+    m = (h[..., 0] >= 115) & (h[..., 0] <= 150) & (h[..., 1] > 90) & (h[..., 2] > 70)
+    if int(m.sum()) < BILHETE_MIN_PX:
+        return None
+    ys, xs = np.nonzero(m)
+    return int(xs.mean()) + x - 4, int(ys.mean()) + y + 20
 
 def tarefa_leste_selecionada(f):
     """Confirma que a tarefa aberta e Super Rota Leste antes de escolher um item."""
@@ -1402,6 +1420,8 @@ class Navegador:
 
     def escolher_material_leste(self, f, popup):
         """Escolhe o primeiro material irrelevante e confirma somente na missao Super Rota Leste."""
+        if self.rota == ["FANTASMA"]:
+            return self.escolher_bilhete_bigodao(f, popup)
         leste_esperada = self.cupom_pendente == "L" or self.rota == ROTAS["L"][1]
         if not leste_esperada or not tarefa_leste_selecionada(f):
             self.log("   [TAREFA] escolha de outra missao: deixo para voce")
@@ -1421,6 +1441,36 @@ class Navegador:
                 g, _ = self.ver()
                 if g is not None and popup_escolha_recompensa(g) is None:
                     return True
+            self.log(f"   [TAREFA] confirmacao da escolha ainda aberta (tentativa {tentativa + 1}/2)")
+        return False
+
+    def escolher_bilhete_bigodao(self, f, popup):
+        """Rota so do Fantasma (missao 'Matar 15 Fantasmas'): escolhe sempre o Bilhete Bigodao e confirma. Se ele nao estiver entre
+        as opcoes, fecha o popup e deixa para o usuario."""
+        for tentativa in range(2):
+            ponto = posicao_bilhete_bigodao(f, popup)
+            if ponto is None:
+                self.log("   [TAREFA] Bilhete Bigodao nao esta entre as opcoes: deixo para voce")
+                self.clicar(popup["fechar"])
+                self.dormir(0.4)
+                return False
+            self.log(f"   [TAREFA] Fantasma: escolhendo o Bilhete Bigodao {ponto} e confirmando")
+            self.clicar(ponto)
+            self.dormir(0.35)
+            g, _ = self.ver()
+            popup = popup_escolha_recompensa(g) if g is not None else None
+            if popup is None:
+                return False
+            self.clicar(popup["confirmar"])
+            for _ in range(5):
+                self.dormir(0.4)
+                g, _ = self.ver()
+                if g is not None and popup_escolha_recompensa(g) is None:
+                    return True
+            f, _ = self.ver()
+            popup = popup_escolha_recompensa(f) if f is not None else None
+            if popup is None:
+                return False
             self.log(f"   [TAREFA] confirmacao da escolha ainda aberta (tentativa {tentativa + 1}/2)")
         return False
 
@@ -1453,7 +1503,7 @@ class Navegador:
                 self.log(f"   (o painel de tarefas sumiu: tela {achadas[0]})")
                 break
             leste_esperada = self.cupom_pendente == "L" or self.rota == ROTAS["L"][1]
-            if tarefa_exige_escolha(f) and not (leste_esperada and tarefa_leste_selecionada(f)) and not ignorar_botao:
+            if tarefa_exige_escolha(f) and not (leste_esperada and tarefa_leste_selecionada(f)) and self.rota != ["FANTASMA"] and not ignorar_botao:
                 ignorar_botao = True
                 self.log("   [TAREFA] recompensa com escolha manual; ignorando esta tarefa")
             acao, ponto = proxima_acao_tarefa(f, vezes, ignorar_botao)
