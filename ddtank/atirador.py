@@ -37,6 +37,7 @@ MENOR_TOQUE_ANGULO = 2.0      # graus: o menor toque da seta mexe ~1,4; passar d
 TAXA_ANGULO_INICIAL = 28.0    # graus/s com a seta apertada (aprende sozinho)
 FORCA_POR_SEGUNDO = 38.0      # % da barra por segundo segurando espaco (medido nas gravacoes; o bot aprende o valor real)
 ANTECIPACAO_INICIAL = 4.0     # % de folga: solta um pouco antes (atraso da captura + do KEYUP)
+ANTECIPACAO_MAX = 40.0         # % de folga maxima: na fase 2 da Ultima Luta (02/11) a barra passava 16-25% do alvo (teto antigo: 12) e o bot errava todos os tiros
 FOCO_CLICK_BATALHA = (560, 230)   # clique na cena de batalha (nunca no chat/log)
 MAX_SEGURANDO = 7.0           # s: trava de seguranca (a carga pode andar na METADE da velocidade; ver NOTAS.md)
 MARGEM_TEMPO_MINIMO = 0.35    # s: tolerancia da trava de tempo minimo
@@ -891,7 +892,7 @@ class Atirador:
             self.taxa_medida_antes = True
         if final > 0:
             if motivo == "alvo":
-                self.antecipacao = float(np.clip(self.antecipacao + 0.5 * (final - alvo), 0.0, 12.0))   # corrige o atraso
+                self.antecipacao = float(np.clip(self.antecipacao + 0.7 * (final - alvo), 0.0, ANTECIPACAO_MAX))   # corrige o atraso
             elif motivo == "tempo_alvo" and segurou > 0.3 and not taxa_medida:
                 self.taxa_forca = float(np.clip(0.7 * self.taxa_forca + 0.3 * (final / segurou), 8.0, 80.0))
         return (final if final > 0 else v), motivo, trace, segurou
