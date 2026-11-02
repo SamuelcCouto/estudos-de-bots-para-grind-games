@@ -145,7 +145,7 @@ Isto vale **igual para PVP e instancias** (bosses usam a mesma fisica; muda so o
 | 1 | **Replay**: aplicar o motor nas gravacoes que ja temos (rota Leste do bot, PVP do usuario) | a forca prevista bate com a dos acertos (+-2 pontos) |
 | 2 | Percepcao pela tela v2: id do mapa, escala do minimapa pela largura real, posicoes, vento, inclinacao pelo `fore.png` | erro de posicao < 15 px do mapa em 50 quadros rotulados |
 | 3 | Rede AO VIVO: leitor em tempo real (pydivert/Npcap, admin) alimentando o bot com o estado da vez | estado lido < 1 s apos o pacote TURN |
-| 4 | Planejador + acao por quadros, ligado ao PVP e a rota Leste (substitui memoria/tabelas/busca) | >= 95% de acerto no 1o tiro em 50 tiros seguidos |
+| 4 (PVP ligado, falta o teste ao vivo) | `mira_exata.py` + `pvp.py`: a vez da rede vira o plano (mira mais tolerante + forca exata); depois do tiro, saida/inclinacao exatas e o resultado do servidor. Abrir o jogo pelo `ABRIR_JOGO.bat` | >= 95% de acerto no 1o tiro em 50 tiros seguidos |
 | 5 | Instancias com bosses (Pericao, Mago...) usando as regras dos scripts do servidor; vitalidade (Leste/PVP) | rodadas sem derrota |
 
 **Sobre os "100%".** Com estado exato (rede) e a fisica do jogo, o tiro vira conta. O que ainda pode impedir um acerto:

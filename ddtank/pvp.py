@@ -30,6 +30,8 @@ import leitura as L
 import memoria as memoria_mod
 import registro as registro_mod
 import vento as vento_mod
+import mira_exata
+import rede_vivo
 from navegador import (ARQUIVO_PARAR, FOCO_PONTO_NEUTRO, FOCO_PONTO_PADRAO, SALA_INICIO, VK_F10, IOJanela, em_1280,
                        evitar_suspensao, instancia_unica)
 
@@ -218,7 +220,12 @@ class MemoriaPvp(memoria_mod.Memoria):
         d_efetiva = (dx / (PX_POR_UNID_TELA if self.tela_pos else self.escala)) * (f_alvo / f_chao)
         return ang, float(np.clip(forca_tabela(d_efetiva, ang), memoria_mod.FORCA_MIN, memoria_mod.FORCA_MAX)), 0.5
 
+    plano_rede = None                      # plano EXATO deste turno (rede + fisica; mira_exata.py). None = metodo antigo
+    forca_rede = None                      # funcao(mira) -> forca % para a mira que o mostrador realmente parou
+
     def forca_para(self, inst, azul, boss, angulo):
+        if self.plano_rede and self.forca_rede:
+            return self.forca_rede(angulo)
         if self.tela_pos:
             azul, boss = self.tela_pos
         if not (azul and boss) or abs(boss[0] - azul[0]) < memoria_mod.DX_MINIMO:
@@ -227,6 +234,12 @@ class MemoriaPvp(memoria_mod.Memoria):
         return None if mt is None else mt[1]
 
     def prever(self, inst, azul, boss):
+        if self.plano_rede:
+            pl = self.plano_rede
+            return {"angulo": float(pl["mira"]), "forca": float(pl["forca_pct"]), "origem": "rede+fisica exata",
+                    "detalhe": f"angulo enviado {pl['angulo_envio']:.0f}, vento {pl['vento']:+.1f}, cai em x={pl['queda_x']:.0f} "
+                               f"(alvo {pl['alvo'][0]:.0f}), folga {pl['folga_px']:.0f} px/1%-1grau"
+                               f"{'' if pl['medido'] else ', saida/inclinacao ainda estimadas'}"}
         if self.tela_pos:
             azul, boss = self.tela_pos
         if azul and boss and abs(boss[0] - azul[0]) >= memoria_mod.DX_MINIMO:
@@ -295,7 +308,7 @@ class LeitorPvp(atirador_mod.LeitorReal):
 def largura_caixa_minimapa(f):
     """Largura (px) do retangulo azul do minimapa (a tela inteira = 10,17 unidades), ou None se nao achou. Mede a ESCALA do mapa sem tiro
     nenhum: o padrao de 4 px/unid estava errado por mais de 2x nos mapas largos (92 px -> 9,0 px/unid; 01/11)."""
-    if f is None or f.ndim != 3 or f.shape[0] < CAIXA_MINI[3]:
+    if not isinstance(f, np.ndarray) or f.ndim != 3 or f.shape[0] < CAIXA_MINI[3]:
         return None
     x0, y0, x1, y1 = CAIXA_MINI
     h = cv2.cvtColor(f[y0:y1, x0:x1], cv2.COLOR_BGR2HSV)
@@ -363,6 +376,8 @@ def barras_na_tela(f):
 
 def posicoes_na_tela(f):
     """((x, y) do nosso boneco, (x, y) do inimigo) na tela principal, ou None se nao houver exatamente uma barra azul e uma vermelha."""
+    if not isinstance(f, np.ndarray) or f.ndim != 3:
+        return None
     b = barras_na_tela(f)
     if len(b["azul"]) != 1 or len(b["verm"]) != 1:
         return None
@@ -437,10 +452,13 @@ def votar_vento(leituras):
 
 
 class AtiradorPvp(atirador_mod.Atirador):
-    def __init__(self, *a, arq_tentativas=ARQ_TENTATIVAS, pasta_vento=PASTA_VENTO_DUVIDOSO, **kw):
+    def __init__(self, *a, arq_tentativas=ARQ_TENTATIVAS, pasta_vento=PASTA_VENTO_DUVIDOSO, rede=None, **kw):
         kw.setdefault("leitor", LeitorPvp(agora=kw.get("agora")))
         kw.setdefault("ordem_itens", list(ORDENS_PVP[0]))
         super().__init__(*a, **kw)
+        self.rede = rede                   # rede_vivo.LeitorAoVivo (estado exato da partida) ou None (so tela)
+        self.mira = mira_exata.MiraExata(log=self.log)
+        self.turno_rede = None             # (eu_id, eu, alvo_id, alvo, plano) deste turno
         self.arq_tentativas = arq_tentativas
         self.pasta_vento = pasta_vento
         self.vento_turno = (None, 0.0, 0)
@@ -509,10 +527,81 @@ class AtiradorPvp(atirador_mod.Atirador):
             self.limite_recente = True
         return r
 
+    def posicoes(self, f):
+        if self.turno_rede:                                  # px do MAPA, exatos (rede): so para virar e prever
+            _eu_id, eu, _alvo_id, alvo, _pl = self.turno_rede
+            return eu, alvo, 1.0
+        return super().posicoes(f)
+
+    def _plano_pela_rede(self):
+        """Na NOSSA vez: posicoes, vento e alvo pela rede -> plano exato. None se a rede nao tiver o estado desta vez."""
+        if not self.rede:
+            return None
+        self._t_plano = time.time()
+        est = self.rede.estado.copia()
+        for _ in range(15):                                  # o pacote da vez chega ~0,2 s depois (registro do Chromium)
+            if est["chave_ok"]["servidor"] and est["vivos"] and est["vez"] is not None and time.time() - est["vez_t"] < 30:
+                break
+            self.dormir(0.15)
+            est = self.rede.estado.copia()
+        else:
+            self.log("   [rede] sem o estado da vez (registro do jogo atrasado ou sem chave): mira pela tela")
+            return None
+        eu_id = est["eu"] if est["eu"] is not None else est["vez"]   # e a nossa vez (a tela mostrou): quem joga agora somos nos
+        if est["eu"] is not None and est["vez"] != est["eu"]:
+            self.log(f"   [rede] a rede diz que a vez e do boneco {est['vez']} (nos somos {est['eu']}): mira pela tela")
+            return None
+        eu = est["vivos"].get(eu_id)
+        inimigos = [v for k, v in est["vivos"].items() if k != eu_id and v["vivo"]]
+        if not eu or not inimigos:
+            return None
+        if len(est["vivos"]) > 2:
+            self.log("   [rede] mais de 2 bonecos: escolho o mais perto (times ainda nao identificados)")
+        alvo = min(inimigos, key=lambda v: abs(v["x"] - eu["x"]))
+        plano = self.mira.planejar((eu["x"], eu["y"]), (alvo["x"], alvo["y"]), est["vento"])
+        if not plano:
+            self.log(f"   [rede] nenhuma mira {mira_exata.MIRA_MIN}-{mira_exata.MIRA_MAX} alcanca o alvo: mira pela tela")
+            return None
+        self.turno_rede = (eu_id, (eu["x"], eu["y"]), alvo["id"], (alvo["x"], alvo["y"]), plano)
+        self.mem.forca_rede = lambda mira: self.mira.forca_para((eu["x"], eu["y"]), (alvo["x"], alvo["y"]), est["vento"], mira,
+                                                                plano["direcao"])
+        self.log(f"   [rede] voce (boneco {eu_id}) em ({eu['x']}, {eu['y']}), alvo {alvo['id']} em ({alvo['x']}, {alvo['y']}), "
+                 f"vento {est['vento']:+.1f} -> mira {plano['mira']} graus, forca {plano['forca_pct']:.0f}% "
+                 f"(saida {'medida' if plano['medido'] else 'estimada'}, inclinacao {plano['inclinacao']:+.0f})")
+        return plano
+
+    def _resultado_pela_rede(self, p):
+        """Depois do NOSSO tiro: ponto de saida/inclinacao exatos (pacote do cliente) e o resultado do servidor."""
+        r = p.get("rede")
+        if not r or not self.rede:
+            return None
+        res = None
+        for _ in range(20):
+            est = self.rede.estado.copia()
+            meus = [t for ts, t in est["meus_tiros"] if ts >= r["t"] - 1.0]
+            dos = [t for ts, t in est["tiros"] if ts >= r["t"] - 1.0 and t["atirador"] == r["eu_id"]]
+            if meus and dos:
+                break
+            self.dormir(0.15)
+        if meus:
+            m = self.mira.aprender(r["eu"], r["plano"]["direcao"], p["angulo"], meus[0])
+            if m:
+                self.log(f"   [rede] tiro enviado: saida ({meus[0]['x']}, {meus[0]['y']}), forca {meus[0]['forca'] / 20:.0f}%, "
+                         f"angulo {meus[0]['angulo']} -> inclinacao do boneco {m['inclinacao']:+.0f} graus (vale para os proximos tiros daqui)")
+        if dos:
+            res = mira_exata.resultado_do_tiro(dos[0], r["alvo_id"])
+            ex = res["explodiu"]
+            self.log(f"   [rede] RESULTADO: {'ACERTOU' if res['acertou'] else 'errou'} (dano {res['dano']})"
+                     f"{f', explodiu em ({ex[0]}, {ex[1]})' if ex else ''}; alvo em ({r['alvo'][0]}, {r['alvo'][1]}), "
+                     f"previsto x={r['plano']['queda_x']:.0f}{' (teleguiado)' if res['teleguiado'] else ''}")
+        return res
+
     def plano_aviao(self, inst, azul, vida):
         """Destino (x, y) do voo com F, ou None. Usa o aviao quando o chao cedeu (boneco desceu no minimapa), quando o angulo bate
         no limite da arma (terreno inclinado/buraco) ou quando o inimigo esta longe (aproxima). Consome o turno."""
         limite, self.limite_recente = self.limite_recente, False
+        if self.turno_rede:
+            return None                                      # mira exata pela rede (o aviao usa medidas do minimapa)
         if self.sombra or not azul or self.aviao_indisponivel or self.avioes_na_luta >= MAX_AVIOES_PARTIDA:
             return None
         if self.y_ref is None:
@@ -597,12 +686,18 @@ class AtiradorPvp(atirador_mod.Atirador):
         self.ordem = list(ORDENS_PVP[self.tiros_na_partida % len(ORDENS_PVP)])
         self.combo_luta = None                       # o atirador reescolhe a ordem (sem combos): a deste turno
         self.itens_ultimo = []
+        self.turno_rede, self.mem.plano_rede, self.mem.forca_rede = None, None, None
+        self.mem.plano_rede = self._plano_pela_rede()
         try:
             super().turno(f)
         finally:
             if self.pendente is not None and self.turnos > antes:
                 self.pendente["tela"] = bool(self.mem.tela_pos)
+                if self.turno_rede:
+                    eu_id, eu, alvo_id, alvo, plano = self.turno_rede
+                    self.pendente["rede"] = dict(t=self._t_plano, eu_id=eu_id, eu=eu, alvo_id=alvo_id, alvo=alvo, plano=plano)
             self.mem.tela_pos = None
+            self.turno_rede, self.mem.plano_rede = None, None
         if self.pendente is not None and self.turnos > antes:
             self.pendente["hp_inimigo0"] = self.hp_inimigo0
             self.pendente["vento"] = self.vento_turno
@@ -654,6 +749,10 @@ class AtiradorPvp(atirador_mod.Atirador):
             return
         hp0, hp1 = p.get("hp_inimigo0"), self._ler_barra_inimigo(f)
         acertou = None if hp0 is None or hp1 is None else (hp0 - hp1) >= QUEDA_BARRA_PX
+        res_rede = self._resultado_pela_rede(p)
+        if res_rede is not None:
+            p["rede_resultado"] = res_rede
+            acertou = res_rede["acertou"]                    # a rede sabe com certeza (dano no alvo)
         esc_usada = getattr(self.mem, "escala", None)
         if acertou is not None and hasattr(self.mem, "resultado") and p.get("tela"):
             self.log(f"   [resultado] barra do inimigo {hp0:.0f} -> {hp1:.0f} px: {'ACERTOU' if acertou else 'ERROU'} (tiro medido na tela principal)")
@@ -676,7 +775,7 @@ class AtiradorPvp(atirador_mod.Atirador):
                  "forca": round(float(p["forca"]), 1), "vento": v, "vento_conf": round(conf, 2), "vento_votos": votos,
                  "itens": p.get("itens", []), "azul": p.get("azul"), "boss": p.get("boss"), "voo": p.get("voo", []), "pos_tiro": pos,
                  "origem_previsao": None, "acertou": p.get("acertou"), "escala": p.get("escala"),
-                 "barra_inimigo": [p.get("hp_inimigo0"), hp1]}
+                 "barra_inimigo": [p.get("hp_inimigo0"), hp1], "rede": p.get("rede"), "rede_resultado": p.get("rede_resultado")}
         self.log(f"   [tentativa {self.partidas + 1}.{self.tiros_na_partida}] {linha['angulo']:.0f} graus, forca {linha['forca']:.0f}%, "
                  f"vento {'?' if v is None else f'{v:+.1f}'}, voce {p.get('azul')} inimigo {p.get('boss')} (resultado: ver os prints)")
         try:
@@ -700,6 +799,7 @@ class AtiradorPvp(atirador_mod.Atirador):
                             tiros=self.tiros_na_partida, duracao_s=None if dur is None else round(dur, 1))
         self.tiros_na_partida, self.inicio_partida = 0, None
         self.y_ref, self.limite_recente, self.ultimo_aviao_tiro = None, False, -99
+        self.mira.reiniciar()
         self.fim_da_batalha(venceu=False)             # zera rastreador/estado (venceu=False: nao registra acerto)
 
 
@@ -901,6 +1001,7 @@ def main():
     ap.add_argument("--sombra", action="store_true", help="so mostra o tiro que faria (nao aperta teclas) e grava os prints")
     ap.add_argument("--foco", type=int, choices=(0, 1, 2), default=1)
     ap.add_argument("--sem-calibrar", action="store_true")
+    ap.add_argument("--sem-rede", action="store_true", help="nao le a rede do jogo (mira so pela tela, como antes)")
     args = ap.parse_args()
     if not instancia_unica():
         sys.exit("ERRO: ja existe um bot (navegador/atirador) rodando. Feche os outros antes.")
@@ -925,7 +1026,16 @@ def main():
     io.log = log
     reg = RegistroPvp("pvp")
     log(f"PVP: gravando em {reg.pasta} e em {ARQ_TENTATIVAS}. Janela: {janela.descrever_janela(hwnd)}")
-    at = AtiradorPvp(io, MemoriaPvp(), lambda: INSTANCIA, sombra=args.sombra, log=log, reg=reg)
+    rede = None
+    if not args.sem_rede:
+        caminho = rede_vivo.registro_do_jogo_aberto()
+        if caminho:
+            rede = rede_vivo.LeitorAoVivo(fonte=lambda parar: rede_vivo.fonte_netlog(caminho, parar), log=log).iniciar()
+            log(f"[rede] lendo a rede do jogo ({os.path.basename(caminho)}): mira EXATA (posicoes, vento e resultado de cada tiro)")
+        else:
+            log("[rede] o jogo NAO foi aberto com o registro de rede: mira so pela tela. Para a mira exata, feche o jogo e abra pelo "
+                "ABRIR_JOGO.bat (ou TESTAR_REDE.bat) antes do PVP.bat.")
+    at = AtiradorPvp(io, MemoriaPvp(), lambda: INSTANCIA, sombra=args.sombra, log=log, reg=reg, rede=rede)
     laco = Laco(io, det, at, log=log, clicar_inicio=not args.sem_inicio, catalogo=CatalogoMapas(), reg=reg)
     ate = time.time() + args.minutos * 60 if args.minutos else None
     try:

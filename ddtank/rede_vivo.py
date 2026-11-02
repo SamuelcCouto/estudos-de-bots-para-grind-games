@@ -167,10 +167,12 @@ class Estado:
         self.chave_ok = {"servidor": False, "cliente": False}
         self.eventos = 0
         self.t_rede = None          # quando chegou o ultimo pedaco lido (relogio do registro de rede)
+        self.tiros = []             # [(instante, tiro do servidor)] recentes (o bot confere o SEU tiro depois da vez)
+        self.meus_tiros = []        # [(instante, tiro do cliente)] recentes
 
     def copia(self):
         with self.lock:
-            return dict(eu=self.eu, vez=self.vez, vez_t=self.vez_t, turno=self.turno, vento=self.vento,
+            return dict(tiros=list(self.tiros), meus_tiros=list(self.meus_tiros), eu=self.eu, vez=self.vez, vez_t=self.vez_t, turno=self.turno, vento=self.vento,
                         vivos={k: dict(v) for k, v in self.vivos.items()}, ultimo_tiro=self.ultimo_tiro,
                         meu_ultimo_tiro=self.meu_ultimo_tiro, minha_vez=self.vez is not None and self.vez == self.eu,
                         pacotes=dict(self.pacotes), chave_ok=dict(self.chave_ok))
@@ -198,11 +200,13 @@ class Estado:
                 elif lado == "servidor" and sub == R.SUB["FIRE"]:
                     t = R.tiro_do_servidor(corpo, e1)
                     self.ultimo_tiro = t
+                    self.tiros = (self.tiros + [(time.time(), t)])[-40:]
                     evento = ("tiro", t)
                 elif lado == "cliente":
                     if sub == R.SUB["FIRE"]:
                         t = R.tiro_do_cliente(corpo)
                         self.meu_ultimo_tiro = t
+                        self.meus_tiros = (self.meus_tiros + [(time.time(), t)])[-40:]
                         if self.vivos:                              # o boneco mais perto do ponto de saida somos nos
                             self.eu = min(self.vivos.values(), key=lambda d: (d["x"] - t["x"]) ** 2 + (d["y"] - t["y"]) ** 2)["id"]
                         evento = ("meu_tiro", t)
@@ -422,6 +426,23 @@ def achar_jogo():
     return next((c for c in CAMINHOS_JOGO if os.path.exists(c)), None)
 
 
+def registro_do_jogo_aberto():
+    """Caminho do registro de rede do jogo ABERTO (se ele foi aberto com --log-net-log), senao None."""
+    try:
+        out = subprocess.run(["powershell", "-NoProfile", "-Command",
+                              "Get-CimInstance Win32_Process -Filter \"Name='BetelTank.exe'\" | ForEach-Object { $_.CommandLine }"],
+                             capture_output=True, text=True, timeout=20).stdout
+    except (OSError, subprocess.SubprocessError):
+        return None
+    for linha in out.splitlines():
+        m = re.search(r'--log-net-log=("([^"]+)"|(\S+))', linha)
+        if m and "--type=" not in linha:
+            caminho = m.group(2) or m.group(3)
+            if os.path.exists(caminho):
+                return caminho
+    return None
+
+
 def jogo_aberto():
     try:
         out = subprocess.run(["tasklist", "/FI", "IMAGENAME eq BetelTank.exe", "/NH"], capture_output=True, text=True, timeout=10).stdout
@@ -528,6 +549,7 @@ def _imprimir(evento, est):
 if __name__ == "__main__":
     ap = argparse.ArgumentParser(description="Le ao vivo a rede do DDTank (so leitura)")
     ap.add_argument("--abrir-jogo", action="store_true", help="abre o jogo com o registro de rede ligado e le ao vivo")
+    ap.add_argument("--so-abrir", action="store_true", help="so abre o jogo com o registro de rede ligado (para o PVP.bat usar) e sai")
     ap.add_argument("--jogo", default=None, help="caminho do BetelTank.exe (se nao achar sozinho)")
     ap.add_argument("--netlog", help="ler um registro de rede (.json do jogo aberto com --abrir-jogo)")
     ap.add_argument("--analisar", action="store_true", help="com --netlog: le o arquivo inteiro de uma vez (depois da partida) e sai")
@@ -535,6 +557,13 @@ if __name__ == "__main__":
     ap.add_argument("--socket-bruto", action="store_true", help="metodo antigo (administrador; nao ve conexao IPv6)")
     ap.add_argument("--segundos", type=float, default=0, help="parar sozinho depois disso (0 = ate fechar)")
     a = ap.parse_args()
+    if a.so_abrir:
+        if registro_do_jogo_aberto():
+            raise SystemExit("O jogo ja esta aberto COM o registro de rede. Pode rodar o PVP.bat.")
+        while jogo_aberto():
+            input("O jogo esta aberto SEM o registro de rede. FECHE o jogo e aperte Enter... ")
+        print(f"Jogo aberto com o registro de rede: {abrir_jogo_com_log(a.jogo)}")
+        raise SystemExit("Faca login, entre na sala do PVP e rode o PVP.bat.")
     if a.replay or (a.netlog and a.analisar):
         if a.replay:
             fonte = lambda parar: fonte_replay(a.replay, parar)
