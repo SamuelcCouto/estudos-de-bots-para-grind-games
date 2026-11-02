@@ -64,6 +64,8 @@ MSG_ERRADA_POS = (380, 320)         # aviso "Voce atirou em uma direcao errada, 
 MSG_CURTO_POS = (387, 330)          # (x, y) do aviso "O poder nao e suficiente, tente aumentar o seu poder" (tiro CURTO), quadro de 1280
 MSG_CURTO_LIMIAR = 0.8
 PASSO_CURTO, PASSO_OUTRO = 0.88, 1.07   # escala do mapa x isto: aviso de tiro curto -> mais forca; erro sem aviso -> um pouco menos
+CAIXA_MINI = (815, 156, 985, 256)   # minimapa (x0, y0, x1, y1): o retangulo azul dele e a area VISIVEL da tela
+UNID_TELA = 10.17                   # unidades da regua do jogo que cabem na tela inteira (largura do retangulo / isto = px de minimapa por unidade)
 QUEDA_BARRA_PX = 3                  # a barra (~22 px) encolhendo isto ou mais = acerto
 PRESO_S = 120.0                     # s em tela desconhecida fora da batalha: clica numa area neutra e avisa
 INTERVALO_INICIO = 12.0             # s entre dois cliques em Inicio na sala
@@ -173,11 +175,25 @@ class MemoriaPvp(memoria_mod.Memoria):
         self.escala_ok = False             # um tiro ja acertou com a escala atual neste mapa
         self.i_busca = 0
         self.angulo = ANGULO_PVP           # sobe 10 graus a cada aviso de "direcao errada" (obstaculo na frente)
+        self.larguras = []                 # larguras do retangulo do minimapa vistas neste mapa
 
     def novo_mapa(self, escala, ok):
         self.escala_base, self.escala_ok, self.i_busca = escala, ok, 0
         self.escala = escala
         self.angulo = ANGULO_PVP
+        self.larguras = []
+
+    def medir_escala(self, largura):
+        """Guarda a largura do retangulo; com 2 leituras iguais (+-3 px) a escala do mapa vira largura/10,17 e fica travada.
+        Devolve a escala se acabou de fixar, senao None."""
+        if largura is None or self.escala_ok:
+            return None
+        self.larguras = (self.larguras + [float(largura)])[-6:]
+        if len(self.larguras) >= 2 and abs(self.larguras[-1] - self.larguras[-2]) <= 3:
+            self.escala = float(np.median(self.larguras[-2:])) / UNID_TELA
+            self.escala_base, self.escala_ok = self.escala, True
+            return self.escala
+        return None
 
     def resultado(self, acertou, curto=False, errada=False):
         """Acertou: trava a escala (vale para o mapa). Errou com o aviso do jogo de tiro CURTO: mais forca (escala menor); erro sem
@@ -274,6 +290,31 @@ class LeitorPvp(atirador_mod.LeitorReal):
         if t - self.ultima_vez < HOLD_VEZ_S:
             return True
         return self.ultima_vez > -1e8 and t - self.inicio_vez < JANELA_VEZ_S
+
+
+def largura_caixa_minimapa(f):
+    """Largura (px) do retangulo azul do minimapa (a tela inteira = 10,17 unidades), ou None se nao achou. Mede a ESCALA do mapa sem tiro
+    nenhum: o padrao de 4 px/unid estava errado por mais de 2x nos mapas largos (92 px -> 9,0 px/unid; 01/11)."""
+    if f is None or f.ndim != 3 or f.shape[0] < CAIXA_MINI[3]:
+        return None
+    x0, y0, x1, y1 = CAIXA_MINI
+    h = cv2.cvtColor(f[y0:y1, x0:x1], cv2.COLOR_BGR2HSV)
+    m = ((h[..., 0] >= 112) & (h[..., 0] <= 130) & (h[..., 1] >= 150) & (h[..., 2] >= 90)).astype(np.uint8)
+    lados = cv2.erode(m, np.ones((14, 1), np.uint8)).any(axis=0)         # colunas com uma corrida vertical azul de >= 14 px
+    cols = np.where(lados)[0]
+    if len(cols) < 2:
+        return None
+    grupos, atual = [], [cols[0]]
+    for c in cols[1:]:
+        if c - atual[-1] <= 2:
+            atual.append(c)
+        else:
+            grupos.append(atual)
+            atual = [c]
+    grupos.append(atual)
+    cs = [float(np.mean(g)) for g in grupos]
+    larg = [cs[j] - cs[i] for i in range(len(cs)) for j in range(i + 1, len(cs)) if cs[j] - cs[i] >= 40]
+    return min(larg) if larg else None
 
 
 _TPL_MSG = {}
@@ -544,6 +585,13 @@ class AtiradorPvp(atirador_mod.Atirador):
             (ax, ay), (rx, ry) = self.mem.tela_pos
             self.log(f"   [tela] voce ({ax:.0f}, {ay:.0f}) inimigo ({rx:.0f}, {ry:.0f}): {abs(rx - ax) / PX_POR_UNID_TELA:.1f} unidades de distancia, "
                      f"{(ay - ry) / PX_POR_UNID_TELA:+.1f} de altura (medido na tela principal)")
+        if hasattr(self.mem, "medir_escala"):
+            fixou = self.mem.medir_escala(largura_caixa_minimapa(f))
+            if fixou:
+                self.log(f"   [escala] retangulo do minimapa = {self.mem.larguras[-1]:.0f} px = {UNID_TELA} unidades -> escala do mapa "
+                         f"{fixou:.2f} px/unidade (medida, nao chutada)")
+                if self.salvar_escala and self.mapa:
+                    self.salvar_escala(self.mapa, fixou, True)
         self.hp_inimigo0 = self._ler_barra_inimigo(f)
         self.turnos_feitos_na_vez += 1
         self.ordem = list(ORDENS_PVP[self.tiros_na_partida % len(ORDENS_PVP)])
@@ -609,7 +657,7 @@ class AtiradorPvp(atirador_mod.Atirador):
         esc_usada = getattr(self.mem, "escala", None)
         if acertou is not None and hasattr(self.mem, "resultado") and p.get("tela"):
             self.log(f"   [resultado] barra do inimigo {hp0:.0f} -> {hp1:.0f} px: {'ACERTOU' if acertou else 'ERROU'} (tiro medido na tela principal)")
-        elif acertou is not None and hasattr(self.mem, "resultado") and p.get("azul") and float(p.get("forca") or 0) >= 10:      # sem posicao no minimapa o tiro foi no padrao: nao diz nada da escala
+        elif acertou is not None and hasattr(self.mem, "resultado") and p.get("azul") and p.get("boss") and float(p.get("forca") or 0) >= 10:      # sem posicao no minimapa o tiro foi no padrao: nao diz nada da escala
             esc, ok = self.mem.resultado(acertou, curto=bool(p.get("curto")), errada=bool(p.get("errada")))
             self.log(f"   [resultado] barra do inimigo {hp0:.0f} -> {hp1:.0f} px: {'ACERTOU' if acertou else 'ERROU'}"
                      f"{' (o jogo avisou: tiro CURTO)' if p.get('curto') else ''}"

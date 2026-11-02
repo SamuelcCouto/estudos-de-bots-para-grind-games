@@ -194,7 +194,11 @@ f0 = mp.prever("PVP", (74.0, 56.0), (13.0, 54.0))["forca"]
 esc, ok = mp.resultado(False, curto=True)
 assert abs(esc - 4.0 * P.PASSO_CURTO) < 1e-6 and not ok
 assert mp.prever("PVP", (74.0, 56.0), (13.0, 54.0))["forca"] > f0, "tiro curto = escala menor = mais forca"
-a0 = mp.angulo
+mp.novo_mapa(4.0, False)
+assert mp.medir_escala(None) is None and mp.medir_escala(92) is None, "uma leitura so nao fixa"
+assert abs(mp.medir_escala(93) - 92.5 / P.UNID_TELA) < 0.01 and mp.escala_ok, "duas leituras iguais fixam a escala"
+mp.novo_mapa(4.0, False)
+a0, esc = mp.angulo, mp.escala
 mp.resultado(False, errada=True)
 assert mp.angulo == a0 + P.PASSO_ANGULO and mp.escala == esc, "direcao errada: sobe o angulo e nao mexe na escala"
 assert mp.prever("PVP", (74.0, 56.0), (13.0, 54.0))["angulo"] == a0 + P.PASSO_ANGULO
