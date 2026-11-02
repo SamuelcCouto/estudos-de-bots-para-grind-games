@@ -81,7 +81,9 @@ O solucionador devolve a forca da tabela de 50 graus com erro maximo de 2 pontos
 **Consequencia:** com a leitura da rede, o bot tem **o estado exato** (posicoes, vento, vez) e **o resultado exato** de cada tiro, e a
 fisica ja esta provada no proprio jogo. **Leitura AO VIVO (`rede_vivo.py`, 02/11):** sem instalar nada e sem administrador.
 O jogo e aberto com o registro de rede do proprio Chromium (`--log-net-log ... --net-log-capture-mode=IncludeSocketBytes`) e o bot
-le esse arquivo enquanto ele cresce. Testado com dados sinteticos e com a reprise da captura; falta o teste ao vivo (`TESTAR_REDE.bat`).
+le esse arquivo enquanto ele cresce. **Funcionou com o registro real de 2 PVPs (02/11):** 843 pacotes do servidor + 136 do cliente,
+vez, posicoes, vento, cada tiro (inclusive teleguiado), dano e os tiros que NOS enviamos. (O Chromium 76 grava os bytes em base64 no
+campo `bytes`.) O jogo reconecta as vezes: cada conexao nova recomeca a leitura sozinha.
 Descartados: o socket bruto do Windows (nao ve a conexao IPv6 do jogo, testado ao vivo) e o WinDivert (o Defender bloqueia).
 Cuidado: o registro grava os dados ja decifrados de todas as conexoes do launcher, inclusive o site. Fica so em `capturas_rede/`.
 

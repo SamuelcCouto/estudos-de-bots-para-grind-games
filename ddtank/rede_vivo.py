@@ -20,6 +20,7 @@ Como funciona: separa os bytes da conexao do jogo, recupera a chave de sessao so
 decifra pacote a pacote.
 """
 import argparse
+import base64
 import ctypes
 import datetime
 import glob
@@ -38,7 +39,8 @@ PASTA = os.path.dirname(os.path.abspath(__file__))
 PASTA_LOGS = os.path.join(PASTA, "capturas_rede")
 CAMINHOS_JOGO = (r"D:\DDTBETEL\BetelTank.exe", r"C:\DDTBETEL\BetelTank.exe", r"C:\Program Files\DDTBETEL\BetelTank.exe",
                  r"C:\Program Files (x86)\DDTBETEL\BetelTank.exe")
-MIN_BYTES_CHAVE = 3000          # bytes acumulados antes de tentar achar a chave (servidor: ~1-3 s de jogo)
+MIN_BYTES_CHAVE = {"servidor": 3000, "cliente": 500}   # o cliente manda pouco: com 500 bytes ja da para achar a chave dele
+_MIN_BYTES_ANTIGO = 3000          # bytes acumulados antes de tentar achar a chave (servidor: ~1-3 s de jogo)
 
 
 # ------------------------------------------------------------------------------------------------ TCP incremental
@@ -85,15 +87,16 @@ class MontadorTCP:
 class Decifrador:
     """Recebe os bytes cifrados de um sentido conforme chegam; acha a chave quando ha dados suficientes e depois devolve os pacotes
     decifrados [(codigo, clientId, extend1, extend2, corpo)]."""
-    def __init__(self):
+    def __init__(self, minimo=3000):
         self.buf = bytearray()
         self.K = None
         self.tentativa = 0
+        self.minimo = minimo
 
     def alimentar(self, dados):
         self.buf += dados
         if self.K is None:
-            if len(self.buf) < MIN_BYTES_CHAVE or len(self.buf) < self.tentativa + 1500:
+            if len(self.buf) < self.minimo or len(self.buf) < self.tentativa + max(300, self.minimo // 2):
                 return []
             self.tentativa = len(self.buf)
             try:
@@ -156,7 +159,9 @@ class Estado:
         try:
             with self.lock:
                 if lado == "servidor" and sub in (R.SUB["GAME_CREATE"], R.SUB["GAME_OVER"]):
-                    self.eu = self.vez = self.turno = self.vento = None   # partida nova: os ids dos bonecos mudam
+                    self.vez = self.turno = self.vento = None             # partida nova: os ids dos bonecos podem mudar
+                    if sub == R.SUB["GAME_CREATE"]:
+                        self.eu = None
                     self.vivos = {}
                     evento = ("partida", sub)
                 elif lado == "servidor" and sub == R.SUB["TURN"]:
@@ -315,7 +320,7 @@ def fonte_netlog(caminho, parar, porta=R.PORTA_JOGO, seguir=True):
         linhas = _linhas_crescendo(caminho, parar)
     else:
         linhas = iter(open(caminho, encoding="utf-8", errors="replace").read().splitlines())
-    cabeca, tipos, fontes_jogo = [], None, set()
+    cabeca, tipos, atual = [], None, None
     alvo = f":{porta}"
     for ln in linhas:
         if parar.is_set():
@@ -339,13 +344,18 @@ def fonte_netlog(caminho, parar, porta=R.PORTA_JOGO, seguir=True):
             continue
         params, fonte = e.get("params") or {}, (e.get("source") or {}).get("id")
         lado = tipos.get(e.get("type"))
-        if lado and fonte in fontes_jogo and params.get("hex_encoded_bytes"):
-            yield lado, None, bytes.fromhex(params["hex_encoded_bytes"])
-        elif fonte not in fontes_jogo and params:
+        if lado and fonte == atual:
+            if params.get("bytes"):                             # Chromium 76: base64 no campo "bytes"
+                yield lado, None, base64.b64decode(params["bytes"])
+            elif params.get("hex_encoded_bytes"):               # versoes mais novas: hexadecimal
+                yield lado, None, bytes.fromhex(params["hex_encoded_bytes"])
+        elif fonte != atual and params:
             for k in ("address", "address_list", "remote_address", "host_and_port"):
                 v = params.get(k)
                 if v and alvo in (v if isinstance(v, str) else " ".join(map(str, v))):
-                    fontes_jogo.add(fonte)                      # e o socket que conecta na porta do jogo
+                    atual = fonte                               # conexao nova com o jogo (login/reconexao): recomeca a leitura
+                    yield "reset", None, b""
+                    break
 
 
 def achar_jogo():
@@ -417,10 +427,15 @@ class LeitorAoVivo:
         self.erro = None
         self.segmentos = 0
         self.tcp = {"servidor": MontadorTCP(), "cliente": MontadorTCP()}
-        self.dec = {"servidor": Decifrador(), "cliente": Decifrador()}
+        self.dec = {lado: Decifrador(MIN_BYTES_CHAVE[lado]) for lado in ("servidor", "cliente")}
 
     def consumir(self, gerador):
         for lado, seq, pl in gerador:
+            if lado == "reset":                                 # conexao nova (login de novo): chave e fluxo novos
+                self.tcp = {"servidor": MontadorTCP(), "cliente": MontadorTCP()}
+                self.dec = {lado: Decifrador(MIN_BYTES_CHAVE[lado]) for lado in ("servidor", "cliente")}
+                self.estado.chave_ok = {"servidor": False, "cliente": False}
+                continue
             self.segmentos += 1
             dados = pl if seq is None else self.tcp[lado].segmento(seq, pl)
             if not dados:
@@ -470,12 +485,17 @@ if __name__ == "__main__":
     ap.add_argument("--abrir-jogo", action="store_true", help="abre o jogo com o registro de rede ligado e le ao vivo")
     ap.add_argument("--jogo", default=None, help="caminho do BetelTank.exe (se nao achar sozinho)")
     ap.add_argument("--netlog", help="ler um registro de rede (.json do jogo aberto com --abrir-jogo)")
+    ap.add_argument("--analisar", action="store_true", help="com --netlog: le o arquivo inteiro de uma vez (depois da partida) e sai")
     ap.add_argument("--replay", help="ler um .pcapng (CAPTURAR_REDE.bat)")
     ap.add_argument("--socket-bruto", action="store_true", help="metodo antigo (administrador; nao ve conexao IPv6)")
     ap.add_argument("--segundos", type=float, default=0, help="parar sozinho depois disso (0 = ate fechar)")
     a = ap.parse_args()
-    if a.replay:
-        leitor = LeitorAoVivo(fonte=lambda parar: fonte_replay(a.replay, parar), ao_mudar=_imprimir)
+    if a.replay or (a.netlog and a.analisar):
+        if a.replay:
+            fonte = lambda parar: fonte_replay(a.replay, parar)
+        else:
+            fonte = lambda parar: fonte_netlog(a.netlog, parar, seguir=False)
+        leitor = LeitorAoVivo(fonte=fonte, ao_mudar=_imprimir)
         leitor.consumir(leitor.fonte(leitor.parar))
     else:
         if a.socket_bruto:

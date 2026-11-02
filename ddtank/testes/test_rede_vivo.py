@@ -65,7 +65,8 @@ linhas = ['{"constants": ' + json.dumps({"logEventTypes": TIPOS, "logSourceType"
 linhas.append(json.dumps({"params": {"address_list": ["[2606:4700::1]:443"]}, "phase": 1, "source": {"id": 3, "type": 8}, "time": "1", "type": 38}) + ",")
 linhas.append(json.dumps({"params": {"address_list": ["[2606:4700::faeb]:25565"]}, "phase": 1, "source": {"id": 7, "type": 8}, "time": "2", "type": 38}) + ",")
 for k, (_lado, _seq, d) in enumerate(pedacos):
-    linhas.append(json.dumps({"params": {"byte_count": len(d), "hex_encoded_bytes": d.hex()}, "phase": 0, "source": {"id": 7, "type": 8},
+    campo = {"bytes": __import__("base64").b64encode(d).decode()} if k % 2 else {"hex_encoded_bytes": d.hex()}   # Chromium 76 usa base64
+    linhas.append(json.dumps({"params": dict(byte_count=len(d), **campo), "phase": 0, "source": {"id": 7, "type": 8},
                               "time": str(10 + k), "type": 61}) + ",")
     if k == 3:
         linhas.append(json.dumps({"params": {"byte_count": 4, "hex_encoded_bytes": "deadbeef"}, "phase": 0, "source": {"id": 3, "type": 8},
