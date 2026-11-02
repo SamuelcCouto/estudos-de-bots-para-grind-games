@@ -33,6 +33,7 @@ AVIAO_MOVEU = 4.0              # px de minimapa: depois do voo o boneco tem que 
 INTERVALO_LEITURA_LEVE = 3.0  # s (gravacao leve: so os numeros, sem print)
 INTERVALO_MINIMAPA = 0.4      # s entre leituras do minimapa para o rastreador (posicao do jogador = a que mais se repete)
 TOLERANCIA_ANGULO = 3.0       # graus
+MENOR_TOQUE_ANGULO = 2.0      # graus: o menor toque da seta mexe ~1,4; passar do alvo por menos que isto vale como chegar
 TAXA_ANGULO_INICIAL = 28.0    # graus/s com a seta apertada (aprende sozinho)
 FORCA_POR_SEGUNDO = 38.0      # % da barra por segundo segurando espaco (medido nas gravacoes; o bot aprende o valor real)
 ANTECIPACAO_INICIAL = 4.0     # % de folga: solta um pouco antes (atraso da captura + do KEYUP)
@@ -677,6 +678,7 @@ class Atirador:
     # ------------------------------------------------------------------ angulo
     def ajustar_angulo(self, alvo, tol=TOLERANCIA_ANGULO):
         sem_efeito = 0
+        erro_ant = None
         for _ in range(12):
             f = self.ver()
             if f is None or not self.lei.minha_vez(f):
@@ -685,6 +687,9 @@ class Atirador:
             erro = alvo - a
             if abs(erro) <= tol:
                 return True
+            if erro_ant is not None and erro * erro_ant < 0 and abs(erro) <= MENOR_TOQUE_ANGULO:
+                return True        # passou do alvo por menos que o menor toque da seta: mais um toque so faria ir-e-voltar (bug do Pericao)
+            erro_ant = erro
             dur = float(np.clip(abs(erro) / self.taxa_angulo * 0.85, 0.05, 0.6))
             tecla = "cima" if erro > 0 else "baixo"
             self.io.tecla(tecla, dur)

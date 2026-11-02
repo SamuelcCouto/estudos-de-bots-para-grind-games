@@ -89,7 +89,8 @@ ESTRATEGIAS = {
     "PERICAO": {
         "chefe_global": True,         # vida do servidor; acerto pelos numeros de dano; vitoria = o chefao morreu para todos
         "angulo_min": 0.0,            # mira quase reta (o ponteiro le 7); nas outras o minimo e 15
-        "tolerancia_angulo": 1.0,     # graus: o ponteiro comeca em 4.5 - a 2.5 do alvo, que a tolerancia normal (3) aceitaria
+        "tolerancia_angulo": 1.5,     # graus: o ponteiro comeca em 4.5 - a 2.5 do alvo (a normal, 3, aceitaria). NAO menos que 1,5: o menor toque da seta
+                                      # mexe ~1,4 e com 1.0 o bot ia-e-voltava 12x e pulava o tiro (usuario: "mexe a mira para sempre e nunca ataca o Pericao")
         "pet_e": True,                # E quando o buff do pet estiver disponivel
         "usar_pow": True,             # B quando o POW encher (antes dos itens; o tridente nao vale junto com o especial)
         "combo": "2,3,4",             # sempre 2, 3 e o maximo de 4 (depois 5, 6, 7, 8): dano maximo, sem testar combos

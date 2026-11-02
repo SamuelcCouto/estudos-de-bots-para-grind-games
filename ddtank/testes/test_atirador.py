@@ -445,6 +445,22 @@ assert "PERICAO" not in cb.dados, "Chefao Global: combo fixo, nada a aprender"
 assert cb.escolher("PERICAO")[0] == "2,3,4"
 print("\nChefao Global (mira reta, numeros de dano, POW) OK")
 
+# ------------------------------------------------------------ 23b) Pericao: seta com toque maior que a tolerancia nao pode ir-e-voltar
+class MundoToque(MundoComThread):
+    PASSO = 3.5                                                   # cada toque mexe 3,5 graus (maior que 2 x tolerancia)
+    def tecla(self, nome, dur=0.05):
+        if nome in ("cima", "baixo"):
+            self.angulo += (1 if nome == "cima" else -1) * self.PASSO
+            self.teclas.append((nome, round(dur, 2))); self.avancar(dur); return
+        super().tecla(nome, dur)
+w = MundoToque(angulo=4.0); w.vez = (0.0, 60.0)
+at, mem, logs, arq = novo(w, inst="PERICAO")
+assert at.ajustar_angulo(6.0, 1.0), "passou do alvo por 1,5 (< menor toque): vale como chegar"
+assert len([t for t in w.teclas if t[0] in ("cima", "baixo")]) == 1, w.teclas          # antes: 12 toques ida e volta e o tiro era pulado
+import estrategias as E
+assert E.estrategia("PERICAO")["tolerancia_angulo"] >= 1.5
+print("angulo: passar do alvo por menos que o menor toque nao gera ida-e-volta (Pericao) OK")
+
 # ------------------------------------------------------------ 24) GATO PRETO: perks Z/X/C, item E do pet, B so com o buff ativo
 class MundoGato(MundoComThread):
     """E so funciona a partir do 2o turno (na vida real: rodada 6); perks +50% do POW cada; B so com o POW cheio."""

@@ -59,9 +59,13 @@ Comando: `python navegador.py --atirar --rota L --cartas TODAS --chefe n [--come
 - Carga da forca: a barra mostra o valor do tiro ANTERIOR parado -> o bot so soltava no fallback e saia 99% (queria 57%). Corrigido: solta quando a barra
   SOBE >=3 acima do minimo visto (`atirador.carregar`). Leitor `leitura.forca` agora le tambem barra vermelha/rosa (fundo claro, forca baixa); antes lia 0%.
 - Ainda ocorre: turno iniciado com o contador em 0 (o hold de vez `HOLD_VEZ_S/JANELA_VEZ_S` acha que e a nossa vez depois que acabou) -> tiro "forca 0%".
-- **BUG RELATADO PELO USUARIO (pericao): "o bot fica alterando a mira eternamente e nunca ataca o pericao".** Nao investigado. Suspeitas: `ajustar_angulo`
-  (ate 12 voltas) oscilando com a leitura nova por digitos/ponteiro, ou tolerancia/limite da arma; reproduzir com `python navegador.py --atirar --rota ...`
-  na instancia PERICAO (estrategias.py linha ~89) olhando a tela e o log `tiro dado`/`ajustar`.
+- **BUG DO PERICAO ("fica alterando a mira eternamente e nunca ataca") - CORRIGIDO em 02/11 (nao visto ao vivo).** Causa: `estrategias.PERICAO`
+  tinha `tolerancia_angulo` 1.0, menor que o menor toque da seta (~1,4); `ajustar_angulo` ia-e-voltava 12x e PULAVA o tiro. Agora 1,5, e
+  `ajustar_angulo` aceita passar do alvo por <= `MENOR_TOQUE_ANGULO` (2) apos inverter o sinal. Teste: `test_atirador` (23b). Validar ao vivo no Pericao.
+- **Numero de dano no PVP (02/11, tentado e NAO resolvido):** o acerto normal tem digitos ~12 px (dourado, contorno escuro); o critico ~20 px com estrela
+  vermelha atras. Filtro so por cor + fileira de 4+ componentes NAO separa acerto de erro (fogo/faiscas da explosao e icones "50%"/relogio da HUD dao
+  falsos positivos; 3 variantes testadas nos 11 tiros da gravacao manual). Caminho certo: casar templates dos digitos 0-9 (como `angulo_digitos.npz`),
+  usando os numeros 13835, 13136, 16606, 16105... da gravacao como amostra; ou olhar a barra de vida do inimigo na tela principal.
 ### 2.5 Dados do usuario (gravacao `sessoes/20261101_235520_pvp_manual_intuicao`, F9 marca)
 - 11 tiros em 4 mapas; 4 acertaram: #2 (64 graus, hold 1,42 s), #5 (46 graus, hold 1,28 s), #7 (52, 0,62 s), #8 (52, 0,77 s). Extracao: `estudos/analisa_manual.py`.
 - Os holds nao batem com a forca lida (barra parada do tiro anterior) -> para ler a forca real use a barra DEPOIS de soltar so quando ela estiver estavel
