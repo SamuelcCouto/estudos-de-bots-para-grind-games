@@ -102,7 +102,12 @@ def forca(f):
     b, g, r = faixa[..., 0], faixa[..., 1], faixa[..., 2]
     col = ((r > 170) & (g > 90) & (b < 140) & (r - b > 70)).mean(axis=0) > 0.5
     xs = np.where(col)[0]
-    return 0.0 if len(xs) == 0 else (xs.max() + 1) / (x1 - x0) * 100
+    forca_laranja = 0.0 if len(xs) == 0 else (xs.max() + 1) / (x1 - x0) * 100
+    # Barra listrada VERMELHA/ROSA (mapas de fundo claro, forca baixa): so metade das linhas e clara e o laranja nao pega -> o bot lia 0%
+    # e "consertava" o metodo de carga a toa (01/11). Aqui conta a corrida de colunas avermelhadas a partir da esquerda.
+    verm = ((r > 150) & (r - b > 60)).mean(axis=0) > 0.1
+    n_verm = len(verm) if verm.all() else int(np.argmin(verm))
+    return max(forca_laranja, n_verm / (x1 - x0) * 100 if n_verm >= 6 else 0.0)
 
 
 _LINHA_H = cv2.getStructuringElement(cv2.MORPH_RECT, (13, 1))
