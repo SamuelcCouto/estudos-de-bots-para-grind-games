@@ -16,7 +16,7 @@ O usuario fala **portugues**, quer explicacoes intuitivas, decide o rumo; eu (Cl
 
 ## 2. Como o usuario usa
 `BotDDT.bat` (baixa novidades com `git pull` e abre o painel `painel.py`, tkinter, tema escuro). Cards: **Rotas** (Norte, Sul, Leste =
-em desenvolvimento/desabilitada), **Chefes** (repete UM chefe: Fantasma ... Gato Preto, Pericao comum, Chefao Global; tarefas a cada 10
+em desenvolvimento/desabilitada), **Chefes** (repete UM chefe: Fantasma ... Gato Preto, Pericao comum, Chefao Global; tarefas a cada 5
 voltas), **Abrir cartas** (Todas / Nenhuma / uma caixinha por chefe), **Opcoes** (coletar tarefas) e, so na versao do desenvolvedor,
 **Desenvolvedor** (gravacao, leve, enviar ao parar, religar, horarios) + botoes "Enviar gravacao", "Testar a minha tela", "Atualizar",
 "Gravar a MINHA jogada". INICIAR / PAUSAR / PARAR no topo. **Versao dos amigos** (`painel.py --amigo` ou arquivo `amigo.flag` ao lado do

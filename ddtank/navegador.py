@@ -1822,7 +1822,7 @@ def main():
     ap.add_argument("--cartas", default=None, help="instancias cujas cartas o bot abre, ex.: RAINHA_LIRIS (ou TODAS). "
                     "Sem isso, pergunta ao abrir (so se a rota tiver mais de uma instancia)")
     ap.add_argument("--tarefas-a-cada", type=int, default=0,
-                    help="coleta as tarefas a cada N voltas (padrao: toda volta; lutando um chefe so: a cada 10)")
+                    help="coleta as tarefas a cada N voltas (padrao: toda volta; lutando um chefe so: a cada 5, para pegar a missao de 15 runs na 15a)")
     ap.add_argument("--comecar-em", type=int, default=1, help="numero da instancia (1, 2, 3...) em que a rota comeca")
     ap.add_argument("--fase", type=int, choices=(1, 2), default=1,
                     help="A Ultima Luta: fase em que o bot comeca (2 = ja dentro da batalha/sala da 2a fase)")
@@ -1918,7 +1918,7 @@ def main():
     import drops as drops_mod
     import estatisticas as estat_mod
     estat = estat_mod.Estatisticas(nome_rota=nome_rota)
-    tarefas_a_cada = args.tarefas_a_cada or (10 if len(rota) == 1 and chave not in ("C",) else 1)
+    tarefas_a_cada = args.tarefas_a_cada or (5 if len(rota) == 1 and chave not in ("C",) else 1)
     log(f"Cronometro: logs\\relatorio.txt (resumo, atualizado a cada luta), logs\\lutas.csv e logs\\voltas.csv")
     io.log = log
     nav = Navegador(io, det, rota, not args.sem_tarefas or chave in ("U", "T"), args.uma_vez, args.simular, log=log, reg=reg,
