@@ -10,6 +10,7 @@ AQUI = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.dirname(AQUI))
 import estados as E
 import navegador as N
+N.ROTA_PADRAO = ["FANTASMA", "PROFUNDEZAS", "MINHOCAO"]     # os simuladores abaixo montam a Norte com 3 salas (a Profundezas esta em manutencao nas rotas reais)
 
 FR = os.path.join(AQUI, "frames")
 img = lambda nome: cv2.imread(os.path.join(FR, nome + ".jpg"))
@@ -140,7 +141,7 @@ for modo_k in (1.0,):
     relogio = [0.0]
     def dormir(s): relogio[0] += s
     def agora(): return relogio[0]
-    nav = N.Navegador(sim, det, uma_vez=False, dormir=dormir, agora=agora, log=lambda m: None)
+    nav = N.Navegador(sim, det, ["FANTASMA", "PROFUNDEZAS", "MINHOCAO"], uma_vez=False, dormir=dormir, agora=agora, log=lambda m: None)
     # roda ate completar 2 voltas
     passos = 0
     while sim.voltas < 2 and passos < 600:
@@ -413,7 +414,7 @@ assert N.perguntar_rota(entrada=lambda _p: next(respostas), saida=lambda *_a: No
 assert N.perguntar_rota(entrada=lambda _p: "", saida=lambda *_a: None) == "S", "Enter = Sul (Norte desabilitada no menu)"
 assert N.perguntar_rota(entrada=lambda _p: "t", saida=lambda *_a: None) == "T"
 nome_t, rota_t, _ = N.rota_dos_argumentos("T")
-assert rota_t == ["FANTASMA", "PROFUNDEZAS", "MINHOCAO", "ESCORPIAO_REI", "DRAGAO_GELADO", "RAINHA_LIRIS"], rota_t
+assert rota_t == ["FANTASMA", "MINHOCAO", "ESCORPIAO_REI", "DRAGAO_GELADO", "RAINHA_LIRIS"], rota_t
 print("pergunta N/S/T OK; T =", " > ".join(rota_t))
 
 def arte_inventada(seed, h, w):
@@ -676,7 +677,7 @@ print("evento fechado: desiste e segue a rota OK")
 saida_menu = []
 N.perguntar_rota(entrada=lambda p: "", saida=saida_menu.append)
 assert "[U] Super Rota" in " ".join(saida_menu) and "[S] Sul" in " ".join(saida_menu), "menu: Super Rota (N > S > L com missao) e Sul"
-assert N.rota_dos_argumentos("N")[1] == ["FANTASMA", "PROFUNDEZAS", "MINHOCAO"] and len(N.rota_dos_argumentos("T")[1]) == 6, "...mas continuam"
+assert N.rota_dos_argumentos("N")[1] == ["FANTASMA", "MINHOCAO"] and len(N.rota_dos_argumentos("T")[1]) == 5, "...mas continuam"
 assert N.perguntar_rota(entrada=lambda p: "p", saida=lambda m: None) == "P" and N.rota_dos_argumentos("P")[1] == ["PERICAO"]
 ROTA_S = N.ROTAS["S"][1]
 assert N.cartas_padrao("S", ROTA_S) == ["RAINHA_LIRIS"]

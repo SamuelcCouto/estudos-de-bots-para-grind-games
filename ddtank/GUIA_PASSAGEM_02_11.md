@@ -73,6 +73,16 @@ Comando: `python navegador.py --atirar --rota L --cartas TODAS --chefe n [--come
 - O usuario vai gravar varias partidas de PVP seguidas quando acabar o evento do Pericao (00h, boss global do servidor). Com isso: (1) rodar
   `python estudos/analisa_manual.py <pasta>/`; (2) rotular acertos pelo numero de dano; (3) ajustar escala por mapa pelo retangulo; (4) testar o modelo.
 
+### 2.6 Gravacao longa de PVP do usuario (02/11, `20261102_111214`, 18 min, 26 tiros; quadros dos tiros 21-26 vieram corrompidos)
+- Estudo dos 20 tiros legiveis (`estudos/analisa_manual.py` + `vento.ler_vento`): o usuario **trava o angulo e so varia a forca**: 52 graus (7x), 58 graus (7x),
+  54-57 (5x); segura o espaco ~2 s (1,8-2,4 s) na maioria. So 2-3 tiros diferentes (22 graus/0,43 s, 71 graus, 61-64 graus/1,3 s, 0,42 s = tiros curtos).
+- Vento nos tiros: -2,2 a +3,4 (a maioria 0,2-1,7); mesmo mapa da selva/halloween em quase toda a gravacao (distancia parecida) -> bom conjunto para
+  calibrar UM mapa. A barra de forca depois de soltar le 53-66% nos tiros de ~2 s.
+- Ainda falta rotular acerto/erro de cada tiro: nos quadros o acerto aparece como explosao laranja + numero amarelo (ex.: 9171) perto do inimigo; erro = brilho
+  ciano/faisca no cenario sem numero. Sem template de digito nao da para automatizar. **Pedido para a proxima gravacao: aperte F9 NA HORA do acerto (e nao no erro).**
+- Mudanca de 02/11: Profundezas esta em manutencao -> `navegador.EM_MANUTENCAO` tira da Rota Norte/T/Super Rota (a Super Rota agora e Fantasma > Minhocao > Sul > Leste;
+  `FIM_ROTA_CUPOM` e calculado pelo tamanho das rotas). Para voltar, esvazie `EM_MANUTENCAO`.
+
 ## 3. Fisica (ddtcurve 0.2.1, PyPI, so lido)
 `ddtc.predict(angulo, vento, dx, dy)`: arrasto linear r=0.90289815, vento w=6.33592869, gravidade g=-184.11666458, dx/dy em "telas"; 100% = forca maxima.
 Reproduz os acertos da rota Leste com UMA escala por mapa (erro medio ~2 pontos de forca): `estudos/fit_ddtcurve.py`. O PVP usa as TABELAS do jogo

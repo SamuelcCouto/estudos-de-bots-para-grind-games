@@ -87,7 +87,8 @@ nav.ver = lambda: (None, [])
 nav.vigiar = lambda *args: None
 cliques = []
 nav.clicar_e_verificar = lambda estado, ponto, **kw: cliques.append((estado,ponto)) or True
-for idx, rota, premio in ((2,"N",40000),(5,"S",50000),(7,"L",60000)):
+fim = {r: i - 1 for i, r in N.FIM_ROTA_CUPOM.items()}     # indice da ultima instancia de cada rota (Profundezas em manutencao fica de fora)
+for idx, rota, premio in ((fim["N"],"N",40000),(fim["S"],"S",50000),(fim["L"],"L",60000)):
     nav.idx = idx
     nav.cartas_vistas = True
     relogio[0] += 120
@@ -108,7 +109,7 @@ assert nav_ns.usar_tarefas and nav_ns.super_rota_cupons
 nav_ns.ver = lambda: (None, [])
 nav_ns.vigiar = lambda *args: None
 nav_ns.clicar_e_verificar = lambda *args, **kw: True
-for idx, rota in ((2, "N"), (5, "S")):
+for idx, rota in ((fim["N"], "N"), (fim["S"], "S")):
     nav_ns.idx = idx
     nav_ns.cartas_vistas = True
     relogio[0] += 120
@@ -142,3 +143,8 @@ relogio_batalha[0] += 5
 nav_batalha._ciclo()
 assert not falso_config.fins and nav_batalha.em_batalha
 print("Super rota, cupons, combos e busca da mira OK")
+
+# Profundezas em manutencao: fora das rotas prontas, e o fim de cada rota acompanha o tamanho certo
+assert "PROFUNDEZAS" not in N.ROTAS["U"][1] and "PROFUNDEZAS" not in N.ROTAS["N"][1]
+assert N.FIM_ROTA_CUPOM == {len(N.ROTAS["N"][1]): "N", len(N.ROTAS["N"][1]) + len(N.ROTAS["S"][1]): "S",
+                            len(N.ROTAS["U"][1]): "L"}

@@ -108,15 +108,25 @@ ABA_DA_INSTANCIA = {"PERICAO": "evento"}         # as outras: "normal"
 BRILHO_ABA_ATIVA = 135                           # aba ativa ~161-163 (creme); as outras ~100 (marrom)
 DIFICULDADE_BOTAO = {"NORMAL": (513, 495), "DIFICIL": (646, 495), "HEROI": (770, 495)}
 # rotas: letra -> (nome, instancias em ordem). T = as duas, uma volta so (coleta as tarefas no fim de tudo).
+# instancias em manutencao no servidor: saem das rotas prontas (N, T, U) para o bot nao travar nelas. Tire daqui quando voltar.
+EM_MANUTENCAO = {"PROFUNDEZAS"}
+
+
+def _sem_manutencao(instancias):
+    return [i for i in instancias if i not in EM_MANUTENCAO]
+
+
 ROTAS = {
-    "N": ("Rota Norte", ["FANTASMA", "PROFUNDEZAS", "MINHOCAO"]),
-    "S": ("Rota Sul", ["ESCORPIAO_REI", "DRAGAO_GELADO", "RAINHA_LIRIS"]),
+    "N": ("Rota Norte", _sem_manutencao(["FANTASMA", "PROFUNDEZAS", "MINHOCAO"])),
+    "S": ("Rota Sul", _sem_manutencao(["ESCORPIAO_REI", "DRAGAO_GELADO", "RAINHA_LIRIS"])),
 }
-ROTAS["L"] = ("Rota Leste", ["ULTIMA_LUTA", "DEVORADORES"])
+ROTAS["L"] = ("Rota Leste", _sem_manutencao(["ULTIMA_LUTA", "DEVORADORES"]))
 ROTAS["T"] = ("Rota Norte e Sul", ROTAS["N"][1] + ROTAS["S"][1])
 ROTAS["U"] = ("Super Rota", ROTAS["N"][1] + ROTAS["S"][1] + ROTAS["L"][1])
 CUPONS_POR_ROTA = {"N": 40000, "S": 50000, "L": 60000}
-FIM_ROTA_CUPOM = {3: "N", 6: "S", 8: "L"}     # indice da PROXIMA instancia (depois da ultima da rota) -> rota que acabou (Super Rota: 3+3+2)
+# indice da PROXIMA instancia (depois da ultima da rota) -> rota que acabou (Super Rota: Norte + Sul + Leste)
+_n, _s, _l = (len(ROTAS[c][1]) for c in "NSL")
+FIM_ROTA_CUPOM = {_n: "N", _n + _s: "S", _n + _s + _l: "L"}
 CHEFE = "PERICAO"
 ROTAS["C"] = ("Chefao Global", [CHEFE])
 ROTAS["P"] = ("Pericao (comum, fora do horario do Chefao Global)", [CHEFE])
