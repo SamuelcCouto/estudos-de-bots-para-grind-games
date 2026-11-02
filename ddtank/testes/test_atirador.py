@@ -177,7 +177,7 @@ w = Mundo(setas_funcionam_em=("top", "filha")); at, mem, logs, arq = novo(w)
 at.mem.prever = lambda inst, a, b: {"angulo": 45.0, "forca": 10.0, "origem": "teste", "detalhe": ""}   # previsao incoerente
 w.angulo = 15.0
 orig = at.ajustar_angulo
-at.ajustar_angulo = lambda alvo, tol=3.0: (setattr(w, "angulo", 30.0) or True)    # o ajuste "parou" em 30 graus
+at.ajustar_angulo = lambda alvo, tol=3.0, passada=0.0: (setattr(w, "angulo", 30.0) or True)    # o ajuste "parou" em 30 graus
 rodar(at, w)
 assert any("recalculada" in l for l in logs), logs
 print("forca recalculada quando o angulo nao chega no previsto OK")
@@ -455,7 +455,7 @@ class MundoToque(MundoComThread):
         super().tecla(nome, dur)
 w = MundoToque(angulo=4.0); w.vez = (0.0, 60.0)
 at, mem, logs, arq = novo(w, inst="PERICAO")
-assert at.ajustar_angulo(6.0, 1.0), "passou do alvo por 1,5 (< menor toque): vale como chegar"
+assert at.ajustar_angulo(6.0, 1.0, 2.0), "passou do alvo por 1,5 (< menor toque): vale como chegar"
 assert len([t for t in w.teclas if t[0] in ("cima", "baixo")]) == 1, w.teclas          # antes: 12 toques ida e volta e o tiro era pulado
 import estrategias as E
 assert E.estrategia("PERICAO")["tolerancia_angulo"] >= 1.5
@@ -561,12 +561,14 @@ w = MundoComThread(); w.azul, w.boss = (78.0, 62.0), (52.0, 27.0)
 at, mem, logs, arq = novo(w, inst="ULTIMA_LUTA_F2")
 at.espelho_falhas = 2
 rodar(at, w, ate=7.5)
-assert any("[ATRAVESSAR]" in l for l in logs) and not w.tiros, "o espelho falhou 2x: atravessa a arena andando (sem atirar)"
+assert not any("[ATRAVESSAR]" in l for l in logs) and w.tiros, "02/11: mesmo apos 2 erros nao atravessa: continua atirando do lado direito (a conta nao muda)"
 w = MundoComThread(); w.azul, w.boss = (78.0, 62.0), (52.0, 27.0)
 at, mem, logs, arq = novo(w, inst="ULTIMA_LUTA_F2")
 at.espelho_falhas = 2
 at.travessias_na_luta = 3                         # nao conseguiu atravessar: usa a mira traseira
+E.ESTRATEGIAS["ULTIMA_LUTA_F2"]["espelho_sempre"] = False     # (a mira traseira so vale com o espelho desligado)
 rodar(at, w, ate=7.5)
+E.ESTRATEGIAS["ULTIMA_LUTA_F2"]["espelho_sempre"] = True
 assert at.pendente is not None and at.pendente["inst"] == "ULTIMA_LUTA_F2_E", "o aprendizado desta mira vai para a instancia propria"
 assert any("uso a mira de ULTIMA_LUTA_F2_E" in l for l in logs), logs
 assert abs(w.angulo - 81.5) <= 2.0, f"ponteiro em {w.angulo:.1f} (esperado ~81,5, de frente para a direita; tolerancia 1 grau na fase 2)"

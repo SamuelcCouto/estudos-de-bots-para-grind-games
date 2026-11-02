@@ -54,6 +54,8 @@ ESTRATEGIAS = {
         "jogador_y_min": 50.0,        # o boneco fica no chao (y ~ 62): descarta cantos azuis da camera do minimapa
         "reposicionar": True,         # boss pequeno colado no boneco = tiro perdido: anda para a direita (o usuario fez 0.2-0.3 s)
         "fugir_do_elite": True,
+        "espelho_sempre": True,       # 02/11 (usuario): nada de atravessar nem de tentativa e erro - nasceu a direita, atira de la com a conta (fisica + vento)
+        "atravessar": False,
         "espelhar": True,             # nasceu a direita: atira do ponto espelhado (x~83) com a mira do lado esquerdo, sem atravessar o mapa       # ponto vermelho colado no azul (minimapa) = elite em cima: anda para o lado OPOSTO antes de atirar
         "andar_se_sem_queda": True,   # boss de ELITE invocado com a hitbox em cima do boneco (o ponto some no minimapa): tiro sem queda -> anda
         "angulo_min": 0.0,
@@ -89,6 +91,7 @@ ESTRATEGIAS = {
     "PERICAO": {
         "chefe_global": True,         # vida do servidor; acerto pelos numeros de dano; vitoria = o chefao morreu para todos
         "angulo_min": 0.0,            # mira quase reta (o ponteiro le 7); nas outras o minimo e 15
+        "passada_angulo": 2.0,        # graus: passar do alvo por menos que o menor toque da seta vale como chegar (so aqui: na fase 2 da Ultima Luta 2 graus decidem)
         "tolerancia_angulo": 1.5,     # graus: o ponteiro comeca em 4.5 - a 2.5 do alvo (a normal, 3, aceitaria). NAO menos que 1,5: o menor toque da seta
                                       # mexe ~1,4 e com 1.0 o bot ia-e-voltava 12x e pulava o tiro (usuario: "mexe a mira para sempre e nunca ataca o Pericao")
         "pet_e": True,                # E quando o buff do pet estiver disponivel

@@ -83,6 +83,13 @@ Comando: `python navegador.py --atirar --rota L --cartas TODAS --chefe n [--come
 - Mudanca de 02/11: Profundezas esta em manutencao -> `navegador.EM_MANUTENCAO` tira da Rota Norte/T/Super Rota (a Super Rota agora e Fantasma > Minhocao > Sul > Leste;
   `FIM_ROTA_CUPOM` e calculado pelo tamanho das rotas). Para voltar, esvazie `EM_MANUTENCAO`.
 
+### 2.7 Fase 2 da Ultima Luta - decisao do usuario (02/11): sem atravessar, sem tentativa e erro
+- Regra de atravessar para a esquerda REMOVIDA da fase 2 (`"atravessar": False`, `"espelho_sempre": True`): nasceu a direita, atira de la (ponto espelhado x~83) com a conta
+  (fisica + vento); nao volta a atravessar depois de 2 erros. A conta ja difere do lado esquerdo (62% x 51% para o mesmo dx).
+- Os erros de 02/11 eram de EXECUCAO, nao de formula: (1) `passada_angulo` (aceitar passar do alvo ate 2 graus, feito para o Pericao) valia para todas as lutas e
+  deixou a fase 2 mirar 72 em vez de 74 -> agora so o Pericao (`"passada_angulo": 2.0`); (2) a forca passava 16-25% do alvo porque o teto da antecipacao era 12% -> `ANTECIPACAO_MAX` 40.
+- Dados 01/11: do lado direito o bot nunca acertou (0/12); do esquerdo acertava 118/169. **Nao validado ao vivo; aguardando gravacao do usuario.**
+
 ## 3. Fisica (ddtcurve 0.2.1, PyPI, so lido)
 `ddtc.predict(angulo, vento, dx, dy)`: arrasto linear r=0.90289815, vento w=6.33592869, gravidade g=-184.11666458, dx/dy em "telas"; 100% = forca maxima.
 Reproduz os acertos da rota Leste com UMA escala por mapa (erro medio ~2 pontos de forca): `estudos/fit_ddtcurve.py`. O PVP usa as TABELAS do jogo

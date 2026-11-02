@@ -33,7 +33,7 @@ AVIAO_MOVEU = 4.0              # px de minimapa: depois do voo o boneco tem que 
 INTERVALO_LEITURA_LEVE = 3.0  # s (gravacao leve: so os numeros, sem print)
 INTERVALO_MINIMAPA = 0.4      # s entre leituras do minimapa para o rastreador (posicao do jogador = a que mais se repete)
 TOLERANCIA_ANGULO = 3.0       # graus
-MENOR_TOQUE_ANGULO = 2.0      # graus: o menor toque da seta mexe ~1,4; passar do alvo por menos que isto vale como chegar
+MENOR_TOQUE_ANGULO = 2.0      # graus: o menor toque da seta mexe ~1,4 (estrategia "passada_angulo": passar do alvo por menos que isto vale como chegar)
 TAXA_ANGULO_INICIAL = 28.0    # graus/s com a seta apertada (aprende sozinho)
 FORCA_POR_SEGUNDO = 38.0      # % da barra por segundo segurando espaco (medido nas gravacoes; o bot aprende o valor real)
 ANTECIPACAO_INICIAL = 4.0     # % de folga: solta um pouco antes (atraso da captura + do KEYUP)
@@ -274,7 +274,8 @@ class Atirador:
         alvo_x = estrategias.estrategia(inst).get("atravessar_para_x")
         espelho = self.espelho_agora = False
         if (azul and boss and alvo_x is not None and boss[0] < azul[0] - 8 and not self.sombra
-                and self.espelho_falhas < 2 and estrategias.estrategia(inst).get("espelhar")):
+                and (self.espelho_falhas < 2 or estrategias.estrategia(inst).get("espelho_sempre"))
+                and estrategias.estrategia(inst).get("espelhar")):
             # nasceu a DIREITA: o mapa e simetrico em volta do boss -> atira do ponto ESPELHADO (x~83) de frente para o boss, com a
             # mesma mira do lado esquerdo, em vez de atravessar o mapa (2 turnos perdidos). 2 tiros sem queda daqui -> volta a atravessar
             espelho = self.espelho_agora = True
@@ -283,7 +284,7 @@ class Atirador:
                 azul, boss, conf = self.ajustar_posicao(azul, boss, conf, alvo_esp)
         elif (azul and boss and alvo_x is not None and boss[0] > alvo_x + 10 and azul[0] > alvo_x + 3 and not self.sombra
                 and self.travessias_na_luta < 3):
-            if azul[0] - alvo_x > TRAVESSIA_CURTA_PX:
+            if azul[0] - alvo_x > TRAVESSIA_CURTA_PX and estrategias.estrategia(inst).get("atravessar", True):
                 return self.atravessar(azul, alvo_x)  # longe (lado direito / debaixo do boss): o turno todo andando
             azul, boss, conf = self.ajustar_posicao(azul, boss, conf, alvo_x)   # perto: anda e atira no mesmo turno
         if azul and boss and not espelho and estrategias.estrategia(inst).get("separar_lado") and boss[0] < azul[0] - 8:
@@ -328,7 +329,7 @@ class Atirador:
             self.virar_para(est["olhar_lado"])        # mira "traseira": de frente para um lado e atirando para o outro
         elif azul and boss and abs(boss[0] - azul[0]) >= 1.5:
             self.virar_para(1 if boss[0] > azul[0] else -1)
-        ok_ang = self.ajustar_angulo(pred["angulo"], est.get("tolerancia_angulo", TOLERANCIA_ANGULO))
+        ok_ang = self.ajustar_angulo(pred["angulo"], est.get("tolerancia_angulo", TOLERANCIA_ANGULO), est.get("passada_angulo", 0.0))
         t_ang = self.agora() - inicio
         if self.reg:
             fr.append(self.reg.frame(self.ver(), "apos_angulo"))
@@ -677,7 +678,7 @@ class Atirador:
                             soltou=soltou, trace_barra=trace[-40:])
 
     # ------------------------------------------------------------------ angulo
-    def ajustar_angulo(self, alvo, tol=TOLERANCIA_ANGULO):
+    def ajustar_angulo(self, alvo, tol=TOLERANCIA_ANGULO, passada=0.0):
         sem_efeito = 0
         erro_ant = None
         for _ in range(12):
@@ -688,7 +689,7 @@ class Atirador:
             erro = alvo - a
             if abs(erro) <= tol:
                 return True
-            if erro_ant is not None and erro * erro_ant < 0 and abs(erro) <= MENOR_TOQUE_ANGULO:
+            if erro_ant is not None and erro * erro_ant < 0 and abs(erro) <= passada:
                 return True        # passou do alvo por menos que o menor toque da seta: mais um toque so faria ir-e-voltar (bug do Pericao)
             erro_ant = erro
             dur = float(np.clip(abs(erro) / self.taxa_angulo * 0.85, 0.05, 0.6))
@@ -907,7 +908,7 @@ class Atirador:
         acertou = hp1 < p["hp0"] - (2 if incerto else 3)
         if p.get("espelho"):
             self.espelho_falhas = 0 if acertou else self.espelho_falhas + 1
-            if self.espelho_falhas >= 2:
+            if self.espelho_falhas >= 2 and not estrategias.estrategia(p["inst"]).get("espelho_sempre"):
                 self.log("   [ESPELHO] 2 tiros sem tirar vida do ponto espelhado: nesta luta volto a atravessar para o lado esquerdo")
         if incerto and acertou or hp1 < 99:
             self.sem_queda_cheia = 0
