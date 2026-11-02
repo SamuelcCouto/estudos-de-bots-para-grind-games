@@ -145,6 +145,15 @@ def tamanho(hwnd):
     return r.right, r.bottom
 
 
+def restaurar_se_minimizada(hwnd):
+    """Janela minimizada tem area cliente 0x0 (capturar devolve None e o bot fica cego). Restaura SEM roubar o foco (SW_SHOWNOACTIVATE).
+    Devolve True se estava minimizada."""
+    if not user32.IsIconic(hwnd):
+        return False
+    user32.ShowWindow(hwnd, 4)
+    return True
+
+
 def capturar(hwnd, modo="print"):
     """Imagem BGR da area cliente da janela, ou None.
 

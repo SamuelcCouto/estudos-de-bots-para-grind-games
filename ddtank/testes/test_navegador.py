@@ -890,3 +890,18 @@ assert _ponto is not None and abs(_ponto[0] - 544) <= 6 and abs(_ponto[1] - 312)
 _fl = cv2.imread(os.path.join(_pasta_frames, "TAREFA_LESTE_ESCOLHA.png"))
 assert N.posicao_bilhete_bigodao(_fl, N.popup_escolha_recompensa(_fl)) is None, "popup do Leste (materiais) nao tem o bilhete: nao escolhe nada"
 print("Fantasma: Bilhete Bigodao achado pela cor roxa no popup (e ausente no popup do Leste) OK")
+
+# ---- captura vazia (janela minimizada): o IOJanela restaura a janela sozinho, no maximo a cada VAZIA_RESTAURAR_S
+class _JanelaMin:
+    def __init__(self): self.restauros = 0; self.min = True
+    def capturar(self, hwnd, modo="print"): return None if self.min else __import__("numpy").zeros((600, 1000, 3), "uint8")
+    def restaurar_se_minimizada(self, hwnd):
+        if self.min:
+            self.restauros += 1; self.min = False; return True
+        return False
+_jm = _JanelaMin(); _logs_jm = []
+_io = N.IOJanela(1, janela_mod=_jm, calibrar=False, log=_logs_jm.append)
+assert _io.capturar_bruto() is None and _jm.restauros == 1 and any("MINIMIZADA" in l for l in _logs_jm), _logs_jm
+_io.capturar_bruto()
+assert _jm.restauros == 1, "so restaura uma vez enquanto nao esta minimizada de novo"
+print("Janela minimizada: o bot restaura sozinho (captura vazia) OK")

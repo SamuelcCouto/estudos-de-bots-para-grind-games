@@ -61,6 +61,7 @@ TAREFA_FECHAR = (881, 190)
 TAREFA_BOTAO = (760, 513)
 ESPERA_CONFIRMAR_TELA = 0.3   # s entre as 2 leituras que confirmam uma tela (era 0,45: ~1 s a menos por instancia)
 MAX_ERROS_EM_10_MIN = 12       # falhas inesperadas seguidas que param o bot
+VAZIA_RESTAURAR_S = 10.0        # s entre tentativas de restaurar a janela quando a captura vem vazia (minimizada)
 IMAGEM_PARADA_S = 40.0         # s com a imagem do jogo identica = janela nao esta sendo desenhada (minimizada/escondida)
 PRESO_APOS = 120.0             # s na mesma tela (fora de batalha) ou em tela desconhecida = "preso": tenta se soltar
 PRESO_REPETIR = 60.0           # s entre as tentativas de se soltar
@@ -183,7 +184,25 @@ class IOJanela:
         img = self.j.capturar(self.hwnd, "print")
         if img is not None:
             self._vigiar_imagem_parada(img)
+        else:
+            self._destravar_captura_vazia()
         return img
+
+    def _destravar_captura_vazia(self):
+        """Captura vazia = janela minimizada (area cliente 0x0): o bot ficou 7 h "preso em tela desconhecida" (02/11 03:09-10:15) sem
+        enxergar nada. Restaura a janela sozinho (sem pegar o foco), no maximo a cada VAZIA_RESTAURAR_S."""
+        agora = time.time()
+        if agora - self._ultima_restauracao < VAZIA_RESTAURAR_S:
+            return
+        self._ultima_restauracao = agora
+        try:
+            if getattr(self.j, "restaurar_se_minimizada", None) and self.j.restaurar_se_minimizada(self.hwnd):
+                self.log("[ALERTA] a janela do jogo estava MINIMIZADA (o bot nao conseguia ver a tela): restaurei sozinho. "
+                         "Se o Windows voltar a minimizar (desligar monitores / Win+D), ele restaura de novo.")
+        except Exception as e:                           # nunca derruba o bot por isso
+            self.log(f"   (nao consegui restaurar a janela: {e})")
+
+    _ultima_restauracao = -1e9
 
     def _vigiar_imagem_parada(self, img):
         """A janela minimizada/escondida para de ser desenhada: o PrintWindow devolve SEMPRE a mesma imagem e o bot fica cego
