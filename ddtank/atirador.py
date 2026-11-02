@@ -844,6 +844,7 @@ class Atirador:
         t0 = self.agora()
         v, motivo, trace, faltas = 0.0, "tempo_limite", [], 0
         visto_baixo = False
+        v_min = None                                  # menor leitura vista: a barra SUBINDO (>= 3 acima dela) prova que e a carga de agora, nao o tiro anterior parado
         while self.agora() - t0 < limite:
             f = self.ver()
             dur = self.agora() - t0
@@ -859,11 +860,12 @@ class Atirador:
                 trace.append((round(dur, 2), round(v)))
                 if v <= 12:
                     visto_baixo = True
+                v_min = v if v_min is None else min(v_min, v)
                 if por_tempo:
                     if dur >= tempo_alvo:
                         motivo = "tempo_alvo"
                         break
-                elif v >= quer and dur >= minimo and (visto_baixo or dur >= 2 * minimo + 0.5):
+                elif v >= quer and dur >= minimo and (visto_baixo or v - v_min >= 3 or dur >= 2 * minimo + 0.5):
                     motivo = "alvo"
                     break
             elif por_tempo and dur >= tempo_alvo:
