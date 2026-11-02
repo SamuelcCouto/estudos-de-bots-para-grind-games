@@ -16,3 +16,8 @@ suite.txt
 ddtank/botDDTGPT/envio/
 ddtank/envio/*.zip
 ddtank/envio/**/*.zip
+
+# cliente do jogo extraido localmente (codigo/dados do jogo: nao versionar)
+ddtank/cliente_extraido/
+ddtank/dados/jogo/
+ddtank/dados/mapas_jogo/

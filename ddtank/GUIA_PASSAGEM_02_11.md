@@ -1,5 +1,9 @@
 # Guia de passagem (sessao local de 01-02/11) - LEIA ANTES DE QUALQUER COISA
 
+> **ATUALIZACAO 02/11 (tarde): leia primeiro `ESTUDO_BOT_INTELIGENTE.md`.** A fisica EXATA do tiro foi extraida do proprio cliente
+> (Flash descompilado do cache local) e validada; o plano agora e trocar memoria/tabelas/busca de escala por um motor exato
+> (`fisica_exata.py`). As secoes abaixo descrevem o bot ANTIGO e continuam validas como historico e para a rota Leste atual.
+
 Escrito para o proximo chat comecar sem o contexto do anterior. O usuario fala portugues e quer explicacoes simples. Regras do projeto estao no
 `../CLAUDE.md` (so a branch `claude/wonderful-rubin-3oyqi3`, sem PR, rodar todos os `python testes/test_*.py` antes de commitar, nao inventar
 coordenadas/telas: pedir gravacao). Contexto geral: `DOCUMENTACAO.md` e `NOTAS.md` (a secao "PVP - estudo de 01/11" resume o que esta aqui).
@@ -13,7 +17,7 @@ Sem PR. `dados/aprendizado.json.bak_antes_da_limpeza`, `dados/drops_vistos/`, `d
   medir tempos, pois as duas capturas da janela competem). Depois monte montagens com cv2 e leia as imagens.
 - Cada correcao deve ter um criterio medido (acertou / tempo da volta), nao impressao. O usuario se frustrou com ciclos de "tentativa e correcao" sem resultado.
 - Nao ligue o bot as cegas em mapas em que ele atira "no padrao" (sem posicao): so gasta partida.
-- Nunca rode software de terceiros nao verificado (o aimbot do DDTank foi recusado de proposito). `ddtcurve` (PyPI) foi so LIDO (fisica abaixo).
+- Ferramentas de terceiros: LIBERADAS pelo usuario em 02/11 (ex.: JPEXS FFDec, pktmon/Npcap, Frida), desde que de codigo aberto/fonte oficial. Executavel fechado de origem duvidosa (o aimbot) continua fora. `ddtcurve` (PyPI) foi so LIDO.
 - O disco C: do usuario encheu uma vez (outro download dele). Os arquivos temporarios da sessao ficam em `%TEMP%\claude\...\scratchpad`.
 - Antes de ligar o PVP, confirme que NAO ha outro bot rodando (`pvp.py` e `navegador.py` usam trava de instancia unica); o painel (`painel.py`) pode ter ligado um.
 
