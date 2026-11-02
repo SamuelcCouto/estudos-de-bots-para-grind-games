@@ -48,4 +48,16 @@ assert r["motivo"] == "alvo" and r["alvo"] == 0, r["motivo"]
 r = FX.simular(0, 0, tiro, FX.angulo_envio(50, +1), terreno=lambda x0, y0, x1, y1: 300 <= x1 and x0 <= 320)   # parede em x=300-320
 assert r["motivo"] == "chao" and 290 <= r["impacto"][0] <= 320, r["impacto"]
 print("colisao com boneco e com terreno OK")
+
+# 5) perk teleguiado: um tiro que passaria ALEM do alvo e corrigido (desce a <150 px dele) e acerta
+f_longe = FX.forca_para_alvo(0, 0, 920, 0, FX.angulo_envio(50, +1))
+sem = FX.simular(0, 0, f_longe, FX.angulo_envio(50, +1), alvos=[(785, -40, 815, 0)])
+com = FX.simular(0, 0, f_longe, FX.angulo_envio(50, +1), alvos=[(785, -40, 815, 0)], teleguiado=True, inimigos=[(800, -20)])
+assert sem["motivo"] != "alvo" and com["motivo"] == "alvo" and com["corrigiu"], (sem["motivo"], com["motivo"])
+print("perk teleguiado (raio 150 px, so descendo) OK")
+
+# 6) "de costas": virado para a direita com |angulo| >= 91 (terreno inclinado: mira 85 + inclinacao -8 = -93)
+assert FX.de_costas(+1, FX.angulo_envio(85, +1, inclinacao=-8)) and not FX.de_costas(+1, FX.angulo_envio(85, +1))
+assert FX.de_costas(-1, -80) and not FX.de_costas(-1, -100)
+print("regra do tiro de costas OK")
 print("\nfisica_exata OK")

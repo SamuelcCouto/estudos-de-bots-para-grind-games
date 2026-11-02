@@ -62,6 +62,27 @@ O solucionador devolve a forca da tabela de 50 graus com erro maximo de 2 pontos
   X, Y, VX, VY iniciais, id da bala e a **lista de eventos** (inclui o dano). Ha tambem pacotes de inicio de turno (vento,
   jogador da vez) e de movimento (posicoes). Lendo a rede, o bot sabe posicoes, vento e resultado **sem erro de imagem**.
 
+### 1.5 RESULTADO da captura de rede (02/11, `CAPTURAR_REDE.bat`, 14 min de PVP do usuario)
+- **A rede foi lida por completo.** Em ~2 s o `rede_ddt.py` recupera a chave de sessao SO pelo trafego cifrado: 1422 pacotes do
+  servidor e 257 do cliente, 100% com checksum certo. Funciona com a captura comecando no meio da partida.
+- **Os seus tiros, exatos** (pacote FIRE do cliente): ponto de saida (x, y) em px do mapa, forca 0-2000 e angulo. Exemplos:
+  `(966, 445, 1080, -98)` e `(1420, 820, 780, -130)` sao tiros de costas.
+- **A cada vez (pacote TURN): a posicao exata de TODOS os bonecos** (x, y em px do mapa), vida, energia, furia, tiros no turno,
+  e o **vento** (o mesmo do tiro, conferido em 99 tiros).
+- **Resultado de cada tiro (FIRE do servidor):** saida, velocidade inicial, ponto e instante da explosao e dano em cada alvo.
+- **A fisica exata foi provada:** os 144 projeteis da captura explodiram a **no maximo 1,8 px** da trajetoria simulada (mediana 0,6 px).
+  Sao 105 normais e 39 teleguiados (`estudos/valida_rede.py`).
+- **Perk teleguiado (Z/X/C)** (servidor `SimpleBomb.StartMoving`): quando o projetil esta DESCENDO e passa a ate **150 px** de um
+  inimigo, ele vai reto no inimigo (velocidade 1000, sem gravidade nem vento; evento `CHANGE_SPEED`). Com o perk, basta passar perto.
+- **Evento "de costas"** (`EmperorOfPlayingBack`): conta quando voce ACERTA um jogador virado para a direita com |angulo| >= 91, ou
+  virado para a esquerda com |angulo| <= 89. O angulo enviado = inclinacao do terreno -/+ mira, entao num chao inclinado a mira 85
+  vira -93. O motor sabe planejar esses tiros (`fisica_exata.de_costas`).
+
+**Consequencia:** com a leitura da rede, o bot tem **o estado exato** (posicoes, vento, vez) e **o resultado exato** de cada tiro, e a
+fisica ja esta provada no proprio jogo. Para ler ao vivo (e nao so depois), a captura precisa rodar junto com o bot:
+- com administrador: `pydivert` (WinDivert) em modo so-leitura, ou Npcap + scapy;
+- sem administrador: Frida no processo do Electron (reserva).
+
 ---
 
 ## 2. A nova arquitetura proposta (o "motor exato")
@@ -116,9 +137,10 @@ Isto vale **igual para PVP e instancias** (bosses usam a mesma fisica; muda so o
 | Etapa | O que | Aceite (medido) |
 |---|---|---|
 | 0 ✅ | Fisica exata + dados do jogo (`fisica_exata.py`, `estudos/extrair_cliente.py`) | testes contra as tabelas oficiais passam |
+| 0b ✅ | Rede decifrada (`rede_ddt.py`): chave, tiros, vez, posicoes, vento, resultado; fisica conferida em 144 projeteis | erro <= 1,8 px |
 | 1 | **Replay**: aplicar o motor nas gravacoes que ja temos (rota Leste do bot, PVP do usuario) | a forca prevista bate com a dos acertos (+-2 pontos) |
 | 2 | Percepcao pela tela v2: id do mapa, escala do minimapa pela largura real, posicoes, vento, inclinacao pelo `fore.png` | erro de posicao < 15 px do mapa em 50 quadros rotulados |
-| 3 | Rede (opcao B): capturar 1 partida com `pktmon` (admin), recuperar a chave e decodificar posicoes, vento e tiros | posicoes e vento dos pacotes = tela; resultado do tiro lido do pacote |
+| 3 | Rede AO VIVO: leitor em tempo real (pydivert/Npcap, admin) alimentando o bot com o estado da vez | estado lido < 1 s apos o pacote TURN |
 | 4 | Planejador + acao por quadros, ligado ao PVP e a rota Leste (substitui memoria/tabelas/busca) | >= 95% de acerto no 1o tiro em 50 tiros seguidos |
 | 5 | Instancias com bosses (Pericao, Mago...) usando as regras dos scripts do servidor; vitalidade (Leste/PVP) | rodadas sem derrota |
 
@@ -134,6 +156,9 @@ cliente. No PVP, o bot joga contra pessoas. A leitura passiva da rede e da tela 
 ## 5. Arquivos desta etapa
 - `fisica_exata.py`: simulador e solucionador exatos (sem dependencias); `testes/test_fisica_exata.py`: validacao com as tabelas.
 - `estudos/extrair_cliente.py`: extrai os SWFs do cache, baixa os XMLs de dados e descompila (com `--ffdec`).
+- `rede_ddt.py` (+ `testes/test_rede_ddt.py`): le o .pcapng, recupera a chave, decifra e interpreta tiros/vez/posicoes/vento.
+- `estudos/valida_rede.py <captura.pcapng>`: confere a fisica contra as explosoes informadas pelo servidor.
+- `CAPTURAR_REDE.bat`: captura so a porta do jogo (pede administrador sozinho); saida em `capturas_rede/` (fora do git).
 - Locais, fora do git: `cliente_extraido/` (SWFs e codigo descompilado, ~150 MB) e `dados/jogo/` (XMLs).
 - Codigo do cliente mais util para o proximo passo: `cliente_extraido/fonte/scripts/` em `phy/`, `game/view/RouteComputer.as`,
   `game/view/GameView.as` (`__shoot`), `game/actions/ChangePlayerAction.as` (vez/vento), `road7th/comm/` (cifra),

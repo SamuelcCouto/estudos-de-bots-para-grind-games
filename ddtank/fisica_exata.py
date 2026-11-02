@@ -40,6 +40,15 @@ class MapaFisico:
 
 
 BALA_PADRAO, MAPA_PADRAO = Bala(), MapaFisico()
+TELEGUIADO_RAIO = 150.0     # perk teleguiado (Z/X/C): descendo a ate 150 px de um inimigo, vai reto nele (servidor SimpleBomb.StartMoving)
+TELEGUIADO_VEL = 1000.0     # ... com velocidade 1000 e SEM gravidade nem vento (CHANGE_SPEED + clearWG)
+
+
+def de_costas(direcao, angulo):
+    """Conquista "de costas" do servidor (EmperorOfPlayingBack): acertar um JOGADOR virado para a direita com |angulo| >= 91, ou
+    virado para a esquerda com |angulo| <= 89 (angulo = o que vai no pacote; o terreno inclinado permite)."""
+    a = abs(angulo)
+    return (direcao > 0 and a >= 91) or (direcao < 0 and a <= 89)
 
 
 def angulo_envio(angulo_mira, direcao, inclinacao=0.0):
@@ -59,14 +68,16 @@ def velocidade_inicial(forca, angulo, fator=1.0, desvio=0):
 
 
 def simular(x0, y0, forca, angulo, vento=0.0, bala=BALA_PADRAO, mapa=MAPA_PADRAO, terreno=None, alvos=(), raio=3,
-            limite_s=20.0, largura=None, altura=None):
+            limite_s=20.0, largura=None, altura=None, teleguiado=False, inimigos=()):
     """Simula o projetil. terreno(x0, y0, x1, y1) -> True se o retangulo tem chao (None = sem terreno); alvos = [(x0,y0,x1,y1)]
-    (retangulos dos bonecos). Devolve dict(pontos, impacto=(x, y), motivo='alvo'|'chao'|'fora'|'tempo', alvo=indice|None)."""
+    (retangulos dos bonecos). teleguiado + inimigos [(x, y)]: perk que corrige a mira (raio 150, so descendo).
+    Devolve dict(pontos, impacto=(x, y), motivo='alvo'|'chao'|'fora'|'tempo', alvo=indice|None, corrigiu=bool)."""
     vx, vy = velocidade_inicial(forca, angulo)
     m, arf = bala.mass, mapa.drag * bala.drag
     fx, fy = vento * bala.wind, mapa.weight * bala.weight * bala.mass
     x, y, t = float(x0), float(y0), 0.0
     pontos = [(x, y)]
+    corrigiu = False
 
     def colide(px, py):
         r = (px - raio, py - raio, px + raio, py + raio)
@@ -95,13 +106,20 @@ def simular(x0, y0, forca, angulo, vento=0.0, bala=BALA_PADRAO, mapa=MAPA_PADRAO
                 motivo, idx = colide(px, py)
                 if motivo:
                     pontos.append((px, py))
-                    return dict(pontos=pontos, impacto=(px, py), motivo=motivo, alvo=idx, tempo=t)
+                    return dict(pontos=pontos, impacto=(px, py), motivo=motivo, alvo=idx, tempo=t, corrigiu=corrigiu)
                 k -= PASSO_COLISAO
         x, y = nx, ny
         pontos.append((x, y))
+        if teleguiado and vy > 0 and inimigos:
+            ex, ey = min(inimigos, key=lambda e: math.hypot(e[0] - x, e[1] - y))
+            d = math.hypot(ex - x, ey - y)
+            if d < TELEGUIADO_RAIO and d > 0:
+                vx, vy = (ex - x) / d * TELEGUIADO_VEL, (ey - y) / d * TELEGUIADO_VEL
+                fx = fy = 0.0
+                teleguiado, corrigiu = False, True
         if terreno is None and not alvos and largura is None and vy > 0 and y >= y0 + 5000:
             break
-    return dict(pontos=pontos, impacto=(x, y), motivo="tempo", alvo=None, tempo=t)
+    return dict(pontos=pontos, impacto=(x, y), motivo="tempo", alvo=None, tempo=t, corrigiu=corrigiu)
 
 
 def x_na_altura(x0, y0, forca, angulo, y_alvo, vento=0.0, bala=BALA_PADRAO, mapa=MAPA_PADRAO):
