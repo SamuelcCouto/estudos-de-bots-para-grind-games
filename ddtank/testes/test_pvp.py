@@ -191,9 +191,9 @@ assert all(8 <= mp.prever("PVP", (74.0, 56.0), (13.0, 54.0))["forca"] <= 95 for 
 # busca da escala do mapa: erro -> proxima escala; acerto -> trava (e nao muda mais)
 mp.novo_mapa(4.0, False)
 f0 = mp.prever("PVP", (74.0, 56.0), (13.0, 54.0))["forca"]
-esc, ok = mp.resultado(False)
-assert abs(esc - 4.0 * P.MULT_ESCALA[1]) < 1e-6 and not ok
-assert mp.prever("PVP", (74.0, 56.0), (13.0, 54.0))["forca"] < f0, "escala maior = menos forca"
+esc, ok = mp.resultado(False, curto=True)
+assert abs(esc - 4.0 * P.PASSO_CURTO) < 1e-6 and not ok
+assert mp.prever("PVP", (74.0, 56.0), (13.0, 54.0))["forca"] > f0, "tiro curto = escala menor = mais forca"
 esc, ok = mp.resultado(True)
 assert ok and mp.resultado(False)[0] == esc, "escala travada nao muda com erro"
 print("vigias (vez curta, tela desconhecida, busca eterna), angulo fixo e busca da escala do mapa OK")

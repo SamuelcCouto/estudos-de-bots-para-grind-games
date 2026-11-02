@@ -59,6 +59,9 @@ MULT_ESCALA = (1.0, 1.12, 0.89, 1.25, 0.8, 1.4, 0.7)   # busca da escala do mapa
 INIMIGO_BARRA = (683, 188, 722, 202)   # barra de vida VERMELHA embaixo do avatar do inimigo (x0, y0, x1, y1), quadro de 1280
 PX_POR_UNID_TELA = 65.7             # px da tela principal por unidade da regua 0-10 do jogo (a mesma das tabelas de distancia: 315 -> 972 px)
 TELA_JOGO = (312, 250, 980, 540)    # area do jogo (x0, y0, x1, y1) onde procurar as barras de vida dos bonecos (fora do minimapa e do HUD)
+MSG_CURTO_POS = (387, 330)          # (x, y) do aviso "O poder nao e suficiente, tente aumentar o seu poder" (tiro CURTO), quadro de 1280
+MSG_CURTO_LIMIAR = 0.8
+PASSO_CURTO, PASSO_OUTRO = 0.88, 1.07   # escala do mapa x isto: aviso de tiro curto -> mais forca; erro sem aviso -> um pouco menos
 QUEDA_BARRA_PX = 3                  # a barra (~22 px) encolhendo isto ou mais = acerto
 PRESO_S = 120.0                     # s em tela desconhecida fora da batalha: clica numa area neutra e avisa
 INTERVALO_INICIO = 12.0             # s entre dois cliques em Inicio na sala
@@ -172,13 +175,14 @@ class MemoriaPvp(memoria_mod.Memoria):
         self.escala_base, self.escala_ok, self.i_busca = escala, ok, 0
         self.escala = escala
 
-    def resultado(self, acertou):
-        """Acertou: trava a escala (vale para o mapa). Errou: tenta a proxima da busca (alternando para os dois lados)."""
+    def resultado(self, acertou, curto=False):
+        """Acertou: trava a escala (vale para o mapa). Errou com o aviso do jogo de tiro CURTO: mais forca (escala menor); erro sem
+        aviso: um pouco menos de forca (pode ter passado, ou bateu no terreno)."""
         if acertou:
             self.escala_ok = True
         elif not self.escala_ok and not self.tela_pos:
-            self.i_busca = (self.i_busca + 1) % len(MULT_ESCALA)
-            self.escala = self.escala_base * MULT_ESCALA[self.i_busca]
+            self.i_busca += 1
+            self.escala = float(np.clip(self.escala * (PASSO_CURTO if curto else PASSO_OUTRO), 1.5, 12.0))
         return self.escala, self.escala_ok
 
     tela_pos = None                        # ((x, y) nosso, (x, y) inimigo) na tela principal neste turno (None = usa o minimapa)
@@ -236,6 +240,8 @@ class LeitorPvp(atirador_mod.LeitorReal):
     buff_pet = staticmethod(lambda f: False)          # o icone do buff do pet aparece sempre "ligado" no PVP: nao serve
     vento = staticmethod(vento_mod.ler_vento)
 
+    msg_curto = staticmethod(lambda f: msg_poder_curto(f))
+
     @staticmethod
     def vida_inimigo(f):
         """Largura (px) da barra de vida vermelha do inimigo (~22 com a vida cheia); 0 se nao achou."""
@@ -261,6 +267,26 @@ class LeitorPvp(atirador_mod.LeitorReal):
         if t - self.ultima_vez < HOLD_VEZ_S:
             return True
         return self.ultima_vez > -1e8 and t - self.inicio_vez < JANELA_VEZ_S
+
+
+_TPL_CURTO = []
+
+
+def msg_poder_curto(f):
+    """True se o jogo mostra "O poder nao e suficiente, tente aumentar o seu poder": o tiro ficou CURTO (feedback direto do jogo,
+    visto em 4 de 4 tiros curtos, 01/11). Casa a mascara das letras brancas, que nao depende do fundo."""
+    if not _TPL_CURTO:
+        _TPL_CURTO.append(cv2.imread(os.path.join(config.PASTA_TEMPLATES, "msg_poder_curto.png"), cv2.IMREAD_GRAYSCALE))
+    t = _TPL_CURTO[0]
+    if t is None or f is None or f.ndim != 3 or f.shape[0] < 400:
+        return False
+    x0, y0 = MSG_CURTO_POS
+    th, tw = t.shape
+    h = cv2.cvtColor(f[y0 - 8:y0 + th + 8, x0 - 20:x0 + tw + 20], cv2.COLOR_BGR2HSV)
+    roi = ((h[..., 1] < 45) & (h[..., 2] > 225)).astype(np.float32) * 255
+    if roi.shape[0] < th or roi.shape[1] < tw:
+        return False
+    return float(cv2.matchTemplate(roi, t.astype(np.float32), cv2.TM_CCOEFF_NORMED).max()) >= MSG_CURTO_LIMIAR
 
 
 def barras_na_tela(f):
@@ -523,6 +549,8 @@ class AtiradorPvp(atirador_mod.Atirador):
         f = self.ver() if f is None else self.lei.preparar(f)
         if f is not None:
             self._amostrar_voo(f)
+            if self.pendente is not None and not self.pendente.get("curto") and hasattr(self.lei, "msg_curto") and self.lei.msg_curto(f):
+                self.pendente["curto"] = True
         super().passo(f)
 
     def _amostrar_voo(self, f):
@@ -562,12 +590,15 @@ class AtiradorPvp(atirador_mod.Atirador):
         if acertou is not None and hasattr(self.mem, "resultado") and p.get("tela"):
             self.log(f"   [resultado] barra do inimigo {hp0:.0f} -> {hp1:.0f} px: {'ACERTOU' if acertou else 'ERROU'} (tiro medido na tela principal)")
         elif acertou is not None and hasattr(self.mem, "resultado") and p.get("azul"):      # sem posicao no minimapa o tiro foi no padrao: nao diz nada da escala
-            esc, ok = self.mem.resultado(acertou)
-            self.log(f"   [resultado] barra do inimigo {hp0:.0f} -> {hp1:.0f} px: {'ACERTOU' if acertou else 'ERROU'}; escala do mapa "
+            esc, ok = self.mem.resultado(acertou, curto=bool(p.get("curto")))
+            self.log(f"   [resultado] barra do inimigo {hp0:.0f} -> {hp1:.0f} px: {'ACERTOU' if acertou else 'ERROU'}"
+                     f"{' (o jogo avisou: tiro CURTO)' if p.get('curto') else ''}; escala do mapa "
                      f"{esc_usada:.2f} -> {esc:.2f}{' (travada)' if ok else ''}")
             if self.salvar_escala and self.mapa:
                 self.salvar_escala(self.mapa, esc_usada if acertou else esc, ok)
         p["acertou"], p["escala"] = acertou, esc_usada
+        if p.get("curto") and acertou is None:
+            self.log("   [resultado] o jogo avisou: tiro CURTO (sem leitura da barra do inimigo)")
         pos = self.reg.frame(f, "pos_tiro") if (self.reg and f is not None) else None
         self.tiros_na_partida += 1
         v, conf, votos = p.get("vento", (None, 0.0, 0))
