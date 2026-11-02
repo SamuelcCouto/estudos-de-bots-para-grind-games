@@ -294,7 +294,8 @@ def pacotes(c, inicio, K):
 
 # ------------------------------------------------------------------------------------------------ comandos de jogo (codigo 91)
 GAME_CMD = 91
-SUB = {"MOVE": 1, "FIRE": 2, "TURN": 6, "MOVESTART": 9, "DIRECTION": 7, "WIND_PIC": 241, "START_GAME": 99}
+SUB = {"MOVE": 1, "FIRE": 2, "TURN": 6, "MOVESTART": 9, "DIRECTION": 7, "WIND_PIC": 241, "START_GAME": 99, "GAME_OVER": 100,
+       "GAME_CREATE": 101, "GAME_LOAD": 103}
 ACAO = {1: "PICK", 2: "BOMB", 3: "START_MOVE", 4: "FLY_OUT", 5: "KILL_PLAYER", 6: "TRANSLATE", 7: "FORZEN", 8: "CHANGE_SPEED",
         9: "UNFORZEN", 10: "DANER", 11: "CURE", 12: "GEM_DEFENSE", 13: "CHANGE_STATE", 14: "DO_ACTION", 15: "PLAYBUFFER",
         16: "LASER", 17: "BOMBED", 18: "PUP", 19: "AUP", 20: "PET"}
