@@ -57,6 +57,8 @@ ORDENS_PVP = ([2, 3, 4, 4], [1, 3, 4, 4])   # itens por turno: so o que da dano 
 ANGULO_PVP = 55.0                   # angulo fixo: o resultado de cada tiro (acertou/errou) ajusta a escala do mapa, nao o angulo
 MULT_ESCALA = (1.0, 1.12, 0.89, 1.25, 0.8, 1.4, 0.7)   # busca da escala do mapa: tenta alternando para os dois lados ate acertar
 INIMIGO_BARRA = (683, 188, 722, 202)   # barra de vida VERMELHA embaixo do avatar do inimigo (x0, y0, x1, y1), quadro de 1280
+PX_POR_UNID_TELA = 65.7             # px da tela principal por unidade da regua 0-10 do jogo (a mesma das tabelas de distancia: 315 -> 972 px)
+TELA_JOGO = (312, 250, 980, 540)    # area do jogo (x0, y0, x1, y1) onde procurar as barras de vida dos bonecos (fora do minimapa e do HUD)
 QUEDA_BARRA_PX = 3                  # a barra (~22 px) encolhendo isto ou mais = acerto
 PRESO_S = 120.0                     # s em tela desconhecida fora da batalha: clica numa area neutra e avisa
 INTERVALO_INICIO = 12.0             # s entre dois cliques em Inicio na sala
@@ -174,10 +176,12 @@ class MemoriaPvp(memoria_mod.Memoria):
         """Acertou: trava a escala (vale para o mapa). Errou: tenta a proxima da busca (alternando para os dois lados)."""
         if acertou:
             self.escala_ok = True
-        elif not self.escala_ok:
+        elif not self.escala_ok and not self.tela_pos:
             self.i_busca = (self.i_busca + 1) % len(MULT_ESCALA)
             self.escala = self.escala_base * MULT_ESCALA[self.i_busca]
         return self.escala, self.escala_ok
+
+    tela_pos = None                        # ((x, y) nosso, (x, y) inimigo) na tela principal neste turno (None = usa o minimapa)
 
     def melhor_tiro(self, inst, dx, dy, angulo=None):
         ang = 55.0 if angulo is None else float(angulo)
@@ -185,24 +189,32 @@ class MemoriaPvp(memoria_mod.Memoria):
         f_alvo = memoria_mod.fator_balistico(dx, dy, ang)
         if not f_chao or not f_alvo:
             return None
-        d_efetiva = (dx / self.escala) * (f_alvo / f_chao)
+        d_efetiva = (dx / (PX_POR_UNID_TELA if self.tela_pos else self.escala)) * (f_alvo / f_chao)
         return ang, float(np.clip(forca_tabela(d_efetiva, ang), memoria_mod.FORCA_MIN, memoria_mod.FORCA_MAX)), 0.5
 
     def forca_para(self, inst, azul, boss, angulo):
+        if self.tela_pos:
+            azul, boss = self.tela_pos
         if not (azul and boss) or abs(boss[0] - azul[0]) < memoria_mod.DX_MINIMO:
             return None
         mt = self.melhor_tiro(inst, abs(boss[0] - azul[0]), azul[1] - boss[1], angulo=angulo)
         return None if mt is None else mt[1]
 
     def prever(self, inst, azul, boss):
+        if self.tela_pos:
+            azul, boss = self.tela_pos
         if azul and boss and abs(boss[0] - azul[0]) >= memoria_mod.DX_MINIMO:
             ang = ANGULO_PVP
             self.n_pvp += 1
             mt = self.melhor_tiro(inst, abs(boss[0] - azul[0]), azul[1] - boss[1], angulo=ang)
             if mt:
-                estado = "TRAVADA: ja acertou neste mapa" if self.escala_ok else f"busca {self.i_busca + 1}/{len(MULT_ESCALA)}"
+                if self.tela_pos:
+                    estado, esc = "medido na tela principal", PX_POR_UNID_TELA
+                else:
+                    estado = "TRAVADA: ja acertou neste mapa" if self.escala_ok else f"busca {self.i_busca + 1}/{len(MULT_ESCALA)}"
+                    esc = self.escala
                 return self._limites(inst, ang, mt[1], "pvp-tabela",
-                                     f"angulo {ang:.0f}; forca pelas tabelas (escala {self.escala:.2f} px/unid, {estado})")
+                                     f"angulo {ang:.0f}; forca pelas tabelas (escala {esc:.2f} px/unid, {estado})")
         return super().prever(inst, azul, boss)
 
 
@@ -249,6 +261,29 @@ class LeitorPvp(atirador_mod.LeitorReal):
         if t - self.ultima_vez < HOLD_VEZ_S:
             return True
         return self.ultima_vez > -1e8 and t - self.inicio_vez < JANELA_VEZ_S
+
+
+def barras_na_tela(f):
+    """Barras de vida finas embaixo dos bonecos na tela principal: [(x, y, largura)] azuis (a nossa) e vermelhas (inimigos).
+    Funciona em qualquer mapa (o minimapa de mapas verdes/ilhas perde o ponto azul) e mede a distancia na MESMA unidade das tabelas."""
+    x0, y0, x1, y1 = TELA_JOGO
+    h = cv2.cvtColor(f[y0:y1, x0:x1], cv2.COLOR_BGR2HSV)
+    saida = {}
+    for nome, m in (("azul", (h[..., 0] >= 100) & (h[..., 0] <= 125) & (h[..., 1] >= 170) & (h[..., 2] >= 150)),
+                    ("verm", ((h[..., 0] <= 6) | (h[..., 0] >= 172)) & (h[..., 1] >= 170) & (h[..., 2] >= 170))):
+        n, _lb, st, _c = cv2.connectedComponentsWithStats(m.astype(np.uint8), connectivity=8)
+        saida[nome] = [(int(x + x0 + w / 2), int(y + y0), int(w)) for x, y, w, hh, a in st[1:]
+                       if 14 <= w <= 40 and 2 <= hh <= 7 and a >= 0.7 * w * hh]
+    return saida
+
+
+def posicoes_na_tela(f):
+    """((x, y) do nosso boneco, (x, y) do inimigo) na tela principal, ou None se nao houver exatamente uma barra azul e uma vermelha."""
+    b = barras_na_tela(f)
+    if len(b["azul"]) != 1 or len(b["verm"]) != 1:
+        return None
+    (ax, ay, _), (rx, ry, _) = b["azul"][0], b["verm"][0]
+    return (float(ax), float(ay)), (float(rx), float(ry))
 
 
 def distancia_tabela(forca, ang):
@@ -461,12 +496,22 @@ class AtiradorPvp(atirador_mod.Atirador):
         self.log(f"   [vento] {'?' if v is None else f'{v:+.1f}'} (confianca {conf:.2f}, {votos} leitura(s) iguais)"
                  f"{'' if v is None or vento_mod.confiavel(conf) else ' - DUVIDOSO: recorte salvo para rotular'}")
         antes = self.turnos
+        self.mem.tela_pos = posicoes_na_tela(f) if hasattr(self.mem, "tela_pos") else None
+        if self.mem.tela_pos:
+            (ax, ay), (rx, ry) = self.mem.tela_pos
+            self.log(f"   [tela] voce ({ax:.0f}, {ay:.0f}) inimigo ({rx:.0f}, {ry:.0f}): {abs(rx - ax) / PX_POR_UNID_TELA:.1f} unidades de distancia, "
+                     f"{(ay - ry) / PX_POR_UNID_TELA:+.1f} de altura (medido na tela principal)")
         self.hp_inimigo0 = self._ler_barra_inimigo(f)
         self.turnos_feitos_na_vez += 1
         self.ordem = list(ORDENS_PVP[self.tiros_na_partida % len(ORDENS_PVP)])
         self.combo_luta = None                       # o atirador reescolhe a ordem (sem combos): a deste turno
         self.itens_ultimo = []
-        super().turno(f)
+        try:
+            super().turno(f)
+        finally:
+            if self.pendente is not None and self.turnos > antes:
+                self.pendente["tela"] = bool(self.mem.tela_pos)
+            self.mem.tela_pos = None
         if self.pendente is not None and self.turnos > antes:
             self.pendente["hp_inimigo0"] = self.hp_inimigo0
             self.pendente["vento"] = self.vento_turno
@@ -514,7 +559,9 @@ class AtiradorPvp(atirador_mod.Atirador):
         hp0, hp1 = p.get("hp_inimigo0"), self._ler_barra_inimigo(f)
         acertou = None if hp0 is None or hp1 is None else (hp0 - hp1) >= QUEDA_BARRA_PX
         esc_usada = getattr(self.mem, "escala", None)
-        if acertou is not None and hasattr(self.mem, "resultado"):
+        if acertou is not None and hasattr(self.mem, "resultado") and p.get("tela"):
+            self.log(f"   [resultado] barra do inimigo {hp0:.0f} -> {hp1:.0f} px: {'ACERTOU' if acertou else 'ERROU'} (tiro medido na tela principal)")
+        elif acertou is not None and hasattr(self.mem, "resultado") and p.get("azul"):      # sem posicao no minimapa o tiro foi no padrao: nao diz nada da escala
             esc, ok = self.mem.resultado(acertou)
             self.log(f"   [resultado] barra do inimigo {hp0:.0f} -> {hp1:.0f} px: {'ACERTOU' if acertou else 'ERROU'}; escala do mapa "
                      f"{esc_usada:.2f} -> {esc:.2f}{' (travada)' if ok else ''}")
