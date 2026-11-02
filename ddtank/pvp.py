@@ -68,6 +68,7 @@ MSG_CURTO_LIMIAR = 0.8
 PASSO_CURTO, PASSO_OUTRO = 0.88, 1.07   # escala do mapa x isto: aviso de tiro curto -> mais forca; erro sem aviso -> um pouco menos
 CAIXA_MINI = (815, 156, 985, 256)   # minimapa (x0, y0, x1, y1): o retangulo azul dele e a area VISIVEL da tela
 UNID_TELA = 10.17                   # unidades da regua do jogo que cabem na tela inteira (largura do retangulo / isto = px de minimapa por unidade)
+TAXA_FORCA_REDE = 27.0              # %/s segurando o espaco (medido pela rede em 8 tiros, 02/11: 1,68 s -> 45%, 3,15 s -> 88%)
 QUEDA_BARRA_PX = 3                  # a barra (~22 px) encolhendo isto ou mais = acerto
 PRESO_S = 120.0                     # s em tela desconhecida fora da batalha: clica numa area neutra e avisa
 INTERVALO_INICIO = 12.0             # s entre dois cliques em Inicio na sala
@@ -457,6 +458,8 @@ class AtiradorPvp(atirador_mod.Atirador):
         kw.setdefault("ordem_itens", list(ORDENS_PVP[0]))
         super().__init__(*a, **kw)
         self.rede = rede                   # rede_vivo.LeitorAoVivo (estado exato da partida) ou None (so tela)
+        self.taxa_rede = TAXA_FORCA_REDE   # % de forca por segundo segurando o espaco, calibrada pela forca REAL de cada tiro (rede)
+        self.segurou_rede = None
         self.mira = mira_exata.MiraExata(log=self.log)
         self.turno_rede = None             # (eu_id, eu, alvo_id, alvo, plano) deste turno
         self.arq_tentativas = arq_tentativas
@@ -525,6 +528,11 @@ class AtiradorPvp(atirador_mod.Atirador):
         r = super()._no_limite(tecla, a)
         if r:
             self.limite_recente = True
+            g = self.ver()
+            if g is not None:
+                lim = self.lei.angulo(g)
+                self.mira.limite(tecla == "cima", lim, self.turno_rede[1] if self.turno_rede else None)
+                self.log(f"   [rede] limite da arma guardado: mira {'max' if tecla == 'cima' else 'min'} {lim:.0f} graus (o plano fica dentro dele)")
         return r
 
     def posicoes(self, f):
@@ -583,6 +591,14 @@ class AtiradorPvp(atirador_mod.Atirador):
             if meus and dos:
                 break
             self.dormir(0.15)
+        if meus and self.segurou_rede and self.segurou_rede > 0.3:
+            taxa = (meus[0]["forca"] / 20.0) / self.segurou_rede
+            if 10 < taxa < 60:
+                antes = self.taxa_rede
+                self.taxa_rede = 0.5 * self.taxa_rede + 0.5 * taxa
+                self.log(f"   [rede] forca real {meus[0]['forca'] / 20:.0f}% em {self.segurou_rede:.2f}s -> {taxa:.1f}%/s "
+                         f"(taxa da carga {antes:.1f} -> {self.taxa_rede:.1f}%/s)")
+        self.segurou_rede = None
         if meus:
             m = self.mira.aprender(r["eu"], r["plano"]["direcao"], p["angulo"], meus[0])
             if m:
@@ -591,10 +607,39 @@ class AtiradorPvp(atirador_mod.Atirador):
         if dos:
             res = mira_exata.resultado_do_tiro(dos[0], r["alvo_id"])
             ex = res["explodiu"]
-            self.log(f"   [rede] RESULTADO: {'ACERTOU' if res['acertou'] else 'errou'} (dano {res['dano']})"
+            self.log(f"   [rede] RESULTADO: {'ACERTOU' if res['acertou'] else 'errou'} (dano do tiro {res['dano']}"
+                     f"{', do pet ' + str(res['dano_pet']) if res.get('dano_pet') else ''})"
                      f"{f', explodiu em ({ex[0]}, {ex[1]})' if ex else ''}; alvo em ({r['alvo'][0]}, {r['alvo'][1]}), "
                      f"previsto x={r['plano']['queda_x']:.0f}{' (teleguiado)' if res['teleguiado'] else ''}")
         return res
+
+    def carregar(self, alvo):
+        """Modo rede: solta PELO TEMPO (forca = taxa x tempo segurando, calibrada pela forca real que a rede informa a cada tiro).
+        A barra da tela ficava parada no valor do tiro anterior e o bot soltava errado (pediu 64%, sairam 88% e 45%; 02/11)."""
+        if not self.turno_rede:
+            return super().carregar(alvo)
+        alvo = float(min(alvo, 97.0))
+        t_alvo = alvo / self.taxa_rede
+        repetir = self._segurar()
+        t0, rep, motivo = self.agora(), 1, "tempo_rede"
+        faltas = 0
+        while self.agora() - t0 < t_alvo:
+            f = self.ver()
+            if f is not None and not self.lei.minha_vez(f):
+                faltas += 1
+                if faltas >= 2:
+                    motivo = "vez_acabou"
+                    break
+            else:
+                faltas = 0
+            if repetir:
+                rep += 1
+                self.io.tecla_baixo(atirador_mod.TECLA_ESPACO, rep)
+            self.dormir(0.01)
+        segurou = self.agora() - t0
+        self._soltar()
+        self.segurou_rede = segurou
+        return min(100.0, segurou * self.taxa_rede), motivo, [], segurou
 
     def plano_aviao(self, inst, azul, vida):
         """Destino (x, y) do voo com F, ou None. Usa o aviao quando o chao cedeu (boneco desceu no minimapa), quando o angulo bate
@@ -754,7 +799,9 @@ class AtiradorPvp(atirador_mod.Atirador):
             p["rede_resultado"] = res_rede
             acertou = res_rede["acertou"]                    # a rede sabe com certeza (dano no alvo)
         esc_usada = getattr(self.mem, "escala", None)
-        if acertou is not None and hasattr(self.mem, "resultado") and p.get("tela"):
+        if res_rede is not None:
+            pass                                             # resultado exato ja registrado pela rede (a barra/escala nao valem aqui)
+        elif acertou is not None and hasattr(self.mem, "resultado") and p.get("tela"):
             self.log(f"   [resultado] barra do inimigo {hp0:.0f} -> {hp1:.0f} px: {'ACERTOU' if acertou else 'ERROU'} (tiro medido na tela principal)")
         elif acertou is not None and hasattr(self.mem, "resultado") and p.get("azul") and p.get("boss") and float(p.get("forca") or 0) >= 10:      # sem posicao no minimapa o tiro foi no padrao: nao diz nada da escala
             esc, ok = self.mem.resultado(acertou, curto=bool(p.get("curto")), errada=bool(p.get("errada")))

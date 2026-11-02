@@ -21,6 +21,7 @@ import fisica_exata as FX
 OFFSET_PADRAO = (0.0, -33.0)       # ponto de saida - posicao do boneco (px do mapa), mediana de 205 tiros reais
 ALVO_DY = -15.0                    # mira no corpo do inimigo (a posicao da rede e o pe)
 MIRA_MIN, MIRA_MAX = 20, 80        # faixa do mostrador usada pelo planejador
+LIMITE_RAIO_PX = 60.0              # o limite de mira medido vale ate esta distancia do lugar
 MESMA_POSICAO_PX = 4.0             # o boneco nao saiu do lugar: o ponto de saida/inclinacao medidos continuam valendo
 
 
@@ -28,10 +29,12 @@ class MiraExata:
     def __init__(self, log=print):
         self.log = log
         self.medidas = {}          # direcao -> dict(pos=(x, y), offset=(dx, dy), inclinacao=graus)
+        self.limites = []          # [(pos, subindo, mira)]: o mostrador nao passou disso AQUI (muda com o terreno: 49 e 42 graus, 02/11)
 
     def reiniciar(self):
-        """Partida nova: os bonecos mudam de lugar."""
+        """Partida nova: os bonecos mudam de lugar (e o mapa)."""
         self.medidas = {}
+        self.limites = []
 
     def _medida(self, eu, direcao):
         m = self.medidas.get(direcao)
@@ -55,6 +58,11 @@ class MiraExata:
         self.medidas[direcao] = dict(pos=tuple(eu), offset=(tiro_cliente["x"] - eu[0], tiro_cliente["y"] - eu[1]), inclinacao=inc)
         return self.medidas[direcao]
 
+    def limite(self, subindo, mira, pos=None):
+        """O mostrador nao passou de `mira` aqui (limite da arma no terreno): o planejador nao pede mais do que isso perto deste lugar
+        (antes perdia ~6 s tentando)."""
+        self.limites = (self.limites + [(tuple(pos) if pos else (0, 0), bool(subindo), float(mira))])[-20:]
+
     def prever(self, saida, angulo_envio, forca, vento, y_alvo):
         return FX.x_na_altura(saida[0], saida[1], forca, angulo_envio, y_alvo, vento)
 
@@ -71,6 +79,9 @@ class MiraExata:
         vento = float(vento or 0.0)
         direcao = direcao or (1 if alvo[0] >= eu[0] else -1)
         saida, inc, medido = self.saida_e_inclinacao(eu, direcao)
+        perto = [(sub_, m) for pos, sub_, m in self.limites if abs(pos[0] - eu[0]) <= LIMITE_RAIO_PX and abs(pos[1] - eu[1]) <= LIMITE_RAIO_PX]
+        maxs, mins = [m for s_, m in perto if s_], [m for s_, m in perto if not s_]
+        faixa = (max([faixa[0]] + [int(math.ceil(m)) for m in mins]), min([faixa[1]] + [int(math.floor(m)) for m in maxs]))
         xa, ya = alvo[0], alvo[1] + ALVO_DY
         melhor = None
         for mira in range(int(faixa[0]), int(faixa[1]) + 1):
@@ -94,9 +105,13 @@ class MiraExata:
 
 
 def resultado_do_tiro(tiro_servidor, alvo_id):
-    """Do resultado do servidor: onde explodiu (1o projetil) e se acertou o alvo (dano no boneco alvo_id)."""
-    b = tiro_servidor["bombas"][0] if tiro_servidor.get("bombas") else None
+    """Do resultado do servidor: onde explodiu (1o projetil) e se O PROJETIL acertou o alvo. O dano do projetil vem nos eventos da
+    propria bomba (KILL_PLAYER: alvo, dano, ...); a lista "alvos" do pacote e o ataque do PET (02/11: o usuario viu o pet dar o dano
+    que o leitor tinha contado como acerto do tiro)."""
+    bombas = tiro_servidor.get("bombas") or []
+    b = bombas[0] if bombas else None
     bomba = next((a for a in b["acoes"] if a["tipo"] == "BOMB"), None) if b else None
-    dano = sum(a["dano"] for a in tiro_servidor.get("alvos", []) if a["vivo"] == alvo_id)
-    return dict(explodiu=bomba["p"][:2] if bomba else None, dano=dano, acertou=dano > 0,
+    dano = sum(a["p"][1] for bb in bombas for a in bb["acoes"] if a["tipo"] == "KILL_PLAYER" and a["p"][0] == alvo_id)
+    dano_pet = sum(a["dano"] for a in tiro_servidor.get("alvos", []) if a["vivo"] == alvo_id)
+    return dict(explodiu=bomba["p"][:2] if bomba else None, dano=dano, acertou=dano > 0, dano_pet=dano_pet,
                 teleguiado=bool(b and any(a["tipo"] == "CHANGE_SPEED" for a in b["acoes"])))

@@ -34,13 +34,22 @@ assert not m.saida_e_inclinacao((990, 478), +1)[2], "andou: a medida antiga nao 
 m.aprender((1200, 500), -1, 60, dict(x=1190, y=468, forca=900, angulo=-125))   # olhando para a esquerda: -125 = inc + 60 - 180
 assert abs(m.saida_e_inclinacao((1200, 500), -1)[1] - (-5)) < 1e-9
 print("inclinacao e saida aprendidas pelo pacote do tiro (direita e esquerda) OK")
+m2 = ME.MiraExata(log=lambda *_: None)
+m2.limite(True, 49.4, (297, 1383))
+pl = m2.planejar((297, 1383), (1182, 811), 1.7)
+assert pl and pl["mira"] <= 49, pl["mira"]
+assert m2.planejar((900, 1383), (1182, 811), 1.7)["mira"] > 49, "longe de onde travou, o limite nao vale"
+print("limite da arma respeitado pelo plano (mira <= 49) OK")
 
 # 3) resultado do servidor
-tiro = dict(atirador=0, vento=0.5, bombas=[dict(acoes=[dict(tempo=2400, tipo="CHANGE_SPEED", p=(1, 2, 0, 0)), dict(tempo=2600, tipo="BOMB", p=(1120, 470, 1, 0))])],
+tiro = dict(atirador=0, vento=0.5, bombas=[dict(acoes=[dict(tempo=2400, tipo="CHANGE_SPEED", p=(1, 2, 0, 0)), dict(tempo=2600, tipo="BOMB", p=(1120, 470, 1, 0)),
+                                                     dict(tempo=2600, tipo="KILL_PLAYER", p=(1, 32650, 1, 37495))])],
             alvos=[dict(vivo=1, dano=972, vida=1000, furia=0)])
 r = ME.resultado_do_tiro(tiro, 1)
-assert r["acertou"] and r["dano"] == 972 and r["explodiu"] == (1120, 470) and r["teleguiado"]
+assert r["acertou"] and r["dano"] == 32650 and r["dano_pet"] == 972 and r["explodiu"] == (1120, 470) and r["teleguiado"]
 assert not ME.resultado_do_tiro(tiro, 5)["acertou"]
+so_pet = dict(atirador=0, vento=0.5, bombas=[dict(acoes=[dict(tempo=2600, tipo="BOMB", p=(1263, 807, 1, 0))])], alvos=[dict(vivo=1, dano=4335, vida=1, furia=0)])
+assert not ME.resultado_do_tiro(so_pet, 1)["acertou"], "dano so do pet nao e acerto do tiro"
 print("resultado do tiro (explosao, dano no alvo, teleguiado) OK")
 
 # 4) ligado ao bot do PVP: a vez lida da rede vira o plano; o mostrador vai para a mira do plano e a forca sai a do plano
@@ -78,6 +87,7 @@ logs = []
 mem = P.MemoriaPvp(arq_aprendizado=None)
 at = P.AtiradorPvp(w, mem, lambda: "PVP", leitor=LeitorT(), dormir=w.dormir, agora=lambda: w.t, log=logs.append,
                    arq_tentativas=os.path.join(tmp, "t.jsonl"), pasta_vento=os.path.join(tmp, "v"), rede=RedeFalsa())
+at.taxa_rede = w.taxa                                   # a carga pelo tempo usa a taxa calibrada (no jogo real, pela rede)
 while w.t < 16.0 and not w.tiros:
     at.passo()
     w.avancar(0.1)
