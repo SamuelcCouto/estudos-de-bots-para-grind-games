@@ -682,3 +682,18 @@ O que os prints mostraram e o que mudou (atirador.py / estrategias.py / memoria.
 - Navegador: derrota na fase 2 -> o jogo recomeca na FASE 1 (o bot seguia achando que era a 2: mira/itens errados). `--fase 2` para ligar o bot no meio da fase 2.
 - Resultado: voltas 1-3 sem derrota (2min24s-5min14s por volta); lado direito vencido com travessia (5 e 9 turnos). Devoradores abriu e venceu sempre (2 turnos).
 
+
+## PVP - estudo de 01/11 (sessao local, olhando a tela)
+- **O jogo avisa o resultado do tiro com texto** (letras brancas em faixa escura): "O poder nao e suficiente, tente aumentar o seu poder" = tiro CURTO
+  (templates/msg_poder_curto.png, achado em 4 de 4 tiros curtos); "Voce atirou em uma direcao errada, tente ajusta-la antes de disparar novamente"
+  = o tiro explodiu colado em nos (obstaculo na frente; no mapa do carro tirou 17 mil da nossa vida) -> subir o angulo
+  (templates/msg_direcao_errada.png). Falta o aviso de tiro LONGO (ainda nao apareceu). Detectores: `pvp.msg_poder_curto` / `msg_direcao_errada`.
+- **Acerto = barra de vida vermelha do inimigo encolhendo** (x 683-722, y 188-202, ~22-27 px). Nenhum acerto confirmado ainda (0 de ~25 tiros).
+- **Escala do minimapa por mapa**: a busca (MULT/PASSO) usa os avisos acima; ao acertar, trava em dados/pvp_mapas/indice.json (campo escala_ok).
+- **Regua do jogo (0-10 embaixo da tela) = unidade das tabelas EstAng**: 65.7 px da tela principal por unidade. Medir os dois bonecos na tela principal
+  (barra azul = nos, vermelha = inimigo) so funciona quando os dois aparecem juntos (raro).
+- **Minimapa falha em mapas de ilhas/verdes** (ponto azul some entre os blocos): o bot atira no padrao (30 graus, 50%). Problema aberto.
+- **Barra de forca**: em fundo claro/forca baixa ela e listrada vermelha/rosa; o leitor so via laranja e lia 0% (o bot "consertava" o metodo de carga a
+  toa). `leitura.forca` agora tambem le o vermelho. AINDA ha tiros com 99% de forca (queria 57%): a carga nao soltou no alvo. Problema aberto.
+- ddtcurve 0.2.1 (PyPI, fonte lida, nao executada): fisica com arrasto r=0.9029, vento 6.336, gravidade -184.1; reproduz os acertos da rota Leste
+  com UMA escala por mapa (erro medio ~2 pontos de forca). Script: estudos/fit_ddtcurve.py.
