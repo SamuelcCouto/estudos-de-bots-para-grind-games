@@ -1,19 +1,30 @@
 # -*- coding: utf-8 -*-
 """
-Leitura AO VIVO da rede do DDTank, so com a biblioteca padrao do Python (nada para instalar; facil de levar para outras maquinas).
-So LE os pacotes da propria maquina (nao injeta, nao altera nada). Precisa de administrador (o Windows exige para ler pacotes):
-os .bat pedem sozinhos.
+Leitura AO VIVO da rede do DDTank, so com a biblioteca padrao do Python (nada para instalar, sem administrador, sem driver).
+So LE (nao injeta, nao altera nada).
 
-    python rede_vivo.py                     # mostra ao vivo: de quem e a vez, posicoes, vento, resultado dos tiros
-    python rede_vivo.py --replay captura.pcapng   # o mesmo, lendo uma captura do CAPTURAR_REDE.bat (nao precisa de administrador)
+Fonte principal (02/11): o REGISTRO DE REDE do proprio Chromium. O BetelTank e um Electron 6 (Chromium 76): aberto com
+`--log-net-log=<arquivo> --net-log-capture-mode=IncludeSocketBytes`, ele grava no arquivo os bytes de cada conexao, inclusive a do
+jogo (porta 25565). O bot le esse arquivo enquanto ele cresce. (Descartados: o socket bruto do Windows nao ve a conexao IPv6 do
+jogo; o WinDivert e bloqueado pelo Windows Defender.)
+ATENCAO: esse registro grava os bytes JA DECIFRADOS de TODAS as conexoes do launcher (inclusive o site). Se digitar a senha nessa
+sessao, ela fica no arquivo: os registros ficam em capturas_rede/ (fora do git) e os antigos sao apagados a cada novo inicio.
 
-Uso no bot:  leitor = LeitorAoVivo(); leitor.iniciar(); ... leitor.estado.copia()  (thread em segundo plano)
+    python rede_vivo.py --abrir-jogo          # abre o jogo com o registro ligado e mostra ao vivo: vez, posicoes, vento, tiros
+    python rede_vivo.py --netlog arquivo.json # so le um registro (do jogo ja aberto assim)
+    python rede_vivo.py --replay captura.pcapng   # le uma captura do CAPTURAR_REDE.bat
 
-Como funciona: socket bruto do Windows (SIO_RCVALL) ligado ao endereco local da conexao do jogo (achado pelo netstat), remonta os
-dois sentidos do TCP, recupera a chave de sessao so pelo trafego (rede_ddt.recuperar_chave) e decifra pacote a pacote.
+Uso no bot:  leitor = LeitorAoVivo(fonte=lambda parar: fonte_netlog(caminho, parar)).iniciar(); ... leitor.estado.copia()
+
+Como funciona: separa os bytes da conexao do jogo, recupera a chave de sessao so pelo trafego (rede_ddt.recuperar_chave) e
+decifra pacote a pacote.
 """
 import argparse
 import ctypes
+import datetime
+import glob
+import json
+import os
 import re
 import socket
 import struct
@@ -23,6 +34,10 @@ import time
 
 import rede_ddt as R
 
+PASTA = os.path.dirname(os.path.abspath(__file__))
+PASTA_LOGS = os.path.join(PASTA, "capturas_rede")
+CAMINHOS_JOGO = (r"D:\DDTBETEL\BetelTank.exe", r"C:\DDTBETEL\BetelTank.exe", r"C:\Program Files\DDTBETEL\BetelTank.exe",
+                 r"C:\Program Files (x86)\DDTBETEL\BetelTank.exe")
 MIN_BYTES_CHAVE = 3000          # bytes acumulados antes de tentar achar a chave (servidor: ~1-3 s de jogo)
 
 
@@ -273,6 +288,124 @@ def fonte_replay(caminho, parar, porta=R.PORTA_JOGO):
             yield ("servidor" if sp == porta else "cliente"), seq, pl
 
 
+# ------------------------------------------------------------------------------------------------ registro de rede do Chromium
+def _linhas_crescendo(caminho, parar, espera=0.2):
+    """Linhas completas de um arquivo que ainda esta sendo escrito (como o tail -f)."""
+    while not os.path.exists(caminho):
+        if parar.is_set():
+            return
+        time.sleep(espera)
+    with open(caminho, "rb") as f:
+        resto = b""
+        while not parar.is_set():
+            bloco = f.read(1 << 20)
+            if not bloco:
+                time.sleep(espera)
+                continue
+            resto += bloco
+            *linhas, resto = resto.split(b"\n")
+            for ln in linhas:
+                yield ln.decode("utf-8", "replace")
+
+
+def fonte_netlog(caminho, parar, porta=R.PORTA_JOGO, seguir=True):
+    """Gera (lado, None, bytes) da conexao do jogo a partir do registro de rede do Chromium (NetLog JSON em streaming).
+    seguir=False: le so o que ja esta no arquivo (testes / analise depois)."""
+    if seguir:
+        linhas = _linhas_crescendo(caminho, parar)
+    else:
+        linhas = iter(open(caminho, encoding="utf-8", errors="replace").read().splitlines())
+    cabeca, tipos, fontes_jogo = [], None, set()
+    alvo = f":{porta}"
+    for ln in linhas:
+        if parar.is_set():
+            return
+        if tipos is None:                                       # cabecalho: {"constants": {...}, "events": [
+            cabeca.append(ln)
+            texto = "\n".join(cabeca)
+            i = texto.find('"events"')
+            if i < 0:
+                continue
+            const = json.loads(texto[:texto.rfind(",", 0, i)] + "}")["constants"]
+            ev = const.get("logEventTypes", {})
+            tipos = {ev.get("SOCKET_BYTES_RECEIVED"): "servidor", ev.get("SOCKET_BYTES_SENT"): "cliente"}
+            continue
+        ln = ln.strip().rstrip(",")
+        if not ln.startswith("{"):
+            continue
+        try:
+            e = json.loads(ln)
+        except ValueError:
+            continue
+        params, fonte = e.get("params") or {}, (e.get("source") or {}).get("id")
+        lado = tipos.get(e.get("type"))
+        if lado and fonte in fontes_jogo and params.get("hex_encoded_bytes"):
+            yield lado, None, bytes.fromhex(params["hex_encoded_bytes"])
+        elif fonte not in fontes_jogo and params:
+            for k in ("address", "address_list", "remote_address", "host_and_port"):
+                v = params.get(k)
+                if v and alvo in (v if isinstance(v, str) else " ".join(map(str, v))):
+                    fontes_jogo.add(fonte)                      # e o socket que conecta na porta do jogo
+
+
+def achar_jogo():
+    """Caminho do BetelTank.exe: o processo aberto, o registro do Windows (desinstalador) ou os lugares comuns."""
+    try:
+        out = subprocess.run(["powershell", "-NoProfile", "-Command",
+                              "(Get-Process BetelTank -ErrorAction SilentlyContinue | Select-Object -First 1).Path"],
+                             capture_output=True, text=True, timeout=15).stdout.strip()
+        if out and os.path.exists(out):
+            return out
+    except (OSError, subprocess.SubprocessError):
+        pass
+    try:
+        import winreg
+        for raiz in (winreg.HKEY_CURRENT_USER, winreg.HKEY_LOCAL_MACHINE):
+            for base in (r"Software\Microsoft\Windows\CurrentVersion\Uninstall",
+                         r"Software\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall"):
+                try:
+                    k = winreg.OpenKey(raiz, base)
+                except OSError:
+                    continue
+                for i in range(winreg.QueryInfoKey(k)[0]):
+                    try:
+                        sk = winreg.OpenKey(k, winreg.EnumKey(k, i))
+                        if "betel" in winreg.QueryValueEx(sk, "DisplayName")[0].lower():
+                            exe = os.path.join(winreg.QueryValueEx(sk, "InstallLocation")[0], "BetelTank.exe")
+                            if os.path.exists(exe):
+                                return exe
+                    except OSError:
+                        continue
+    except ImportError:
+        pass
+    return next((c for c in CAMINHOS_JOGO if os.path.exists(c)), None)
+
+
+def jogo_aberto():
+    try:
+        out = subprocess.run(["tasklist", "/FI", "IMAGENAME eq BetelTank.exe", "/NH"], capture_output=True, text=True, timeout=10).stdout
+        return "BetelTank.exe" in out
+    except (OSError, subprocess.SubprocessError):
+        return False
+
+
+def abrir_jogo_com_log(exe=None, manter=2):
+    """Abre o jogo com o registro de rede ligado. Apaga os registros antigos (guarda os `manter`-1 mais novos). Devolve o caminho do novo."""
+    exe = exe or achar_jogo()
+    if not exe:
+        raise RuntimeError("nao achei o BetelTank.exe (passe o caminho com --jogo)")
+    os.makedirs(PASTA_LOGS, exist_ok=True)
+    antigos = sorted(glob.glob(os.path.join(PASTA_LOGS, "netlog_*.json")))
+    for velho in antigos[:max(0, len(antigos) - manter + 1)]:
+        try:
+            os.remove(velho)
+        except OSError:
+            pass
+    caminho = os.path.join(PASTA_LOGS, f"netlog_{datetime.datetime.now():%Y%m%d_%H%M%S}.json")
+    subprocess.Popen([exe, f"--log-net-log={caminho}", "--net-log-capture-mode=IncludeSocketBytes"], cwd=os.path.dirname(exe))
+    return caminho
+
+
 # ------------------------------------------------------------------------------------------------ leitor
 class LeitorAoVivo:
     def __init__(self, fonte=None, ao_mudar=None, log=print):
@@ -289,7 +422,7 @@ class LeitorAoVivo:
     def consumir(self, gerador):
         for lado, seq, pl in gerador:
             self.segmentos += 1
-            dados = self.tcp[lado].segmento(seq, pl)
+            dados = pl if seq is None else self.tcp[lado].segmento(seq, pl)
             if not dados:
                 continue
             for pac in self.dec[lado].alimentar(dados):
@@ -334,17 +467,33 @@ def _imprimir(evento, est):
 
 if __name__ == "__main__":
     ap = argparse.ArgumentParser(description="Le ao vivo a rede do DDTank (so leitura)")
-    ap.add_argument("--replay", help="ler um .pcapng em vez da rede ao vivo")
+    ap.add_argument("--abrir-jogo", action="store_true", help="abre o jogo com o registro de rede ligado e le ao vivo")
+    ap.add_argument("--jogo", default=None, help="caminho do BetelTank.exe (se nao achar sozinho)")
+    ap.add_argument("--netlog", help="ler um registro de rede (.json do jogo aberto com --abrir-jogo)")
+    ap.add_argument("--replay", help="ler um .pcapng (CAPTURAR_REDE.bat)")
+    ap.add_argument("--socket-bruto", action="store_true", help="metodo antigo (administrador; nao ve conexao IPv6)")
     ap.add_argument("--segundos", type=float, default=0, help="parar sozinho depois disso (0 = ate fechar)")
     a = ap.parse_args()
     if a.replay:
         leitor = LeitorAoVivo(fonte=lambda parar: fonte_replay(a.replay, parar), ao_mudar=_imprimir)
         leitor.consumir(leitor.fonte(leitor.parar))
     else:
-        if not eh_admin():
-            raise SystemExit("Precisa de administrador para ler a rede. Use TESTAR_REDE.bat (ele pede sozinho).")
+        if a.socket_bruto:
+            if not eh_admin():
+                raise SystemExit("O socket bruto precisa de administrador.")
+            fonte = fonte_socket_bruto
+        else:
+            caminho = a.netlog
+            if a.abrir_jogo:
+                while jogo_aberto():
+                    input("O jogo ja esta aberto. FECHE o jogo e aperte Enter (ele precisa abrir com o registro ligado)... ")
+                caminho = abrir_jogo_com_log(a.jogo)
+                print(f"Jogo aberto com o registro de rede: {caminho}")
+            if not caminho:
+                raise SystemExit("Use --abrir-jogo (ou --netlog arquivo).")
+            fonte = lambda parar: fonte_netlog(caminho, parar)
         print("Lendo a rede do jogo ao vivo (so leitura). Entre numa partida; Ctrl+C para sair.")
-        leitor = LeitorAoVivo(ao_mudar=_imprimir).iniciar()
+        leitor = LeitorAoVivo(fonte=fonte, ao_mudar=_imprimir).iniciar()
         t0 = time.time()
         try:
             while not a.segundos or time.time() - t0 < a.segundos:
@@ -353,8 +502,8 @@ if __name__ == "__main__":
                 if leitor.erro:
                     break
                 if not e["chave_ok"]["servidor"]:
-                    print(f"  ... ainda sem a chave: {leitor.segmentos} segmentos do jogo lidos ate agora"
-                          f"{' (NENHUM: o socket bruto nao esta vendo o jogo)' if leitor.segmentos == 0 and time.time() - t0 > 20 else ''}")
+                    print(f"  ... ainda sem a chave: {leitor.segmentos} pedacos de dados do jogo lidos ate agora"
+                          f"{' (NENHUM ainda: faca login e entre numa sala/partida)' if leitor.segmentos == 0 else ''}")
         except KeyboardInterrupt:
             pass
         leitor.encerrar()

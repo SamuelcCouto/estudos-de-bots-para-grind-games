@@ -79,9 +79,11 @@ O solucionador devolve a forca da tabela de 50 graus com erro maximo de 2 pontos
   vira -93. O motor sabe planejar esses tiros (`fisica_exata.de_costas`).
 
 **Consequencia:** com a leitura da rede, o bot tem **o estado exato** (posicoes, vento, vez) e **o resultado exato** de cada tiro, e a
-fisica ja esta provada no proprio jogo. Para ler ao vivo (e nao so depois), a captura precisa rodar junto com o bot:
-- com administrador: `pydivert` (WinDivert) em modo so-leitura, ou Npcap + scapy;
-- sem administrador: Frida no processo do Electron (reserva).
+fisica ja esta provada no proprio jogo. **Leitura AO VIVO (`rede_vivo.py`, 02/11):** sem instalar nada e sem administrador.
+O jogo e aberto com o registro de rede do proprio Chromium (`--log-net-log ... --net-log-capture-mode=IncludeSocketBytes`) e o bot
+le esse arquivo enquanto ele cresce. Testado com dados sinteticos e com a reprise da captura; falta o teste ao vivo (`TESTAR_REDE.bat`).
+Descartados: o socket bruto do Windows (nao ve a conexao IPv6 do jogo, testado ao vivo) e o WinDivert (o Defender bloqueia).
+Cuidado: o registro grava os dados ja decifrados de todas as conexoes do launcher, inclusive o site. Fica so em `capturas_rede/`.
 
 ---
 

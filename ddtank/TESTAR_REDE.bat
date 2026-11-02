@@ -1,19 +1,16 @@
 @echo off
 chcp 65001 >nul
-rem Testa a leitura AO VIVO da rede do jogo (so le; nao altera nada). Nao precisa instalar nada: usa so o Python.
-rem Pede administrador sozinho (o Windows mostra "Deseja permitir...?": clique em Sim).
-net session >nul 2>&1
-if %errorlevel% neq 0 (
-    powershell -NoProfile -Command "Start-Process -FilePath '%~f0' -Verb RunAs"
-    exit /b
-)
+rem Testa a leitura AO VIVO da rede do jogo (so le; nao altera nada). Sem administrador e sem instalar nada.
+rem Abre o jogo com o "registro de rede" do Chromium ligado (o BetelTank e um Chromium por dentro) e le esse registro ao vivo.
+rem ATENCAO: o registro guarda os dados de rede do launcher; nao mande o arquivo de capturas_rede\ para ninguem.
 cd /d "%~dp0"
 title Teste da leitura da rede do DDTank
-echo Deixe o jogo aberto e entre numa partida (PVP ou instancia).
-echo Esta janela vai mostrar de quem e a vez, as posicoes, o vento e o resultado de cada tiro.
-echo Para terminar: feche esta janela (ou Ctrl+C).
+echo 1) Se o jogo estiver aberto, FECHE o jogo (esta janela vai pedir).
+echo 2) O jogo vai abrir sozinho. Entre e va para uma partida (PVP ou instancia).
+echo 3) Esta janela vai mostrar de quem e a vez, as posicoes, o vento e o resultado de cada tiro.
+echo Para terminar: feche esta janela (ou Ctrl+C). O jogo continua aberto.
 echo.
-python rede_vivo.py
+python rede_vivo.py --abrir-jogo
 echo.
 echo Terminou. Tire um print desta janela e mande para o Claude.
 pause
