@@ -210,10 +210,11 @@ def _pe_no_chao(terreno, x, y):
 def planejar_voo(mira_ex, eu, alvo, vento, direcao, terreno, terreno_seguro=None, max_candidatos=14):
     """Aviao (F): o boneco voa como uma bala e para onde ela bate no chao. Procura (ponteiro, forca) que leva a um lugar de onde o
     tiro no inimigo passa pelo terreno (preso num buraco, todas as miras batiam na parede). None se nao achar."""
-    saida, _inc, corr, _o = mira_ex.contexto(eu, direcao, terreno)
+    saida, inc, corr, _o = mira_ex.contexto(eu, direcao, terreno)
+    lo, hi = mira_ex.faixa(eu, direcao, inc, (20, 80))     # o ponteiro do aviao tem o mesmo limite da arma aqui
     mapa = FX.MapaFisico(*terreno.fisica())
     pousos = {}
-    for mira in range(30, 81, 3):
+    for mira in range(max(lo, 20), hi + 1, 3):
         ang = FX.angulo_envio(mira, direcao, corr)
         for pct in range(8, 80, 3):
             r = FX.simular(saida[0], saida[1], pct / 100.0 * FX.FORCA_MAX, ang, vento, mapa=mapa, terreno=terreno,
