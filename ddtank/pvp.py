@@ -57,7 +57,7 @@ AFUNDOU_PX = 8.0                    # seu boneco desceu isso no minimapa desde o
 LONGE_PX = 58.0                     # inimigo mais longe que isso: o aviao aproxima
 MAX_AVIOES_PARTIDA = 4
 INTERVALO_AVIAO_TIROS = 3           # tiros entre dois avioes
-ORDENS_PVP = ([2, 3, 4, 4], [1, 3, 4, 4])   # itens por turno: so o que da dano (antes 10 itens = 2-3 s por turno e a vez acabava, 01/11)
+ORDENS_PVP = ([3] + [4] * 8,)       # 3 (2 tiros) + 4 (buff) ate a stamina acabar; sem 1/2 (pedido do usuario 03/11: contra bots, 2 tiros fortes matam em 1 turno)
 ANGULO_PVP = 55.0                   # angulo fixo: o resultado de cada tiro (acertou/errou) ajusta a escala do mapa, nao o angulo
 MULT_ESCALA = (1.0, 1.12, 0.89, 1.25, 0.8, 1.4, 0.7)   # busca da escala do mapa: tenta alternando para os dois lados ate acertar
 INIMIGO_BARRA = (683, 188, 722, 202)   # barra de vida VERMELHA embaixo do avatar do inimigo (x0, y0, x1, y1), quadro de 1280

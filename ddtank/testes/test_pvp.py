@@ -289,7 +289,7 @@ while w2.t < 16.0:
 assert at2.e_usos == 1 and any("[E] usado" in l for l in logs2), logs2
 assert at2.ordem == list(P.ORDENS_PVP[0]) and at2.itens_ultimo, (at2.ordem, at2.itens_ultimo)
 linhas2 = [json.loads(l) for l in open(os.path.join(tmp2, "t.jsonl"), encoding="utf-8")]
-assert linhas2 and linhas2[0]["itens"] == at2.itens_ultimo and 2 in linhas2[0]["itens"], linhas2
+assert linhas2 and linhas2[0]["itens"] == at2.itens_ultimo and linhas2[0]["itens"][:2] == [3, 4], linhas2
 print("E (so com o slot verde) e itens por turno gravados OK")
 # ------------------------------------------------------------ 7) vez pelo contador vermelho (mapa de fundo claro: o PASS some)
 import cv2
