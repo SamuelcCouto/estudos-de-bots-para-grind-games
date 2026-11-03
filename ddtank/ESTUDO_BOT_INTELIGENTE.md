@@ -103,8 +103,19 @@ Cuidado: o registro grava os dados ja decifrados de todas as conexoes do launche
   leitura do ponteiro (0-2 graus), exceto quando o boneco estava virado ao contrario.
 - **Direcao do boneco**: o lado do ponteiro engana (num morro, virado para a esquerda, o ponteiro fica a direita). A direcao certa
   vem da rede: DIRECTION (sub 7, int +1/-1) e MOVESTART do cliente (sub 9: tipo, x, y, direcao), que tambem da a posicao atual.
-- **Forca**: a taxa de carga variou 27-40%/s (a barra sobe 1% por quadro; o quadro do Flash varia). O bot agora registra a barra
-  durante a carga (`dados/pvp_barra_carga/`) e solta pela barra quando ela comprovadamente acompanha a carga.
+- **Forca (resolvido 03/11)**: a barra da tela mostra a carga AO VIVO como um enchimento laranja por cima da barra vermelha do
+  tiro anterior (o leitor antigo pegava a vermelha e parecia "travado"): `leitura.forca_carga`. O jogo as vezes so comeca a carregar
+  1-2 s depois do espaco: o bot espera a barra sair do 0 e solta na hora prevista pela subida (leituras a cada ~0,25 s). Pedido x real
+  ficou em +-1%.
+
+### 1.7 Teste ao vivo de 03/11 (madrugada, contra bots)
+- Itens: 3 + 4 ate a stamina acabar (pedido do usuario). Acertos com a mira da rede: ~9 de 14 na ultima rodada, varias partidas
+  ganhas em 1-2 tiros.
+- Erros que sobram: (1) leitura do ponteiro erra ate 2 graus -> o plano agora escolhe miras tolerantes a +-2 graus; (2) boneco no fundo
+  de buraco: o modelo dos buracos diverge do real perto dele (bala bate logo acima) -> terreno "pessimista" (buracos 60% menores) e
+  aviao para sair quando tudo bloqueia; (3) a tela marcava fim de partida no meio (o aprendido da saida so zera quando o mapa muda).
+- Proximo: medir o ponteiro de forma exata (contar toques a partir do angulo do tiro anterior, que a rede da) e estudar os buracos
+  reais nas gravacoes `capturas_rede/netlog_20261103_031824.json`.
 
 ---
 
