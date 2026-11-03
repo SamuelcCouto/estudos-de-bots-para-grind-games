@@ -114,8 +114,14 @@ Cuidado: o registro grava os dados ja decifrados de todas as conexoes do launche
 - Erros que sobram: (1) leitura do ponteiro erra ate 2 graus -> o plano agora escolhe miras tolerantes a +-2 graus; (2) boneco no fundo
   de buraco: o modelo dos buracos diverge do real perto dele (bala bate logo acima) -> terreno "pessimista" (buracos 60% menores) e
   aviao para sair quando tudo bloqueia; (3) a tela marcava fim de partida no meio (o aprendido da saida so zera quando o mapa muda).
-- Proximo: medir o ponteiro de forma exata (contar toques a partir do angulo do tiro anterior, que a rede da) e estudar os buracos
-  reais nas gravacoes `capturas_rede/netlog_20261103_031824.json`.
+- Resolvido depois (03/11 a tarde, sem o jogo aberto):
+  - **buracos**: cada bala tem a IMAGEM da cratera (`balllist.xml` "Crater" -> `image/bomb/crater/<id>/crater.png`, cache em
+    `dados/crateras/`). Cavando com ela: mediana 1,1 px e 95% das 350 explosoes reais a ate 5 px (o oval dava 80%). O terreno
+    "pessimista" agora e a mesma cratera 6 px menor em volta.
+  - **angulo exato**: o mostrador mostra o NUMERO do angulo e ele e exatamente o angulo do tiro (11 de 11 tiros conferidos com a rede).
+    Lido pelo OCR do proprio Windows (`ocr_windows.py` + `ocr_windows.ps1`, um PowerShell aberto, ~0,05 s por leitura, nada para
+    instalar): 29 de 32 quadros lidos e nenhum errado; quando nao le, o bot usa o ponteiro (que errava ate 4 graus).
+- Falta testar ao vivo essas duas mudancas.
 
 ---
 
