@@ -34,6 +34,7 @@ import vento as vento_mod
 import mira_exata
 import rede_vivo
 import terreno_jogo
+import ocr_windows
 from fisica_exata import angulo_envio as FX_ANG
 from navegador import (ARQUIVO_PARAR, FOCO_PONTO_NEUTRO, FOCO_PONTO_PADRAO, SALA_INICIO, VK_F10, IOJanela, em_1280,
                        evitar_suspensao, instancia_unica)
@@ -473,6 +474,23 @@ class AtiradorPvp(atirador_mod.Atirador):
         self.recortes_salvos = 0
         self.pasta_barra = PASTA_BARRA_CARGA     # None = nao salva recortes (testes)
         self.mira = mira_exata.MiraExata(log=self.log)
+        self.ocr = ocr_windows.OcrAngulo() if rede is not None else None
+        self.ocr_lidos = self.ocr_falhas = 0
+        if self.ocr is not None and hasattr(self.lei, "angulo"):
+            ponteiro = self.lei.angulo
+
+            def angulo_exato(f, *a, **kw):
+                """O NUMERO do mostrador (OCR do Windows) e o angulo exato do tiro; o ponteiro erra ate ~4 graus (03/11)."""
+                p = ponteiro(f, *a, **kw)
+                if not isinstance(f, np.ndarray) or f.ndim != 3:
+                    return p
+                n = self.ocr.angulo(f)
+                if n is not None and abs(n - p) <= 6:
+                    self.ocr_lidos += 1
+                    return float(n)
+                self.ocr_falhas += 1
+                return p
+            self.lei.angulo = angulo_exato
         self.turno_rede = None             # (eu_id, eu, alvo_id, alvo, plano) deste turno
         self.arq_tentativas = arq_tentativas
         self.pasta_vento = pasta_vento
