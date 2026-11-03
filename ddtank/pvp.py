@@ -34,6 +34,7 @@ import vento as vento_mod
 import mira_exata
 import rede_vivo
 import terreno_jogo
+from fisica_exata import angulo_envio as FX_ANG
 from navegador import (ARQUIVO_PARAR, FOCO_PONTO_NEUTRO, FOCO_PONTO_PADRAO, SALA_INICIO, VK_F10, IOJanela, em_1280,
                        evitar_suspensao, instancia_unica)
 
@@ -600,6 +601,13 @@ class AtiradorPvp(atirador_mod.Atirador):
             except (OSError, ValueError):
                 seguro = None
         plano = self.mira.planejar((eu["x"], eu["y"]), (alvo["x"], alvo["y"]), est["vento"], terreno=ter, terreno_seguro=seguro)
+        if not plano and ter is not None:
+            # nenhuma mira que a arma alcanca aqui chega no alvo (ex.: no fundo de um buraco, ponteiro min 78): plano "vazio" para o aviao
+            d = 1 if alvo["x"] >= eu["x"] else -1
+            saida, inc, corr, origem = self.mira.contexto((eu["x"], eu["y"]), d, ter)
+            plano = dict(mira=60, forca=0.0, forca_pct=0.0, angulo_envio=FX_ANG(60, d, corr), direcao=d, folga_px=0.0, queda_x=0.0, saida=saida,
+                         inclinacao=inc, correcao=corr, origem=origem, medido=origem != "estimada", alvo=(alvo["x"], alvo["y"]),
+                         vento=float(est["vento"] or 0.0), acertos=None, faixa=self.mira.faixa((eu["x"], eu["y"]), d, inc), bloqueado=True)
         if not plano:
             self.log(f"   [rede] nenhuma mira {mira_exata.MIRA_MIN}-{mira_exata.MIRA_MAX} alcanca o alvo: mira pela tela")
             return None
@@ -615,6 +623,10 @@ class AtiradorPvp(atirador_mod.Atirador):
                          f"{voo['destino']}, de onde {voo['plano_de_la']['acertos']}/5 tiros acertam ({time.time() - t1:.1f}s)")
             else:
                 self.log(f"   [rede] preso e nenhum voo leva a um lugar melhor ({time.time() - t1:.1f}s): atiro o melhor que der")
+        if plano.get("forca_pct", 0) <= 0 and not self.voo_rede:
+            self.turno_rede = None                            # plano vazio e sem voo: mira pela tela
+            self.log("   [rede] nenhuma mira alcanca o alvo e nao ha voo: mira pela tela")
+            return None
         self.mem.forca_rede = lambda mira: self.mira.forca_para((eu["x"], eu["y"]), (alvo["x"], alvo["y"]), est["vento"], mira,
                                                                 plano["direcao"], ter)
         inc = plano["inclinacao"]
