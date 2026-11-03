@@ -181,11 +181,13 @@ def saida_do_tiro(pe, direcao, inclinacao):
 _CACHE = {}
 
 
-def terreno_da_partida(mapa_id, buracos, baixar=True):
-    """Terreno do mapa com os buracos das explosoes desta partida [(x, y, bala)] (guarda o mapa e os buracos ja cavados)."""
+def terreno_da_partida(mapa_id, buracos, baixar=True, fator=1.0):
+    """Terreno do mapa com os buracos das explosoes desta partida [(x, y, bala)] (guarda o mapa e os buracos ja cavados).
+    fator < 1: buracos menores (terreno "pessimista": o buraco real as vezes e menor e a bala bate onde o modelo ja tinha cavado)."""
     if mapa_id is None:
         return None
-    c = _CACHE.get("atual")
+    chave = "atual" if fator == 1.0 else ("atual", fator)
+    c = _CACHE.get(chave)
     if not c or c[0] != mapa_id or len(c[1]) > len(buracos) or c[1] != list(buracos[:len(c[1])]):
         base = _CACHE.get(("base", mapa_id))
         if base is None:
@@ -196,6 +198,7 @@ def terreno_da_partida(mapa_id, buracos, baixar=True):
         c = (mapa_id, [], base.copia())
     ter = c[2]
     for x, y, bala in buracos[len(c[1]):]:
-        ter.cavar_bomba(x, y, bala)
-    _CACHE["atual"] = (mapa_id, list(buracos), ter)
+        r = float((info_bala(bala) or {}).get("Radii", 60)) * fator
+        ter.cavar(x, y, r * BURACO_LARGURA, r * BURACO_ALTURA)
+    _CACHE[chave] = (mapa_id, list(buracos), ter)
     return ter

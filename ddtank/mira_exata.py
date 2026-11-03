@@ -123,7 +123,7 @@ class MiraExata:
         return FX.simular(saida[0], saida[1], f, ang, vento, mapa=mapa, terreno=terreno, alvos=[caixa], largura=terreno.largura,
                           altura=terreno.altura + 200, limite_s=15.0)
 
-    def planejar(self, eu, alvo, vento, direcao=None, faixa=(MIRA_MIN, MIRA_MAX), terreno=None):
+    def planejar(self, eu, alvo, vento, direcao=None, faixa=(MIRA_MIN, MIRA_MAX), terreno=None, terreno_seguro=None):
         """Melhor (ponteiro, forca %) para cair no alvo. Escolhe a mira mais TOLERANTE (a que menos muda o ponto de queda com 1 quadro
         de forca e 1 grau) entre as que, com o terreno, chegam no corpo do inimigo sem bater no chao antes."""
         vento = float(vento or 0.0)
@@ -163,6 +163,10 @@ class MiraExata:
             c["impacto"], c["motivo"] = r["impacto"], r["motivo"]
             if r["motivo"] != "alvo":
                 continue
+            if terreno_seguro is not None:                    # com buracos menores tambem tem que passar (bala batia logo acima de nos)
+                if self._simula(saida, c["angulo_envio"], c["forca"], vento, terreno_seguro, caixa, mapa)["motivo"] != "alvo":
+                    c["motivo"] = "inseguro"
+                    continue
             acertos = 1 + sum(self._simula(saida, c["angulo_envio"] + da, c["forca"] + df, vento, terreno, caixa, mapa)["motivo"] == "alvo"
                               for df, da in ((FX.FORCA_POR_QUADRO, 0), (-FX.FORCA_POR_QUADRO, 0), (0, 1), (0, -1)))
             c["acertos"] = acertos
@@ -172,9 +176,11 @@ class MiraExata:
                 break
         if melhor is None:
             if faixa == (MIRA_MIN, MIRA_MAX):                # tudo bloqueado: tenta rasante e quase vertical (por cima/por baixo)
-                c = self.planejar(eu, alvo, vento, direcao, FAIXA_AMPLA, terreno)
+                c = self.planejar(eu, alvo, vento, direcao, FAIXA_AMPLA, terreno, terreno_seguro)
                 if c and not c.get("bloqueado"):
                     return c
+            if terreno_seguro is not None:                    # nada passa com buracos menores: aceita so o terreno normal
+                return self.planejar(eu, alvo, vento, direcao, faixa, terreno)
             return dict(candidatos[0], bloqueado=True)
         return melhor
 

@@ -593,7 +593,13 @@ class AtiradorPvp(atirador_mod.Atirador):
         alvo = min(inimigos, key=lambda v: abs(v["x"] - eu["x"]))
         ter = self._terreno(est)
         t0 = time.time()
-        plano = self.mira.planejar((eu["x"], eu["y"]), (alvo["x"], alvo["y"]), est["vento"], terreno=ter)
+        seguro = None
+        if ter is not None and est.get("buracos"):
+            try:
+                seguro = terreno_jogo.terreno_da_partida(est["mapa"], est["buracos"], fator=0.6)
+            except (OSError, ValueError):
+                seguro = None
+        plano = self.mira.planejar((eu["x"], eu["y"]), (alvo["x"], alvo["y"]), est["vento"], terreno=ter, terreno_seguro=seguro)
         if not plano:
             self.log(f"   [rede] nenhuma mira {mira_exata.MIRA_MIN}-{mira_exata.MIRA_MAX} alcanca o alvo: mira pela tela")
             return None
