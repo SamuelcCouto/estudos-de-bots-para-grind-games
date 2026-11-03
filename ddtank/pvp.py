@@ -33,6 +33,7 @@ import registro as registro_mod
 import vento as vento_mod
 import mira_exata
 import rede_vivo
+import terreno_jogo
 from navegador import (ARQUIVO_PARAR, FOCO_PONTO_NEUTRO, FOCO_PONTO_PADRAO, SALA_INICIO, VK_F10, IOJanela, em_1280,
                        evitar_suspensao, instancia_unica)
 
@@ -83,6 +84,9 @@ MAPA_RECORTE = (638, 494, 834, 552)  # miniatura do mapa na tela VS (canto de ba
 MAPA_NOME_RECORTE = (636, 458, 840, 556)
 MAPA_DIST_MAX = 10                  # bits de diferenca (de 64) para ser o mesmo mapa
 PASTA_MAPAS = os.path.join(config.PASTA, "dados", "pvp_mapas")
+PASTA_BARRA_CARGA = os.path.join(config.PASTA, "dados", "pvp_barra_carga")   # recortes da barra de forca durante a carga (estudo)
+RECORTE_BARRA = (520, 580, 395, 765)       # y0, y1, x0, x1: a barra de forca e um pouco em volta
+CARGA_JANELA = (0.7, 1.4)                  # a barra so manda soltar entre 0,7x e 1,4x do tempo estimado (a taxa real variou 27-40%/s)
 PRINTS_DO_PVP = ("turno_inicio", "tiro_dado", "turno_pulado", "voo", "pos_tiro", "partida_fim", "desconhecida", "mapa", "vez", "batalha", "preso")
 
 
@@ -240,8 +244,8 @@ class MemoriaPvp(memoria_mod.Memoria):
             pl = self.plano_rede
             return {"angulo": float(pl["mira"]), "forca": float(pl["forca_pct"]), "origem": "rede+fisica exata",
                     "detalhe": f"angulo enviado {pl['angulo_envio']:.0f}, vento {pl['vento']:+.1f}, cai em x={pl['queda_x']:.0f} "
-                               f"(alvo {pl['alvo'][0]:.0f}), folga {pl['folga_px']:.0f} px/1%-1grau"
-                               f"{'' if pl['medido'] else ', saida/inclinacao ainda estimadas'}"}
+                               f"(alvo {pl['alvo'][0]:.0f}), folga {pl['folga_px']:.0f} px/1%-1grau, saida {pl['origem']}"
+                               + ("" if pl.get("acertos") is None else f", {pl['acertos']}/5 variacoes acertam com o terreno")}
         if self.tela_pos:
             azul, boss = self.tela_pos
         if azul and boss and abs(boss[0] - azul[0]) >= memoria_mod.DX_MINIMO:
@@ -462,6 +466,9 @@ class AtiradorPvp(atirador_mod.Atirador):
         self.taxa_rede = TAXA_FORCA_REDE   # % de forca por segundo segurando o espaco, calibrada pela forca REAL de cada tiro (rede)
         self.taxas_medidas = [TAXA_FORCA_REDE] * 3
         self.segurou_rede = None
+        self.trace_rede = []               # [(s, % lido na barra)] da ultima carga no modo rede
+        self.recortes_salvos = 0
+        self.pasta_barra = PASTA_BARRA_CARGA     # None = nao salva recortes (testes)
         self.mira = mira_exata.MiraExata(log=self.log)
         self.turno_rede = None             # (eu_id, eu, alvo_id, alvo, plano) deste turno
         self.arq_tentativas = arq_tentativas
@@ -533,8 +540,11 @@ class AtiradorPvp(atirador_mod.Atirador):
             g = self.ver()
             if g is not None:
                 lim = self.lei.angulo(g)
-                self.mira.limite(tecla == "cima", lim, self.turno_rede[1] if self.turno_rede else None)
-                self.log(f"   [rede] limite da arma guardado: mira {'max' if tecla == 'cima' else 'min'} {lim:.0f} graus (o plano fica dentro dele)")
+                pl = self.turno_rede[4] if self.turno_rede else None
+                arma = self.mira.limite(tecla == "cima", lim, self.turno_rede[1] if self.turno_rede else None,
+                                        pl["direcao"] if pl else None, pl["inclinacao"] if pl else None)
+                extra = f" (arma {arma:.0f} graus sem a inclinacao: vale em qualquer lugar)" if arma is not None else ""
+                self.log(f"   [rede] limite da arma guardado: ponteiro {'max' if tecla == 'cima' else 'min'} {lim:.0f} graus aqui{extra}")
         return r
 
     def posicoes(self, f):
@@ -579,17 +589,74 @@ class AtiradorPvp(atirador_mod.Atirador):
         if len(est["vivos"]) > 2:
             self.log("   [rede] mais de 2 bonecos: escolho o mais perto (times ainda nao identificados)")
         alvo = min(inimigos, key=lambda v: abs(v["x"] - eu["x"]))
-        plano = self.mira.planejar((eu["x"], eu["y"]), (alvo["x"], alvo["y"]), est["vento"])
+        ter = self._terreno(est)
+        t0 = time.time()
+        plano = self.mira.planejar((eu["x"], eu["y"]), (alvo["x"], alvo["y"]), est["vento"], terreno=ter)
         if not plano:
             self.log(f"   [rede] nenhuma mira {mira_exata.MIRA_MIN}-{mira_exata.MIRA_MAX} alcanca o alvo: mira pela tela")
             return None
         self.turno_rede = (eu_id, (eu["x"], eu["y"]), alvo["id"], (alvo["x"], alvo["y"]), plano)
+        self.terreno_rede = ter
         self.mem.forca_rede = lambda mira: self.mira.forca_para((eu["x"], eu["y"]), (alvo["x"], alvo["y"]), est["vento"], mira,
-                                                                plano["direcao"])
+                                                                plano["direcao"], ter)
+        inc = plano["inclinacao"]
+        olhando = (est.get("direcao") or {}).get(eu_id)
+        if ter is None:
+            sobre_terreno = "sem terreno"
+        elif plano.get("bloqueado"):
+            sobre_terreno = "BLOQUEADO pelo terreno em todas as miras"
+        else:
+            sobre_terreno = f"{plano['acertos']}/5 acertam com o terreno do mapa {est['mapa']}"
         self.log(f"   [rede] voce (boneco {eu_id}) em ({eu['x']}, {eu['y']}), alvo {alvo['id']} em ({alvo['x']}, {alvo['y']}), "
                  f"vento {est['vento']:+.1f} -> mira {plano['mira']} graus, forca {plano['forca_pct']:.0f}% "
-                 f"(saida {'medida' if plano['medido'] else 'estimada'}, inclinacao {plano['inclinacao']:+.0f})")
+                 f"(saida {plano['saida']} {plano['origem']}, inclinacao {'?' if inc is None else f'{inc:+.0f}'}, "
+                 f"ponteiro {plano['faixa'][0]}-{plano['faixa'][1]}, {sobre_terreno}, "
+                 f"olhando para a {'?' if olhando is None else ('direita' if olhando > 0 else 'esquerda')}; {time.time() - t0:.1f}s)")
         return plano
+
+    def _terreno(self, est):
+        """Terreno do mapa desta partida com os buracos ja feitos (None se o mapa nao veio pela rede ou nao deu para baixar)."""
+        if est.get("mapa") is None:
+            return None
+        try:
+            return terreno_jogo.terreno_da_partida(est["mapa"], est.get("buracos") or [])
+        except (OSError, ValueError) as e:
+            self.log(f"   [rede] nao consegui o terreno do mapa {est['mapa']}: {e}")
+            return None
+
+    def lado(self, f):
+        """Para onde o boneco olha: pela rede (DIRECTION/MOVESTART do nosso cliente). O ponteiro NAO serve: ele mostra o angulo real
+        do tiro, e num morro (63 graus, olhando para a esquerda) ele fica do lado direito (02/11)."""
+        if self.turno_rede and self.rede:
+            d = (self.rede.estado.copia().get("direcao") or {}).get(self.turno_rede[0])
+            if d in (1, -1):
+                return d
+        return super().lado(f)
+
+    def virar_para(self, lado):
+        """Modo rede: toca a seta e espera o jogo confirmar a direcao pela rede (ate ~1 s por toque)."""
+        if not (self.turno_rede and self.rede):
+            return super().virar_para(lado)
+        eu_id = self.turno_rede[0]
+        nome = "direita" if lado > 0 else "esquerda"
+        for dur in atirador_mod.TOQUES_VIRAR:
+            d = (self.rede.estado.copia().get("direcao") or {}).get(eu_id)
+            if d == lado:
+                return True
+            f = self.ver()
+            if f is None or not self.lei.minha_vez(f):
+                return False
+            diz = "?" if d is None else ("direita" if d > 0 else "esquerda")
+            self.log(f"   virando para a {nome} (o alvo esta desse lado; a rede diz {diz}): toque de {dur:.2f}s")
+            self.io.tecla(nome, dur)
+            for _ in range(10):
+                self.dormir(0.1)
+                if (self.rede.estado.copia().get("direcao") or {}).get(eu_id) == lado:
+                    break
+        ok = (self.rede.estado.copia().get("direcao") or {}).get(eu_id) == lado
+        if not ok:
+            self.log("   ! a rede nao confirmou que o boneco virou")
+        return ok
 
     def _eu_pelo_minimapa(self, vivos):
         """Qual boneco somos, pelo minimapa: o ponto azul (nos) a esquerda ou a direita do vermelho (inimigo)."""
@@ -628,6 +695,7 @@ class AtiradorPvp(atirador_mod.Atirador):
             self.log(f"   [rede] ! o plano usou o boneco {r['eu_id']}, mas somos o {eu_id} (corrigido para as proximas vezes)")
         if meus and self.segurou_rede and self.segurou_rede > 0.8:
             taxa = (meus[0]["forca"] / 20.0) / self.segurou_rede
+            self.log(f"   [rede] barra lida durante a carga (s, %): {self._resumo_trace(self.trace_rede)} | real {meus[0]['forca'] / 20:.0f}%")
             if 10 < taxa < 60:
                 antes = self.taxa_rede
                 self.taxas_medidas = (self.taxas_medidas + [taxa])[-7:]
@@ -645,9 +713,10 @@ class AtiradorPvp(atirador_mod.Atirador):
                      f"{'direita' if r['plano']['direcao'] > 0 else 'esquerda'}: o boneco nao virou. Nao aprendo inclinacao deste tiro")
         else:
             m = self.mira.aprender(r["eu"], r["plano"]["direcao"], p["angulo"], meus[0])
-            if m and abs(m["inclinacao"]) <= 35:
-                self.log(f"   [rede] tiro enviado: saida ({meus[0]['x']}, {meus[0]['y']}), forca {meus[0]['forca'] / 20:.0f}%, "
-                         f"angulo {meus[0]['angulo']} -> inclinacao do boneco {m['inclinacao']:+.0f} graus (vale para os proximos tiros daqui)")
+            sp = r["plano"]["saida"]
+            corr = f"; correcao {m['correcao']:+.0f}" if m else ""
+            self.log(f"   [rede] tiro enviado: saida ({meus[0]['x']}, {meus[0]['y']}) (prevista {sp[0]:.0f}, {sp[1]:.0f}, {r['plano']['origem']}), "
+                     f"forca {meus[0]['forca'] / 20:.0f}%, angulo {meus[0]['angulo']} (ponteiro lido {p['angulo']:.0f}{corr})")
         if dos:
             res = mira_exata.resultado_do_tiro(dos[0], r["alvo_id"])
             ex = res["explodiu"]
@@ -657,25 +726,64 @@ class AtiradorPvp(atirador_mod.Atirador):
                      f"previsto x={r['plano']['queda_x']:.0f}{' (teleguiado)' if res['teleguiado'] else ''}")
         return res
 
+    @staticmethod
+    def _resumo_trace(trace, n=12):
+        if len(trace) <= n:
+            return " ".join(f"{t:.2f}:{v}" for t, v in trace)
+        passo = len(trace) / n
+        return " ".join(f"{t:.2f}:{v}" for t, v in (trace[int(i * passo)] for i in range(n))) + f" ... {trace[-1][0]:.2f}:{trace[-1][1]}"
+
+    @staticmethod
+    def _barra_viva(trace):
+        """A barra da tela esta mostrando a carga DESTE tiro? So se ela foi vista baixa (<= 12%) e depois subiu sem voltar, a uma
+        velocidade possivel (15-60%/s). Se ela fica parada no valor do tiro anterior, nao e."""
+        i0 = next((i for i, (_t, v) in enumerate(trace) if v <= 12), None)
+        if i0 is None:
+            return False
+        sub_ = trace[i0:]
+        if len(sub_) < 4 or sub_[-1][1] - sub_[0][1] < 8:
+            return False
+        if any(b[1] < a[1] - 4 for a, b in zip(sub_, sub_[1:])):
+            return False
+        dt = sub_[-1][0] - sub_[0][0]
+        return dt > 0 and 15 <= (sub_[-1][1] - sub_[0][1]) / dt <= 60
+
     def carregar(self, alvo):
-        """Modo rede: solta PELO TEMPO (forca = taxa x tempo segurando, calibrada pela forca real que a rede informa a cada tiro).
-        A barra da tela ficava parada no valor do tiro anterior e o bot soltava errado (pediu 64%, sairam 88% e 45%; 02/11)."""
+        """Modo rede: solta pelo TEMPO (forca = taxa x tempo segurando, taxa calibrada pela forca real que a rede informa a cada
+        tiro), a nao ser que a barra da tela esteja comprovadamente acompanhando a carga (vista baixa e subindo): ai solta pela
+        barra, dentro de 0,7-1,4x do tempo estimado. A barra ficava parada no valor do tiro anterior e o bot soltava errado (pediu
+        64%, sairam 88% e 45%; 02/11); e so o tempo variou demais (44% tanto com 1,15 s quanto com 1,62 s)."""
         if not self.turno_rede:
             return super().carregar(alvo)
+        alvo = self._forca_agora(alvo)
         alvo = float(min(alvo, 97.0))
         t_alvo = alvo / self.taxa_rede
         repetir = self._segurar()
         t0, rep, motivo = self.agora(), 1, "tempo_rede"
-        faltas = 0
-        while self.agora() - t0 < t_alvo:
+        faltas, trace, recortes, ult_rec = 0, [], [], -1.0
+        salvar = self.pasta_barra is not None and self.recortes_salvos < 4
+        while True:
+            dur = self.agora() - t0
+            if dur >= t_alvo * (CARGA_JANELA[1] if self._barra_viva(trace) else 1.0):
+                break
             f = self.ver()
-            if f is not None and not self.lei.minha_vez(f):
-                faltas += 1
-                if faltas >= 2:
-                    motivo = "vez_acabou"
+            if f is not None and isinstance(f, np.ndarray):
+                if not self.lei.minha_vez(f):
+                    faltas += 1
+                    if faltas >= 2:
+                        motivo = "vez_acabou"
+                        break
+                else:
+                    faltas = 0
+                v = self.lei.forca(f)
+                trace.append((round(dur, 2), int(round(v))))
+                if salvar and dur - ult_rec >= 0.12:
+                    y0, y1, x0, x1 = RECORTE_BARRA
+                    recortes.append((dur, f[y0:y1, x0:x1].copy()))
+                    ult_rec = dur
+                if dur >= CARGA_JANELA[0] * t_alvo and v >= alvo - 1 and self._barra_viva(trace):
+                    motivo = "barra_rede"
                     break
-            else:
-                faltas = 0
             if repetir:
                 rep += 1
                 self.io.tecla_baixo(atirador_mod.TECLA_ESPACO, rep)
@@ -683,7 +791,45 @@ class AtiradorPvp(atirador_mod.Atirador):
         segurou = self.agora() - t0
         self._soltar()
         self.segurou_rede = segurou
-        return min(100.0, segurou * self.taxa_rede), motivo, [], segurou
+        self.trace_rede = trace
+        if salvar and recortes:
+            self.dormir(0.3)
+            f = self.ver()
+            if f is not None and isinstance(f, np.ndarray):
+                y0, y1, x0, x1 = RECORTE_BARRA
+                recortes.append((segurou + 0.3, f[y0:y1, x0:x1].copy()))
+            try:
+                os.makedirs(self.pasta_barra, exist_ok=True)
+                tag = datetime.datetime.now().strftime("%H%M%S")
+                for t, img in recortes:
+                    cv2.imwrite(os.path.join(self.pasta_barra, f"{tag}_{t:05.2f}s.png"), img)
+                self.recortes_salvos += 1
+            except (OSError, cv2.error):
+                pass
+        forca = trace[-1][1] if motivo == "barra_rede" else min(100.0, segurou * self.taxa_rede)
+        return forca, motivo, trace, segurou
+
+    def _forca_agora(self, alvo):
+        """Na hora de carregar: forca para o angulo que o ponteiro REALMENTE mostra, com a posicao e a direcao atuais (rede): virar
+        pode andar uns px e o ponteiro para 1-2 graus fora do pedido."""
+        eu_id, eu0, _aid, alvo_pos, pl = self.turno_rede
+        est = self.rede.estado.copia() if self.rede else None
+        f = self.ver()
+        if est is None or f is None or not isinstance(f, np.ndarray):
+            return alvo
+        v = est["vivos"].get(eu_id)
+        eu = (v["x"], v["y"]) if v else eu0
+        d = (est.get("direcao") or {}).get(eu_id) or pl["direcao"]
+        if d != pl["direcao"]:
+            self.log(f"   [rede] ! o boneco esta olhando para a {'direita' if d > 0 else 'esquerda'}, o alvo esta do outro lado")
+            return alvo
+        mira = self.lei.angulo(f)
+        nova = self.mira.forca_para(eu, alvo_pos, pl["vento"], mira, d, getattr(self, "terreno_rede", None))
+        if nova is None:
+            return alvo
+        if abs(nova - alvo) >= 1.0 or tuple(eu) != tuple(eu0):
+            self.log(f"   [rede] forca recalculada na hora: ponteiro em {mira:.0f}, voce em {tuple(eu)}: {alvo:.0f}% -> {nova:.0f}%")
+        return nova
 
     def plano_aviao(self, inst, azul, vida):
         """Destino (x, y) do voo com F, ou None. Usa o aviao quando o chao cedeu (boneco desceu no minimapa), quando o angulo bate

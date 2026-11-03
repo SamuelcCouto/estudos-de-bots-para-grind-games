@@ -169,13 +169,17 @@ class Estado:
         self.t_rede = None          # quando chegou o ultimo pedaco lido (relogio do registro de rede)
         self.tiros = []             # [(instante, tiro do servidor)] recentes (o bot confere o SEU tiro depois da vez)
         self.meus_tiros = []        # [(instante, tiro do cliente)] recentes
+        self.mapa = None            # numero do mapa da partida (GAME_LOAD) -> terreno_jogo.Terreno.do_mapa
+        self.buracos = []           # [(x, y, bala)] explosoes que cavaram o chao nesta partida (para o terreno ficar igual ao do jogo)
+        self.direcao = {}           # id -> +1 olhando para a direita / -1 esquerda (DIRECTION e MOVESTART)
 
     def copia(self):
         with self.lock:
             return dict(tiros=list(self.tiros), meus_tiros=list(self.meus_tiros), eu=self.eu, vez=self.vez, vez_t=self.vez_t, turno=self.turno, vento=self.vento,
                         vivos={k: dict(v) for k, v in self.vivos.items()}, ultimo_tiro=self.ultimo_tiro,
                         meu_ultimo_tiro=self.meu_ultimo_tiro, minha_vez=self.vez is not None and self.vez == self.eu,
-                        pacotes=dict(self.pacotes), chave_ok=dict(self.chave_ok))
+                        pacotes=dict(self.pacotes), chave_ok=dict(self.chave_ok), mapa=self.mapa, buracos=list(self.buracos),
+                        direcao=dict(self.direcao))
 
     def processar(self, lado, pacote, ao_mudar=None):
         cod, _cid, e1, _e2, corpo = pacote
@@ -191,7 +195,12 @@ class Estado:
                     if sub == R.SUB["GAME_CREATE"]:
                         self.eu = None
                     self.vivos = {}
+                    self.mapa, self.buracos, self.direcao = None, [], {}
                     evento = ("partida", sub)
+                elif lado == "servidor" and sub == R.SUB["GAME_LOAD"]:
+                    self.mapa = struct.unpack(">i", corpo[5:9])[0]   # GameManager.__beginLoad: tempo maximo, numero do mapa, ...
+                    self.buracos, self.direcao = [], {}
+                    evento = ("mapa", self.mapa)
                 elif lado == "servidor" and sub == R.SUB["TURN"]:
                     v = R.vez_do_servidor(corpo, e1)
                     self.vez, self.vez_t, self.turno, self.vento = v["quem"], time.time(), v["turno"], v["vento"]
@@ -199,10 +208,29 @@ class Estado:
                     evento = ("vez", v)
                 elif lado == "servidor" and sub == R.SUB["FIRE"]:
                     t = R.tiro_do_servidor(corpo, e1)
+                    for b in t["bombas"]:
+                        bomba = next((a for a in b["acoes"] if a["tipo"] == "BOMB"), None)
+                        if bomba is not None and b["buraco"]:
+                            self.buracos.append((bomba["p"][0], bomba["p"][1], b["bala"]))
                     self.ultimo_tiro = t
                     self.tiros = (self.tiros + [(time.time(), t)])[-40:]
                     evento = ("tiro", t)
+                elif sub == R.SUB["DIRECTION"] and len(corpo) >= 5:
+                    d = struct.unpack(">i", corpo[1:5])[0]
+                    quem = e1 if lado == "servidor" else (self.eu if self.eu is not None else self.vez)
+                    if quem is not None and d in (1, -1):
+                        self.direcao[quem] = d
+                    if lado == "cliente" and self.vez is not None and self.eu is None:
+                        self.eu = self.vez
                 elif lado == "cliente":
+                    if sub == R.SUB["MOVESTART"] and len(corpo) >= 11 and self.vez is not None:
+                        x, y = struct.unpack(">ii", corpo[2:10])        # sendGameStartMove: tipo, x, y, direcao, ...
+                        d = corpo[10] if corpo[10] < 128 else corpo[10] - 256
+                        quem = self.eu if self.eu is not None else self.vez
+                        if quem in self.vivos:
+                            self.vivos[quem]["x"], self.vivos[quem]["y"] = x, y
+                        if d in (1, -1):
+                            self.direcao[quem] = d
                     if sub == R.SUB["FIRE"]:
                         t = R.tiro_do_cliente(corpo)
                         self.meu_ultimo_tiro = t

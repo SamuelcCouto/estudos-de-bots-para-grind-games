@@ -87,6 +87,25 @@ campo `bytes`.) O jogo reconecta as vezes: cada conexao nova recomeca a leitura 
 Descartados: o socket bruto do Windows (nao ve a conexao IPv6 do jogo, testado ao vivo) e o WinDivert (o Defender bloqueia).
 Cuidado: o registro grava os dados ja decifrados de todas as conexoes do launcher, inclusive o site. Fica so em `capturas_rede/`.
 
+### 1.6 Terreno, inclinacao e ponto de saida (02/11 a noite, `terreno_jogo.py`)
+- **Numero do mapa**: vem no pacote GAME_LOAD (sub 103: tempo maximo, mapa, ...). Os numeros sao os do `loadmapsitems.xml`
+  (858xxx). O chao e `https://res20.ddtankbetel.com/image/map/<mapa>/fore.png` (e `dead.png` = pedra), baixado uma vez para
+  `dados/mapas_jogo/`. Chao = alfa > 150 (Ground.IsEmpty).
+- **Conferido**: no 1o turno de cada partida a posicao da rede fica exatamente na superficie do chao (1 px, 20 partidas). Bala
+  simulada com o terreno: explode a 1-5 px do ponto do servidor no terreno intacto.
+- **Buracos**: cada explosao com "buraco" cava um oval de largura = Radii da bala e altura 0,6 x Radii. Em 257 explosoes reais:
+  78% a ate 5 px e 93% a ate 10 px do previsto (circulo de Radii/2: 32% / 40%).
+- **Inclinacao** do boneco = conta do jogo (PhysicalObj.calcObjectAngle) sobre o terreno. **Ponto de saida** do tiro
+  (GamePlayer.shootPoint) = pe + (0, -3) + gira(inclinacao, (+-30, -20)); o cliente corta as casas (int). Bate com o pacote.
+- **Descoberta que muda a mira**: o PONTEIRO do mostrador (o que o bot le) ja mostra o angulo REAL do tiro (com a inclinacao).
+  A inclinacao so muda o ponto de saida e a faixa da arma (ponteiro = arma - direcao x inclinacao: arma de minimo 13 num morro de
+  63 graus olhando para a esquerda so chega a 76, o "limite 76" visto ao vivo). A "inclinacao" que o bot aprendia era o erro de
+  leitura do ponteiro (0-2 graus), exceto quando o boneco estava virado ao contrario.
+- **Direcao do boneco**: o lado do ponteiro engana (num morro, virado para a esquerda, o ponteiro fica a direita). A direcao certa
+  vem da rede: DIRECTION (sub 7, int +1/-1) e MOVESTART do cliente (sub 9: tipo, x, y, direcao), que tambem da a posicao atual.
+- **Forca**: a taxa de carga variou 27-40%/s (a barra sobe 1% por quadro; o quadro do Flash varia). O bot agora registra a barra
+  durante a carga (`dados/pvp_barra_carga/`) e solta pela barra quando ela comprovadamente acompanha a carga.
+
 ---
 
 ## 2. A nova arquitetura proposta (o "motor exato")

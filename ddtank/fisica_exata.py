@@ -68,11 +68,12 @@ def velocidade_inicial(forca, angulo, fator=1.0, desvio=0):
 
 
 def simular(x0, y0, forca, angulo, vento=0.0, bala=BALA_PADRAO, mapa=MAPA_PADRAO, terreno=None, alvos=(), raio=3,
-            limite_s=20.0, largura=None, altura=None, teleguiado=False, inimigos=()):
+            limite_s=20.0, largura=None, altura=None, teleguiado=False, inimigos=(), v0=None):
     """Simula o projetil. terreno(x0, y0, x1, y1) -> True se o retangulo tem chao (None = sem terreno); alvos = [(x0,y0,x1,y1)]
     (retangulos dos bonecos). teleguiado + inimigos [(x, y)]: perk que corrige a mira (raio 150, so descendo).
+    v0 = (vx, vy) ja pronto (ex.: o do pacote do servidor) no lugar de forca/angulo.
     Devolve dict(pontos, impacto=(x, y), motivo='alvo'|'chao'|'fora'|'tempo', alvo=indice|None, corrigiu=bool)."""
-    vx, vy = velocidade_inicial(forca, angulo)
+    vx, vy = v0 if v0 is not None else velocidade_inicial(forca, angulo)
     m, arf = bala.mass, mapa.drag * bala.drag
     fx, fy = vento * bala.wind, mapa.weight * bala.weight * bala.mass
     x, y, t = float(x0), float(y0), 0.0
