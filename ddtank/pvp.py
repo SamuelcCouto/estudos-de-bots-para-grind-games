@@ -792,9 +792,16 @@ class AtiradorPvp(atirador_mod.Atirador):
                     y0, y1, x0, x1 = RECORTE_BARRA
                     recortes.append((dur, f[y0:y1, x0:x1].copy()))
                     ult_rec = dur
-                if dur >= CARGA_JANELA[0] * t_alvo and v >= alvo - BARRA_ATRASO and self._barra_viva(trace):
-                    motivo = "barra_rede"
-                    break
+                if self._barra_viva(trace) and dur - (t_ini or 0.0) >= CARGA_JANELA[0] * t_alvo:
+                    # as leituras saem a cada ~0,25 s (a barra anda ~7% entre elas): preve quando chega no alvo e solta na hora certa
+                    pts = [(t, x) for t, x in trace if x >= 2]
+                    taxa = (pts[-1][1] - pts[0][1]) / (pts[-1][0] - pts[0][0]) if len(pts) >= 2 and pts[-1][0] > pts[0][0] else self.taxa_rede
+                    falta = (alvo - BARRA_ATRASO - v) / max(taxa, 5.0)
+                    if falta <= 0.3:
+                        if falta > 0:
+                            self.dormir(falta)
+                        motivo = "barra_rede"
+                        break
             if repetir:
                 rep += 1
                 self.io.tecla_baixo(atirador_mod.TECLA_ESPACO, rep)
