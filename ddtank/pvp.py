@@ -86,7 +86,8 @@ MAPA_DIST_MAX = 10                  # bits de diferenca (de 64) para ser o mesmo
 PASTA_MAPAS = os.path.join(config.PASTA, "dados", "pvp_mapas")
 PASTA_BARRA_CARGA = os.path.join(config.PASTA, "dados", "pvp_barra_carga")   # recortes da barra de forca durante a carga (estudo)
 RECORTE_BARRA = (520, 580, 395, 765)       # y0, y1, x0, x1: a barra de forca e um pouco em volta
-BARRA_ATRASO = 3.5                 # % que a barra lida fica atras da forca real (03/11: lida 66 -> real 69; lida 49 -> real 53)
+CARGA_INICIO_MAX = 2.5             # s esperando a barra sair do 0 (se nao sair, solta pelo relogio)
+BARRA_ATRASO = 3.0                 # % que a barra lida fica atras da forca real (~0,1 s de atraso da captura; 03/11)
 CARGA_JANELA = (0.7, 1.4)                  # a barra so manda soltar entre 0,7x e 1,4x do tempo estimado (a taxa real variou 27-40%/s)
 PRINTS_DO_PVP = ("turno_inicio", "tiro_dado", "turno_pulado", "voo", "pos_tiro", "partida_fim", "desconhecida", "mapa", "vez", "batalha", "preso")
 
@@ -766,9 +767,13 @@ class AtiradorPvp(atirador_mod.Atirador):
         t0, rep, motivo = self.agora(), 1, "tempo_rede"
         faltas, trace, recortes, ult_rec = 0, [], [], -1.0
         salvar = self.pasta_barra is not None and self.recortes_salvos < 4
+        t_ini = None                       # quando a barra comecou a subir (o jogo as vezes so comeca a carregar 1-2 s depois, 03/11)
         while True:
             dur = self.agora() - t0
-            if dur >= t_alvo * (CARGA_JANELA[1] if self._barra_viva(trace) else 1.0):
+            base = t_ini if t_ini is not None else 0.0
+            if t_ini is None and trace and dur < CARGA_INICIO_MAX and not any(v > 0 for _t, v in trace[-3:]) and len(trace) >= 3:
+                pass                           # a barra ainda esta em 0: a carga nao comecou; espera (ate CARGA_INICIO_MAX)
+            elif dur - base >= t_alvo * (CARGA_JANELA[1] if self._barra_viva(trace) else 1.0):
                 break
             f = self.ver()
             if f is not None and isinstance(f, np.ndarray):
@@ -779,8 +784,10 @@ class AtiradorPvp(atirador_mod.Atirador):
                         break
                 else:
                     faltas = 0
-                v = self.lei.forca(f)
+                v = L.forca_carga(f) if isinstance(f, np.ndarray) and f.ndim == 3 else self.lei.forca(f)
                 trace.append((round(dur, 2), int(round(v))))
+                if t_ini is None and v >= 2:
+                    t_ini = max(0.0, dur - 0.1)
                 if salvar and dur - ult_rec >= 0.12:
                     y0, y1, x0, x1 = RECORTE_BARRA
                     recortes.append((dur, f[y0:y1, x0:x1].copy()))

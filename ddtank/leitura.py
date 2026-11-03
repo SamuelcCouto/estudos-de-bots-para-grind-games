@@ -110,6 +110,25 @@ def forca(f):
     return max(forca_laranja, n_verm / (x1 - x0) * 100 if n_verm >= 6 else 0.0)
 
 
+def forca_carga(f):
+    """Forca da carga ATUAL (0-100): so o enchimento laranja/amarelo claro que cresce por cima da barra. A barra vermelha escura
+    embaixo e o tiro ANTERIOR (o leitor antigo pegava ela e parecia "travado", 03/11). Os tracos da regua (a cada 10%) cortam o
+    enchimento: buracos de ate 8 px sao ignorados."""
+    x0, x1, y0, y1 = BARRA_FORCA
+    faixa = f[y0:y1, x0:x1].astype(int)
+    g, r = faixa[..., 1], faixa[..., 2]
+    col = ((r > 170) & (g > 85)).mean(axis=0) > 0.3
+    xs = np.where(col)[0]
+    if len(xs) == 0 or xs[0] > 8:
+        return 0.0
+    fim = xs[0]
+    for x in xs[1:]:
+        if x - fim > 8:
+            break
+        fim = x
+    return (fim + 1) / (x1 - x0) * 100
+
+
 _LINHA_H = cv2.getStructuringElement(cv2.MORPH_RECT, (13, 1))
 _LINHA_V = cv2.getStructuringElement(cv2.MORPH_RECT, (1, 11))
 
