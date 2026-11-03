@@ -562,7 +562,7 @@ class AtiradorPvp(atirador_mod.Atirador):
             return None
         self._t_plano = time.time()
         est = self.rede.estado.copia()
-        for _ in range(15):                                  # o pacote da vez chega ~0,2 s depois (registro do Chromium)
+        for _ in range(35):                                  # o pacote da vez chega 0,2-5 s depois (registro do Chromium; inicio de partida)
             if est["chave_ok"]["servidor"] and est["vivos"] and est["vez"] is not None and time.time() - est["vez_t"] < 30:
                 break
             self.dormir(0.15)
