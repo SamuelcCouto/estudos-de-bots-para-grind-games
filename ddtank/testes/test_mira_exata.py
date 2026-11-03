@@ -63,7 +63,7 @@ t2 = TJ.Terreno(chao2, mapa_id=2, info={"Weight": "10", "DragIndex": "2"})
 m3 = ME.MiraExata(log=lambda *_: None)
 pl_sem = m3.planejar((1000, 800), (1600, 800), 0.0)
 pl = m3.planejar((1000, 800), (1600, 800), 0.0, terreno=t2)
-assert pl and not pl.get("bloqueado") and pl["acertos"] >= 4 and pl["origem"] == "terreno", pl
+assert pl and not pl.get("bloqueado") and pl["acertos"] >= 3 and pl["origem"] == "terreno", pl
 r = FX.simular(pl["saida"][0], pl["saida"][1], pl["forca"], pl["angulo_envio"], 0.0, terreno=t2, alvos=[(1585, 765, 1615, 800)],
                largura=t2.largura, altura=t2.altura + 200)
 assert r["motivo"] == "alvo", r["motivo"]

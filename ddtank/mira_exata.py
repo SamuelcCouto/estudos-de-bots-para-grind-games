@@ -29,6 +29,7 @@ MIRA_MIN, MIRA_MAX = 20, 80        # faixa do ponteiro usada pelo planejador
 LIMITE_RAIO_PX = 60.0              # o limite de mira medido vale ate esta distancia do lugar (sem terreno)
 SAIDA_MAX_PX = 70.0                # o cano fica a no maximo ~40 px do boneco: saida mais longe = posicao do boneco errada
 MESMA_POSICAO_PX = 4.0             # o boneco nao saiu do lugar: o ponto de saida medido continua valendo
+ERRO_PONTEIRO = 2                  # graus: a leitura do ponteiro erra ate ~2 (03/11: leu 62 e 58 com o tiro saindo a 60) -> mira tolerante a isso
 CORRECAO_MAX = 6.0                 # diferenca ponteiro x angulo enviado aceitavel (mais que isso = leitura/lado errados)
 FAIXA_AMPLA = (8, 88)              # quando nada na faixa normal passa pelo terreno
 CANDIDATOS_TERRENO = 16            # quantas miras (as mais tolerantes) sao simuladas com o terreno
@@ -142,7 +143,7 @@ class MiraExata:
             if x0 is None:
                 continue
             desvios = []
-            for df, da in ((FX.FORCA_POR_QUADRO, 0), (-FX.FORCA_POR_QUADRO, 0), (0, 1), (0, -1)):
+            for df, da in ((FX.FORCA_POR_QUADRO, 0), (-FX.FORCA_POR_QUADRO, 0), (0, ERRO_PONTEIRO), (0, -ERRO_PONTEIRO)):
                 xi = self.prever(saida, ang + da, f + df, vento, ya, mapa)
                 desvios.append(abs(xi - x0) if xi is not None else 999.0)
             folga = max(desvios)
@@ -168,7 +169,7 @@ class MiraExata:
                     c["motivo"] = "inseguro"
                     continue
             acertos = 1 + sum(self._simula(saida, c["angulo_envio"] + da, c["forca"] + df, vento, terreno, caixa, mapa)["motivo"] == "alvo"
-                              for df, da in ((FX.FORCA_POR_QUADRO, 0), (-FX.FORCA_POR_QUADRO, 0), (0, 1), (0, -1)))
+                              for df, da in ((FX.FORCA_POR_QUADRO, 0), (-FX.FORCA_POR_QUADRO, 0), (0, ERRO_PONTEIRO), (0, -ERRO_PONTEIRO)))
             c["acertos"] = acertos
             if melhor is None or (acertos, -c["nota"]) > (melhor["acertos"], -melhor["nota"]):
                 melhor = c
