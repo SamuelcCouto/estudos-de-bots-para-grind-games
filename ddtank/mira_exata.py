@@ -22,6 +22,7 @@ OFFSET_PADRAO = (0.0, -33.0)       # ponto de saida - posicao do boneco (px do m
 ALVO_DY = -15.0                    # mira no corpo do inimigo (a posicao da rede e o pe)
 MIRA_MIN, MIRA_MAX = 20, 80        # faixa do mostrador usada pelo planejador
 LIMITE_RAIO_PX = 60.0              # o limite de mira medido vale ate esta distancia do lugar
+SAIDA_MAX_PX = 70.0                # o cano fica a no maximo ~40 px do boneco: saida mais longe = posicao do boneco errada
 MESMA_POSICAO_PX = 4.0             # o boneco nao saiu do lugar: o ponto de saida/inclinacao medidos continuam valendo
 
 
@@ -55,6 +56,10 @@ class MiraExata:
         ang = float(tiro_cliente["angulo"])
         inc = ang + mira_usada if direcao > 0 else ang - mira_usada + 180.0
         inc = (inc + 180.0) % 360.0 - 180.0
+        if abs(inc) > 35:                                   # inclinacao absurda: o boneco estava virado para o outro lado ou o mostrador mentiu
+            return None
+        if abs(tiro_cliente["x"] - eu[0]) > SAIDA_MAX_PX or abs(tiro_cliente["y"] - eu[1]) > SAIDA_MAX_PX:
+            return None                                     # o tiro saiu longe de onde achavamos estar (posicao velha): nao vale
         self.medidas[direcao] = dict(pos=tuple(eu), offset=(tiro_cliente["x"] - eu[0], tiro_cliente["y"] - eu[1]), inclinacao=inc)
         return self.medidas[direcao]
 

@@ -14,6 +14,7 @@ Para a leitura do vento melhorar: recortes de leitura duvidosa vao para dados/pv
 Para parar: F10, o botao PARAR do painel (logs/parar.flag) ou --minutos. F8 pausa/continua nao existe aqui (so PARAR).
 """
 import argparse
+import math
 import datetime
 import json
 import os
@@ -459,6 +460,7 @@ class AtiradorPvp(atirador_mod.Atirador):
         super().__init__(*a, **kw)
         self.rede = rede                   # rede_vivo.LeitorAoVivo (estado exato da partida) ou None (so tela)
         self.taxa_rede = TAXA_FORCA_REDE   # % de forca por segundo segurando o espaco, calibrada pela forca REAL de cada tiro (rede)
+        self.taxas_medidas = [TAXA_FORCA_REDE] * 3
         self.segurou_rede = None
         self.mira = mira_exata.MiraExata(log=self.log)
         self.turno_rede = None             # (eu_id, eu, alvo_id, alvo, plano) deste turno
@@ -555,7 +557,18 @@ class AtiradorPvp(atirador_mod.Atirador):
         else:
             self.log("   [rede] sem o estado da vez (registro do jogo atrasado ou sem chave): mira pela tela")
             return None
-        eu_id = est["eu"] if est["eu"] is not None else est["vez"]   # e a nossa vez (a tela mostrou): quem joga agora somos nos
+        eu_id = est["eu"]
+        if eu_id is None and len(est["vivos"]) == 2:
+            eu_id = self._eu_pelo_minimapa(est["vivos"])        # o ponto AZUL do minimapa e o nosso: mesmo lado (esquerda/direita)
+        if eu_id is None:
+            if time.time() - est["vez_t"] > 4.0:
+                self.log("   [rede] ainda nao sei qual boneco e o nosso e a troca de vez nao e recente: mira pela tela")
+                return None
+            eu_id = est["vez"]                                  # vez recente + a tela mostra a nossa vez: quem joga somos nos
+        if est["vez"] != eu_id:
+            self.log(f"   [rede] a rede diz que a vez e do boneco {est['vez']} (nos somos {eu_id}): nao atiro (a tela se enganou?)")
+            self.agiu = True
+            return "nao_e_a_vez"
         if est["eu"] is not None and est["vez"] != est["eu"]:
             self.log(f"   [rede] a rede diz que a vez e do boneco {est['vez']} (nos somos {est['eu']}): mira pela tela")
             return None
@@ -578,6 +591,21 @@ class AtiradorPvp(atirador_mod.Atirador):
                  f"(saida {'medida' if plano['medido'] else 'estimada'}, inclinacao {plano['inclinacao']:+.0f})")
         return plano
 
+    def _eu_pelo_minimapa(self, vivos):
+        """Qual boneco somos, pelo minimapa: o ponto azul (nos) a esquerda ou a direita do vermelho (inimigo)."""
+        f = self.ver()
+        if f is None:
+            return None
+        self.observar_minimapa(f, forcar=True)
+        azul, _c = self.rastreador.jogador()
+        boss = self.rastreador.boss
+        if not (azul and boss) or abs(azul[0] - boss[0]) < 3:
+            return None
+        a, b = sorted(vivos.values(), key=lambda v: v["x"])
+        eu = a if azul[0] < boss[0] else b
+        self.log(f"   [rede] pelo minimapa somos o boneco {eu['id']} (ponto azul {'a esquerda' if azul[0] < boss[0] else 'a direita'})")
+        return eu["id"]
+
     def _resultado_pela_rede(self, p):
         """Depois do NOSSO tiro: ponto de saida/inclinacao exatos (pacote do cliente) e o resultado do servidor."""
         r = p.get("rede")
@@ -587,21 +615,37 @@ class AtiradorPvp(atirador_mod.Atirador):
         for _ in range(20):
             est = self.rede.estado.copia()
             meus = [t for ts, t in est["meus_tiros"] if ts >= r["t"] - 1.0]
-            dos = [t for ts, t in est["tiros"] if ts >= r["t"] - 1.0 and t["atirador"] == r["eu_id"]]
+            eu_id = est["eu"] if est["eu"] is not None else r["eu_id"]   # o pacote do NOSSO tiro confirma qual boneco somos
+            dos = [t for ts, t in est["tiros"] if ts >= r["t"] - 1.0 and t["atirador"] == eu_id]
             if meus and dos:
                 break
             self.dormir(0.15)
-        if meus and self.segurou_rede and self.segurou_rede > 0.3:
+        if not meus:
+            self.log("   [rede] o jogo NAO registrou tiro nosso nesta vez (nao era a nossa vez? as teclas nao chegaram?): sem resultado")
+            self.segurou_rede = None
+            return None
+        if eu_id != r["eu_id"]:
+            self.log(f"   [rede] ! o plano usou o boneco {r['eu_id']}, mas somos o {eu_id} (corrigido para as proximas vezes)")
+        if meus and self.segurou_rede and self.segurou_rede > 0.8:
             taxa = (meus[0]["forca"] / 20.0) / self.segurou_rede
             if 10 < taxa < 60:
                 antes = self.taxa_rede
-                self.taxa_rede = 0.5 * self.taxa_rede + 0.5 * taxa
+                self.taxas_medidas = (self.taxas_medidas + [taxa])[-7:]
+                self.taxa_rede = float(np.median(self.taxas_medidas))     # mediana: uma medida estranha (48,8%/s) nao estraga
                 self.log(f"   [rede] forca real {meus[0]['forca'] / 20:.0f}% em {self.segurou_rede:.2f}s -> {taxa:.1f}%/s "
-                         f"(taxa da carga {antes:.1f} -> {self.taxa_rede:.1f}%/s)")
+                         f"(taxa da carga {antes:.1f} -> {self.taxa_rede:.1f}%/s, mediana das ultimas)")
         self.segurou_rede = None
-        if meus:
+        lado_real = 1 if math.cos(math.radians(meus[0]["angulo"])) >= 0 else -1
+        longe = max(abs(meus[0]["x"] - r["eu"][0]), abs(meus[0]["y"] - r["eu"][1]))
+        if longe > mira_exata.SAIDA_MAX_PX:
+            self.log(f"   [rede] ! o tiro saiu de ({meus[0]['x']}, {meus[0]['y']}), {longe:.0f} px longe de onde o plano achava que estavamos "
+                     f"{r['eu']}: posicao velha (o boneco caiu/foi empurrado?). Nao aprendo saida deste tiro")
+        elif lado_real != r["plano"]["direcao"]:
+            self.log(f"   [rede] ! o tiro saiu para a {'direita' if lado_real > 0 else 'esquerda'} (angulo {meus[0]['angulo']}), o plano era para a "
+                     f"{'direita' if r['plano']['direcao'] > 0 else 'esquerda'}: o boneco nao virou. Nao aprendo inclinacao deste tiro")
+        else:
             m = self.mira.aprender(r["eu"], r["plano"]["direcao"], p["angulo"], meus[0])
-            if m:
+            if m and abs(m["inclinacao"]) <= 35:
                 self.log(f"   [rede] tiro enviado: saida ({meus[0]['x']}, {meus[0]['y']}), forca {meus[0]['forca'] / 20:.0f}%, "
                          f"angulo {meus[0]['angulo']} -> inclinacao do boneco {m['inclinacao']:+.0f} graus (vale para os proximos tiros daqui)")
         if dos:
@@ -732,7 +776,11 @@ class AtiradorPvp(atirador_mod.Atirador):
         self.combo_luta = None                       # o atirador reescolhe a ordem (sem combos): a deste turno
         self.itens_ultimo = []
         self.turno_rede, self.mem.plano_rede, self.mem.forca_rede = None, None, None
-        self.mem.plano_rede = self._plano_pela_rede()
+        plano = self._plano_pela_rede()
+        if plano == "nao_e_a_vez":
+            self.turnos_feitos_na_vez -= 1
+            return
+        self.mem.plano_rede = plano
         try:
             super().turno(f)
         finally:
