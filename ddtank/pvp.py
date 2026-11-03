@@ -474,6 +474,7 @@ class AtiradorPvp(atirador_mod.Atirador):
         self.recortes_salvos = 0
         self.pasta_barra = PASTA_BARRA_CARGA     # None = nao salva recortes (testes)
         self.mira = mira_exata.MiraExata(log=self.log)
+        self.tempo_itens_max = 9.0                 # a vez do PVP e longa (~20 s): itens 3 + 4 sempre (o usuario viu o bot pular os itens, 03/11)
         self.ocr = ocr_windows.OcrAngulo() if rede is not None else None
         self.ocr_lidos = self.ocr_falhas = 0
         if self.ocr is not None and hasattr(self.lei, "angulo"):

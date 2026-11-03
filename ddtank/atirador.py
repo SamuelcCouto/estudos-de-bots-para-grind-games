@@ -357,7 +357,7 @@ class Atirador:
                 self.combo_luta = (nome_c, ordem_c)
             else:
                 self.combo_luta = (None, self.ordem)
-        sem_tempo = self.agora() - inicio > TEMPO_ITENS_MAX
+        sem_tempo = self.agora() - inicio > getattr(self, "tempo_itens_max", TEMPO_ITENS_MAX)
         if sem_tempo:
             # a vez dura ~7 s: andar + mirar ja comeram o tempo; os itens fariam o tiro sair no fim do contador (ou nao sair)
             self.log(f"   (sem tempo para itens: {self.agora() - inicio:.1f}s gastos na vez; atiro direto)")
