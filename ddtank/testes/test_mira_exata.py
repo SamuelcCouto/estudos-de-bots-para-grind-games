@@ -69,6 +69,14 @@ r = FX.simular(pl["saida"][0], pl["saida"][1], pl["forca"], pl["angulo_envio"], 
 assert r["motivo"] == "alvo", r["motivo"]
 print(f"terreno: inclinacao {inc:+.0f} na rampa de 30, saida do tiro igual a do pacote, plano por cima do muro "
       f"(mira {pl['mira']}, {pl['acertos']}/5 variacoes acertam; sem terreno escolheria {pl_sem['mira']}) OK")
+t3 = TJ.Terreno(np.ones((100, 100), bool), mapa_id=3)
+masc = np.zeros((11, 21), bool)
+masc[2:9, 3:18] = True                                       # cratera de 15 x 7 px centrada
+t3.cavar_mascara(50, 50, masc)
+assert t3.vazio(50, 50) and t3.vazio(43, 47) and not t3.vazio(41, 50) and not t3.vazio(50, 55)
+t3.cavar_mascara(2, 2, masc)                                  # na borda do mapa: corta sem erro
+assert t3.vazio(0, 0)
+print("buraco com a imagem da cratera (centrada na explosao, cortada na borda) OK")
 m4 = ME.MiraExata(log=lambda *_: None)
 assert m4.limite(False, 76, (645, 786), -1, 63) == 13, "ponteiro min 76 olhando para a esquerda num morro de 63 -> arma min 13"
 assert m4.faixa((100, 100), +1, 0)[0] == 20 and m4.faixa((100, 100), +1, -20)[0] == 33, "arma min 13 + inclinacao 20 (direita)"

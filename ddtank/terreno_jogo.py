@@ -17,8 +17,8 @@ De onde vem (cliente descompilado, 02/11):
   baixo (MathUtils.GetAngleTwoPoint).
 - GamePlayer.shootPoint: o tiro sai de (30, -20) no corpo do boneco (espelhado quando olha para a esquerda), girado pela inclinacao,
   com o corpo 3 px acima do pe: saida = pe + (0, -3) + gira(inclinacao, (+-30, -20)). Conferido em 40+ tiros reais (1-2 px).
-- Buraco da explosao: oval com largura = Radii da bala (balllist.xml) e profundidade 0,6 x Radii (ajustado em 257 explosoes reais:
-  78% caem a ate 5 px do previsto e 93% a ate 10 px; com circulo o melhor era 50% / 66%).
+- Buraco da explosao: a IMAGEM da cratera da bala (balllist.xml "Crater" -> image/bomb/crater/<id>/crater.png; Tile.Dig apaga o chao
+  com ela, centrada na explosao). Em 350 explosoes reais: mediana 1,1 px, 95% a ate 5 px (03/11). Sem imagem: oval Radii x 0,6 Radii.
 - O ponteiro do mostrador (o que o bot le) ja mostra o angulo REAL do tiro (com a inclinacao): a inclinacao so muda o ponto de saida e
   a faixa que a arma alcanca (mostrador = arma - inclinacao olhando para a direita, arma + inclinacao para a esquerda).
 """
@@ -36,6 +36,8 @@ PASTA = os.path.join(config.PASTA, "dados", "mapas_jogo")
 ARQ_MAPAS = os.path.join(config.PASTA, "dados", "jogo", "loadmapsitems.xml")
 ARQ_BALAS = os.path.join(config.PASTA, "dados", "jogo", "balllist.xml")
 URL_MAPA = "https://res20.ddtankbetel.com/image/map/{id}/{pic}.png"
+URL_CRATERA = "https://res20.ddtankbetel.com/image/bomb/crater/{id}/crater.png"   # PathManager.solveCrater
+PASTA_CRATERAS = os.path.join(config.PASTA, "dados", "crateras")
 ALFA_CHAO = 150
 SAIDA_NO_CORPO = (30.0, -20.0)     # GamePlayer._ballpos
 CORPO_DY = -3.0                    # GamePlayer._player.y
@@ -43,6 +45,7 @@ BURACO_LARGURA, BURACO_ALTURA = 1.0, 0.6   # x Radii da bala
 
 _INFO = {}
 _BALAS = {}
+_CRATERAS = {}
 
 
 def _atributos(tag):
@@ -153,9 +156,24 @@ class Terreno:
             self.chao[m > 0] = False
 
     def cavar_bomba(self, x, y, bala_id):
-        """Buraco que a explosao da bala `bala_id` deixa (tamanho pelo Radii do balllist.xml)."""
-        r = float((info_bala(bala_id) or {}).get("Radii", 60))
+        """Buraco que a explosao da bala `bala_id` deixa: a imagem da cratera da bala (Tile.Dig apaga o chao com ela, centrada na
+        explosao); sem imagem, um oval pelo Radii."""
+        info = info_bala(bala_id) or {}
+        mascara = cratera(info.get("Crater"))
+        if mascara is not None:
+            self.cavar_mascara(x, y, mascara)
+            return
+        r = float(info.get("Radii", 60))
         self.cavar(x, y, r * BURACO_LARGURA, r * BURACO_ALTURA)
+
+    def cavar_mascara(self, x, y, mascara):
+        """Apaga o chao onde a mascara (bool, centrada em (x, y)) e verdadeira."""
+        h, w = mascara.shape
+        x0, y0 = int(x - w / 2), int(y - h / 2)
+        a0, b0 = max(0, x0), max(0, y0)
+        a1, b1 = min(self.largura, x0 + w), min(self.altura, y0 + h)
+        if a1 > a0 and b1 > b0:
+            self.chao[b0:b1, a0:a1] &= ~mascara[b0 - y0:b1 - y0, a0 - x0:a1 - x0]
 
     def no_chao(self, x, y):
         """O pe (x, y) esta sobre o chao (vazio no pe ou 1 px acima, chao ate 2 px abaixo): o terreno daqui bate com o do jogo."""
@@ -181,12 +199,12 @@ def saida_do_tiro(pe, direcao, inclinacao):
 _CACHE = {}
 
 
-def terreno_da_partida(mapa_id, buracos, baixar=True, fator=1.0):
+def terreno_da_partida(mapa_id, buracos, baixar=True, margem=0):
     """Terreno do mapa com os buracos das explosoes desta partida [(x, y, bala)] (guarda o mapa e os buracos ja cavados).
-    fator < 1: buracos menores (terreno "pessimista": o buraco real as vezes e menor e a bala bate onde o modelo ja tinha cavado)."""
+    margem > 0: cada buraco `margem` px menor em volta (terreno "pessimista", para a bala nao passar raspando na borda de um buraco)."""
     if mapa_id is None:
         return None
-    chave = "atual" if fator == 1.0 else ("atual", fator)
+    chave = "atual" if not margem else ("atual", margem)
     c = _CACHE.get(chave)
     if not c or c[0] != mapa_id or len(c[1]) > len(buracos) or c[1] != list(buracos[:len(c[1])]):
         base = _CACHE.get(("base", mapa_id))
@@ -198,7 +216,43 @@ def terreno_da_partida(mapa_id, buracos, baixar=True, fator=1.0):
         c = (mapa_id, [], base.copia())
     ter = c[2]
     for x, y, bala in buracos[len(c[1]):]:
-        r = float((info_bala(bala) or {}).get("Radii", 60)) * fator
-        ter.cavar(x, y, r * BURACO_LARGURA, r * BURACO_ALTURA)
+        if not margem:
+            ter.cavar_bomba(x, y, bala)
+            continue
+        info = info_bala(bala) or {}
+        m = cratera(info.get("Crater"))
+        if m is not None:
+            k = np.ones((2 * margem + 1, 2 * margem + 1), np.uint8)
+            ter.cavar_mascara(x, y, cv2.erode(m.astype(np.uint8), k).astype(bool))
+        else:
+            r = float(info.get("Radii", 60))
+            ter.cavar(x, y, max(1.0, r * BURACO_LARGURA - margem), max(1.0, r * BURACO_ALTURA - margem))
     _CACHE[chave] = (mapa_id, list(buracos), ter)
     return ter
+
+
+def cratera(cratera_id, baixar=True, alfa_minimo=105):
+    """Mascara (bool) da cratera `cratera_id`: o ERASE do Flash tira alfa * (1 - a/255) do chao; com chao de alfa 255 o pixel vira vazio
+    (alfa <= 150) quando a cratera tem a >= 105. None se a bala nao tem cratera ou nao deu para baixar."""
+    if not cratera_id:
+        return None
+    if cratera_id in _CRATERAS:
+        return _CRATERAS[cratera_id]
+    arq = os.path.join(PASTA_CRATERAS, f"{cratera_id}_crater.png")
+    m = None
+    try:
+        if not os.path.exists(arq) and baixar:
+            os.makedirs(PASTA_CRATERAS, exist_ok=True)
+            req = urllib.request.Request(URL_CRATERA.format(id=cratera_id), headers={"User-Agent": "Mozilla/5.0"})
+            with urllib.request.urlopen(req, timeout=15) as r:
+                dados = r.read()
+            with open(arq + ".tmp", "wb") as f:
+                f.write(dados)
+            os.replace(arq + ".tmp", arq)
+        im = cv2.imread(arq, cv2.IMREAD_UNCHANGED) if os.path.exists(arq) else None
+        if im is not None and im.ndim == 3 and im.shape[2] == 4:
+            m = im[..., 3] >= alfa_minimo
+    except OSError:
+        m = None
+    _CRATERAS[cratera_id] = m
+    return m
