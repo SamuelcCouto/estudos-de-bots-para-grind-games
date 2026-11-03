@@ -196,3 +196,48 @@ def resultado_do_tiro(tiro_servidor, alvo_id):
     dano_pet = sum(a["dano"] for a in tiro_servidor.get("alvos", []) if a["vivo"] == alvo_id)
     return dict(explodiu=bomba["p"][:2] if bomba else None, dano=dano, acertou=dano > 0, dano_pet=dano_pet,
                 teleguiado=bool(b and any(a["tipo"] == "CHANGE_SPEED" for a in b["acoes"])))
+
+
+def _pe_no_chao(terreno, x, y):
+    """Onde o boneco fica de pe perto de (x, y): sobe ate o 1o ponto vazio com chao embaixo."""
+    x, y = int(x), int(y)
+    for yy in range(y + 4, y - 80, -1):
+        if terreno.vazio(x, yy) and not terreno.vazio(x, yy + 1):
+            return (x, yy)
+    return None
+
+
+def planejar_voo(mira_ex, eu, alvo, vento, direcao, terreno, terreno_seguro=None, max_candidatos=14):
+    """Aviao (F): o boneco voa como uma bala e para onde ela bate no chao. Procura (ponteiro, forca) que leva a um lugar de onde o
+    tiro no inimigo passa pelo terreno (preso num buraco, todas as miras batiam na parede). None se nao achar."""
+    saida, _inc, corr, _o = mira_ex.contexto(eu, direcao, terreno)
+    mapa = FX.MapaFisico(*terreno.fisica())
+    pousos = {}
+    for mira in range(30, 81, 3):
+        ang = FX.angulo_envio(mira, direcao, corr)
+        for pct in range(8, 80, 3):
+            r = FX.simular(saida[0], saida[1], pct / 100.0 * FX.FORCA_MAX, ang, vento, mapa=mapa, terreno=terreno,
+                           largura=terreno.largura, altura=terreno.altura + 200, limite_s=10.0)
+            if r["motivo"] != "chao":
+                continue
+            pe = _pe_no_chao(terreno, *r["impacto"])
+            if pe is None or abs(pe[0] - eu[0]) < 40:
+                continue
+            chave = pe[0] // 30
+            d = abs(pe[0] - alvo[0])
+            if chave not in pousos or pct < pousos[chave][1]:
+                pousos[chave] = (mira, pct, pe, d)
+    melhor = None
+    for mira, pct, pe, d in sorted(pousos.values(), key=lambda p: p[3])[:max_candidatos]:
+        if d < 60:
+            continue                                         # colado no inimigo: a explosao pega nos dois
+        dir2 = 1 if alvo[0] >= pe[0] else -1
+        pl = mira_ex.planejar(pe, alvo, vento, dir2, terreno=terreno, terreno_seguro=terreno_seguro)
+        if not pl or pl.get("bloqueado"):
+            continue
+        nota = (pl.get("acertos") or 0, -pct)
+        if melhor is None or nota > melhor["nota"]:
+            melhor = dict(nota=nota, mira=mira, forca_pct=float(pct), destino=pe, direcao=direcao, plano_de_la=pl)
+            if pl.get("acertos") == 5:
+                break
+    return melhor

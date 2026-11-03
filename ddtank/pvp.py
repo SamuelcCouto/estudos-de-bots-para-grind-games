@@ -605,6 +605,16 @@ class AtiradorPvp(atirador_mod.Atirador):
             return None
         self.turno_rede = (eu_id, (eu["x"], eu["y"]), alvo["id"], (alvo["x"], alvo["y"]), plano)
         self.terreno_rede = ter
+        self.voo_rede = None
+        if (plano.get("bloqueado") and ter is not None and not self.aviao_indisponivel and self.avioes_na_luta < MAX_AVIOES_PARTIDA):
+            t1 = time.time()
+            voo = mira_exata.planejar_voo(self.mira, (eu["x"], eu["y"]), (alvo["x"], alvo["y"]), est["vento"], plano["direcao"], ter, seguro)
+            if voo:
+                self.voo_rede = voo
+                self.log(f"   [rede] preso: nenhum tiro passa daqui. AVIAO: ponteiro {voo['mira']}, forca {voo['forca_pct']:.0f}% -> pousa em "
+                         f"{voo['destino']}, de onde {voo['plano_de_la']['acertos']}/5 tiros acertam ({time.time() - t1:.1f}s)")
+            else:
+                self.log(f"   [rede] preso e nenhum voo leva a um lugar melhor ({time.time() - t1:.1f}s): atiro o melhor que der")
         self.mem.forca_rede = lambda mira: self.mira.forca_para((eu["x"], eu["y"]), (alvo["x"], alvo["y"]), est["vento"], mira,
                                                                 plano["direcao"], ter)
         inc = plano["inclinacao"]
@@ -837,6 +847,8 @@ class AtiradorPvp(atirador_mod.Atirador):
         """Na hora de carregar: forca para o angulo que o ponteiro REALMENTE mostra, com a posicao e a direcao atuais (rede): virar
         pode andar uns px e o ponteiro para 1-2 graus fora do pedido."""
         eu_id, eu0, _aid, alvo_pos, pl = self.turno_rede
+        if getattr(self, "voo_rede", None):
+            return alvo                                       # carga do aviao: a forca do voo, nao a do tiro no inimigo
         est = self.rede.estado.copia() if self.rede else None
         f = self.ver()
         if est is None or f is None or not isinstance(f, np.ndarray):
@@ -860,7 +872,11 @@ class AtiradorPvp(atirador_mod.Atirador):
         no limite da arma (terreno inclinado/buraco) ou quando o inimigo esta longe (aproxima). Consome o turno."""
         limite, self.limite_recente = self.limite_recente, False
         if self.turno_rede:
-            return None                                      # mira exata pela rede (o aviao usa medidas do minimapa)
+            voo = getattr(self, "voo_rede", None)            # mira exata: so voa quando o terreno bloqueia todos os tiros
+            if voo and not self.sombra:
+                self.motivo_aviao = "preso (todos os tiros bloqueados pelo terreno)"
+                return voo["destino"]
+            return None
         if self.sombra or not azul or self.aviao_indisponivel or self.avioes_na_luta >= MAX_AVIOES_PARTIDA:
             return None
         if self.y_ref is None:
@@ -879,11 +895,17 @@ class AtiradorPvp(atirador_mod.Atirador):
 
     def turno_aviao(self, f, inst, azul, boss, destino, hp0):
         """Tiro de F: o boneco e levado pelo aviao ate onde ele cair (consome o turno; sem itens)."""
-        dx, dy = destino[0] - azul[0], azul[1] - destino[1]
-        mt = self.mem.melhor_tiro(inst, abs(dx), dy, angulo=50.0)
-        if not mt:
-            return
-        ang, forca, _ch = mt
+        voo = getattr(self, "voo_rede", None) if self.turno_rede else None
+        if voo:
+            azul = self.turno_rede[1]
+            dx, dy = voo["direcao"], 0
+            ang, forca = float(voo["mira"]), voo["forca_pct"]
+        else:
+            dx, dy = destino[0] - azul[0], azul[1] - destino[1]
+            mt = self.mem.melhor_tiro(inst, abs(dx), dy, angulo=50.0)
+            if not mt:
+                return
+            ang, forca, _ch = mt
         self.log(f"[aviao {self.avioes_na_luta + 1}] {self.motivo_aviao}: voce em x={azul[0]:.0f}, y={azul[1]:.0f} -> voando com F para "
                  f"x={destino[0]:.0f}: mirar {ang:.0f} graus, forca {forca:.0f}%")
         fr = [self.reg.frame(f, "turno_inicio")] if self.reg else []
@@ -901,7 +923,7 @@ class AtiradorPvp(atirador_mod.Atirador):
             self.devolver_foco()
             return
         angulo_real = self.lei.angulo(self.ver())
-        if abs(angulo_real - ang) > 3:
+        if abs(angulo_real - ang) > 3 and not voo:
             alt = self.mem.forca_para(inst, azul, (destino[0], destino[1]), angulo_real)
             if alt:
                 forca = alt
