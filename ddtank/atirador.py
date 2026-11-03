@@ -800,6 +800,14 @@ class Atirador:
             ativos = self.lei.itens(f)
             if not any(ativos):
                 break
+            for _ in range(3):                           # logo depois de um item o slot fica cinza um instante: confere de novo
+                if ativos[item - 1]:
+                    break
+                self.dormir(0.25)
+                g = self.ver()
+                if g is None:
+                    break
+                ativos = self.lei.itens(g)
             if not ativos[item - 1]:
                 continue
             self.io.tecla(str(item), 0.08)
