@@ -593,6 +593,10 @@ class AtiradorPvp(atirador_mod.Atirador):
             self.log("   [rede] mais de 2 bonecos: escolho o mais perto (times ainda nao identificados)")
         alvo = min(inimigos, key=lambda v: abs(v["x"] - eu["x"]))
         ter = self._terreno(est)
+        if (est.get("mapa"), est.get("vivos") and len(est["vivos"])) != getattr(self, "_partida_mira", None):
+            if getattr(self, "_partida_mira", None) is not None and est.get("mapa") != self._partida_mira[0]:
+                self.mira.reiniciar()
+            self._partida_mira = (est.get("mapa"), est.get("vivos") and len(est["vivos"]))
         t0 = time.time()
         seguro = None
         if ter is not None and est.get("buracos"):
@@ -1098,7 +1102,8 @@ class AtiradorPvp(atirador_mod.Atirador):
                             tiros=self.tiros_na_partida, duracao_s=None if dur is None else round(dur, 1))
         self.tiros_na_partida, self.inicio_partida = 0, None
         self.y_ref, self.limite_recente, self.ultimo_aviao_tiro = None, False, -99
-        self.mira.reiniciar()
+        if not self.rede:
+            self.mira.reiniciar()                             # com a rede, so zera quando o MAPA muda (a tela as vezes "acaba" a partida no meio)
         self.fim_da_batalha(venceu=False)             # zera rastreador/estado (venceu=False: nao registra acerto)
 
 
