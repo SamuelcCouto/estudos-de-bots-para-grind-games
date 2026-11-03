@@ -86,6 +86,7 @@ MAPA_DIST_MAX = 10                  # bits de diferenca (de 64) para ser o mesmo
 PASTA_MAPAS = os.path.join(config.PASTA, "dados", "pvp_mapas")
 PASTA_BARRA_CARGA = os.path.join(config.PASTA, "dados", "pvp_barra_carga")   # recortes da barra de forca durante a carga (estudo)
 RECORTE_BARRA = (520, 580, 395, 765)       # y0, y1, x0, x1: a barra de forca e um pouco em volta
+BARRA_ATRASO = 3.5                 # % que a barra lida fica atras da forca real (03/11: lida 66 -> real 69; lida 49 -> real 53)
 CARGA_JANELA = (0.7, 1.4)                  # a barra so manda soltar entre 0,7x e 1,4x do tempo estimado (a taxa real variou 27-40%/s)
 PRINTS_DO_PVP = ("turno_inicio", "tiro_dado", "turno_pulado", "voo", "pos_tiro", "partida_fim", "desconhecida", "mapa", "vez", "batalha", "preso")
 
@@ -638,6 +639,8 @@ class AtiradorPvp(atirador_mod.Atirador):
         if not (self.turno_rede and self.rede):
             return super().virar_para(lado)
         eu_id = self.turno_rede[0]
+        if (self.rede.estado.copia().get("direcao") or {}).get(eu_id) is None:
+            return super().virar_para(lado)                   # a rede ainda nao viu a direcao (inicio da partida): pelo ponteiro
         nome = "direita" if lado > 0 else "esquerda"
         for dur in atirador_mod.TOQUES_VIRAR:
             d = (self.rede.estado.copia().get("direcao") or {}).get(eu_id)
@@ -649,7 +652,7 @@ class AtiradorPvp(atirador_mod.Atirador):
             diz = "?" if d is None else ("direita" if d > 0 else "esquerda")
             self.log(f"   virando para a {nome} (o alvo esta desse lado; a rede diz {diz}): toque de {dur:.2f}s")
             self.io.tecla(nome, dur)
-            for _ in range(10):
+            for _ in range(25):                               # o pacote de direcao/posicao chega 1-2 s depois do toque (03/11)
                 self.dormir(0.1)
                 if (self.rede.estado.copia().get("direcao") or {}).get(eu_id) == lado:
                     break
@@ -757,6 +760,7 @@ class AtiradorPvp(atirador_mod.Atirador):
             return super().carregar(alvo)
         alvo = self._forca_agora(alvo)
         alvo = float(min(alvo, 97.0))
+        self.dormir(0.4)          # logo depois dos itens o jogo ignorava o espaco: sairam 14% e 5% segurando ~2 s (03/11)
         t_alvo = alvo / self.taxa_rede
         repetir = self._segurar()
         t0, rep, motivo = self.agora(), 1, "tempo_rede"
@@ -781,7 +785,7 @@ class AtiradorPvp(atirador_mod.Atirador):
                     y0, y1, x0, x1 = RECORTE_BARRA
                     recortes.append((dur, f[y0:y1, x0:x1].copy()))
                     ult_rec = dur
-                if dur >= CARGA_JANELA[0] * t_alvo and v >= alvo - 1 and self._barra_viva(trace):
+                if dur >= CARGA_JANELA[0] * t_alvo and v >= alvo - BARRA_ATRASO and self._barra_viva(trace):
                     motivo = "barra_rede"
                     break
             if repetir:

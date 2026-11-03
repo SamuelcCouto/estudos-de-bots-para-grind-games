@@ -30,6 +30,7 @@ LIMITE_RAIO_PX = 60.0              # o limite de mira medido vale ate esta dista
 SAIDA_MAX_PX = 70.0                # o cano fica a no maximo ~40 px do boneco: saida mais longe = posicao do boneco errada
 MESMA_POSICAO_PX = 4.0             # o boneco nao saiu do lugar: o ponto de saida medido continua valendo
 CORRECAO_MAX = 6.0                 # diferenca ponteiro x angulo enviado aceitavel (mais que isso = leitura/lado errados)
+FAIXA_AMPLA = (8, 88)              # quando nada na faixa normal passa pelo terreno
 CANDIDATOS_TERRENO = 16            # quantas miras (as mais tolerantes) sao simuladas com o terreno
 
 
@@ -157,7 +158,7 @@ class MiraExata:
             return candidatos[0]
         caixa = (alvo[0] + CORPO[0], alvo[1] + CORPO[1], alvo[0] + CORPO[2], alvo[1] + CORPO[3])
         melhor = None
-        for c in candidatos[:CANDIDATOS_TERRENO]:
+        for c in candidatos[:CANDIDATOS_TERRENO if faixa == (MIRA_MIN, MIRA_MAX) else len(candidatos)]:
             r = self._simula(saida, c["angulo_envio"], c["forca"], vento, terreno, caixa, mapa)
             c["impacto"], c["motivo"] = r["impacto"], r["motivo"]
             if r["motivo"] != "alvo":
@@ -170,8 +171,11 @@ class MiraExata:
             if acertos == 5 and c["nota"] <= candidatos[0]["nota"] + 5:
                 break
         if melhor is None:
-            c = dict(candidatos[0], bloqueado=True)
-            return c
+            if faixa == (MIRA_MIN, MIRA_MAX):                # tudo bloqueado: tenta rasante e quase vertical (por cima/por baixo)
+                c = self.planejar(eu, alvo, vento, direcao, FAIXA_AMPLA, terreno)
+                if c and not c.get("bloqueado"):
+                    return c
+            return dict(candidatos[0], bloqueado=True)
         return melhor
 
 
