@@ -123,6 +123,8 @@ ROTAS = {
 ROTAS["L"] = ("Rota Leste", _sem_manutencao(["ULTIMA_LUTA", "DEVORADORES"]))
 ROTAS["T"] = ("Rota Norte e Sul", ROTAS["N"][1] + ROTAS["S"][1])
 ROTAS["U"] = ("Super Rota", ROTAS["N"][1] + ROTAS["S"][1] + ROTAS["L"][1])
+# X = Super Rota COMPLETA (06/11, pedido do usuario): a Super Rota + Gato Preto + Pericao (comum). Sem Profundezas (manutencao).
+ROTAS["X"] = ("Super Rota completa", ROTAS["U"][1] + ["GATO_PRETO", "PERICAO"])
 CUPONS_POR_ROTA = {"N": 40000, "S": 50000, "L": 60000}
 # indice da PROXIMA instancia (depois da ultima da rota) -> rota que acabou (Super Rota: Norte + Sul + Leste)
 _n, _s, _l = (len(ROTAS[c][1]) for c in "NSL")
@@ -137,7 +139,7 @@ ROTA_PADRAO_MENU = "S"
 # cartas que interessam por rota (as outras so completam a missao da rota: o bot nao abre as cartas delas)
 CARTAS_DE_INTERESSE = {"S": ["RAINHA_LIRIS"]}
 APELIDOS_ROTA = {"1": "N", "2": "S", "NORTE": "N", "SUL": "S", "CUPONS": "U", "SUPER": "U", "NORTE E SUL": "T", "TODAS": "T", "TUDO": "T", "AMBAS": "T",
-                 "CHEFE": "C", "CHEFAO": "C", "PERICAO": "C", "COMUM": "P", "LESTE": "L"}
+                 "CHEFE": "C", "CHEFAO": "C", "PERICAO": "C", "COMUM": "P", "LESTE": "L", "COMPLETA": "X", "SUPER COMPLETA": "X"}
 # horarios do Chefao Global (relogio do PC): (inicio, fim). Mude aqui ou com --horarios-chefe 12:00-13:00,21:00-22:00
 HORARIOS_CHEFE = [((12, 0), (13, 0)), ((21, 0), (22, 0))]
 CHEFE_DERROTAS_FORA_DO_HORARIO = 3   # opcao C aberta fora do horario: tenta assim mesmo; depois disso, espera o horario
@@ -711,7 +713,7 @@ class Navegador:
     def __init__(self, io, detector, rota=None, usar_tarefas=True, uma_vez=False, simular=False,
                  dormir=time.sleep, agora=time.time, log=print, atirador=None, reg=None, dificuldade=None,
                  metricas=None, chefe=None, horarios_chefe=None, relogio=datetime.datetime.now, cartas_em=None,
-                 estat=None, catalogo=None, tarefas_a_cada=1):
+                 estat=None, catalogo=None, tarefas_a_cada=1, max_voltas=0):
         """chefe: None (sem Chefao Global) | "horarios" (rota + Chefao nos horarios) | "so" (opcao C: so o Chefao,
         comecando agora; depois espera os horarios)."""
         self.io, self.det = io, detector
@@ -756,7 +758,7 @@ class Navegador:
         self.em_batalha = False
         self.fora_da_batalha_desde = None
         self.rota = rota or list(ROTA_PADRAO)
-        self.super_rota_cupons = self.rota in (ROTAS["U"][1], ROTAS["T"][1])
+        self.super_rota_cupons = self.rota in (ROTAS["U"][1], ROTAS["T"][1], ROTAS["X"][1])
         self.cupom_pendente = None
         self.ultima_coleta_tarefas = 0
         # Gato Preto sozinho tem recompensa com escolha manual; nunca abrir/coletar tarefas.
@@ -771,6 +773,7 @@ class Navegador:
         self.tela_desde, self.tela_atual = None, None      # vigia: ha quanto tempo esta na mesma tela
         self.preso_aviso, self.preso_vezes = -1e9, 0
         self.voltas = 0
+        self.max_voltas = int(max_voltas or 0)   # 0 = sem limite; N = para depois de N voltas completas
         self.novo_ciclo()
         self.cartas_vistas = False
         self.perdido_desde = None
@@ -1152,7 +1155,8 @@ class Navegador:
             self.pontos_tarefa.clear()
             if self.reg:
                 self.reg.evento("volta", [], voltas=self.voltas)
-            if self.uma_vez:
+            if self.uma_vez or (self.max_voltas and self.voltas >= self.max_voltas):
+                self.log(f"*** {self.voltas} volta(s) feitas: parando (limite pedido: {self.max_voltas or 1}). ***")
                 self.parar = True
                 return
 
@@ -1171,7 +1175,8 @@ class Navegador:
                 if self.metr:
                     self.metr.volta_fim(self.voltas)
                 self.novo_ciclo()
-                if self.uma_vez:
+                if self.uma_vez or (self.max_voltas and self.voltas >= self.max_voltas):
+                    self.log(f"*** {self.voltas} volta(s) feitas: parando (limite pedido: {self.max_voltas or 1}). ***")
                     self.parar = True
                     return
             self.clicar_e_verificar(estado, CENTRAL_JOGAR, descricao="Jogar")
@@ -1725,6 +1730,7 @@ def perguntar_rota(entrada=input, saida=print):
     saida("Qual rota?  [S] Sul (Escorpiao Rei, Dragao Gelado, Rainha Liris)")
     saida("            [L] Leste (A Ultima Luta, 2 fases, Devoradores)")
     saida("            [U] Super Rota (Norte > Sul > Leste; missao apos cada rota)")
+    saida("            [X] Super Rota COMPLETA (Super Rota + Gato Preto + Pericao comum)")
     saida("            [T] Rota Norte e Sul (missao apos cada rota)")
     saida("            [P] Pericao comum (fora do horario do Chefao Global)")
     saida(f"            [C] Chefao Global (Pericao) - so ele: comeca agora e depois espera os horarios "
@@ -1736,7 +1742,7 @@ def perguntar_rota(entrada=input, saida=print):
             return ROTA_PADRAO_MENU
         if r == "":
             return ROTA_PADRAO_MENU
-        if r[0] in ("S", "L", "U", "P", "C", "N", "T"):
+        if r[0] in ("S", "L", "U", "P", "C", "N", "T", "X"):
             return r[0]
         saida("   responda S, L, P ou C")
     return ROTA_PADRAO_MENU
@@ -1857,6 +1863,7 @@ def main():
                     help="A Ultima Luta: fase em que o bot comeca (2 = ja dentro da batalha/sala da 2a fase)")
     ap.add_argument("--sem-tarefas", action="store_true")
     ap.add_argument("--uma-vez", action="store_true")
+    ap.add_argument("--voltas", type=int, default=0, help="para depois de N voltas completas da rota (0 = sem limite)")
     ap.add_argument("--so-ver", action="store_true", help="so mostra a tela detectada (nao clica)")
     ap.add_argument("--testar-tela", action="store_true", help="diagnostico: calibra o tamanho da janela e diz o que o bot enxerga")
     ap.add_argument("--sem-calibrar", action="store_true", help="nao calibra o tamanho da janela (usa so o tamanho original)")
@@ -1950,9 +1957,9 @@ def main():
     tarefas_a_cada = args.tarefas_a_cada or (5 if len(rota) == 1 and chave not in ("C",) else 1)
     log(f"Cronometro: logs\\relatorio.txt (resumo, atualizado a cada luta), logs\\lutas.csv e logs\\voltas.csv")
     io.log = log
-    nav = Navegador(io, det, rota, not args.sem_tarefas or chave in ("U", "T"), args.uma_vez, args.simular, log=log, reg=reg,
+    nav = Navegador(io, det, rota, not args.sem_tarefas or chave in ("U", "T", "X"), args.uma_vez, args.simular, log=log, reg=reg,
                     dificuldade=dificuldade, metricas=metr, chefe=chefe, horarios_chefe=horarios, cartas_em=cartas_em,
-                    estat=estat, catalogo=drops_mod.Catalogo(), tarefas_a_cada=tarefas_a_cada)
+                    estat=estat, catalogo=drops_mod.Catalogo(), tarefas_a_cada=tarefas_a_cada, max_voltas=args.voltas)
     log("Cartas: " + ("abre todas" if not cartas_em else "so de " + ", ".join(cartas_em) + " (as outras so completam a missao)"))
     log(f"{nome_rota}: {' -> '.join(rota)}" + (f" (dificuldade {dificuldade} em todas)" if dificuldade else ""))
     if chefe == "so":

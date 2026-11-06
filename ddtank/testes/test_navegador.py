@@ -409,7 +409,7 @@ PASTA_TEMPLATES_REAL = N.config.PASTA_TEMPLATES
 N.config.PASTA_TEMPLATES = MODELOS_TESTE
 
 # pergunta da rota ao abrir
-respostas = iter(["x", "s"])
+respostas = iter(["k", "s"])
 assert N.perguntar_rota(entrada=lambda _p: next(respostas), saida=lambda *_a: None) == "S"
 assert N.perguntar_rota(entrada=lambda _p: "", saida=lambda *_a: None) == "S", "Enter = Sul (Norte desabilitada no menu)"
 assert N.perguntar_rota(entrada=lambda _p: "t", saida=lambda *_a: None) == "T"
