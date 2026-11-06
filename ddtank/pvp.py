@@ -742,6 +742,21 @@ class AtiradorPvp(atirador_mod.Atirador):
             if meus and dos:
                 break
             self.dormir(0.15)
+        if meus and dos:
+            # tiro triplo (item 3): o servidor manda UM PACOTE POR PROJETIL (3 pacotes) e o cliente tambem repete o tiro 3x; o resultado
+            # so esta completo quando chegaram todos (antes lia so o 1o e dava "errou" com o 3o projetil acertando, 06/11)
+            estavel, ult = 0, len(dos)
+            for _ in range(20):
+                est = self.rede.estado.copia()
+                meus = [t for ts, t in est["meus_tiros"] if ts >= r["t"] - 1.0]
+                dos = [t for ts, t in est["tiros"] if ts >= r["t"] - 1.0 and t["atirador"] == eu_id]
+                if len(dos) >= len(meus) and len(dos) == ult:
+                    estavel += 1
+                    if estavel >= 3:
+                        break
+                else:
+                    estavel, ult = 0, len(dos)
+                self.dormir(0.15)
         if not meus:
             self.log("   [rede] o jogo NAO registrou tiro nosso nesta vez (nao era a nossa vez? as teclas nao chegaram?): sem resultado")
             self.segurou_rede = None
@@ -773,9 +788,11 @@ class AtiradorPvp(atirador_mod.Atirador):
             self.log(f"   [rede] tiro enviado: saida ({meus[0]['x']}, {meus[0]['y']}) (prevista {sp[0]:.0f}, {sp[1]:.0f}, {r['plano']['origem']}), "
                      f"forca {meus[0]['forca'] / 20:.0f}%, angulo {meus[0]['angulo']} (ponteiro lido {p['angulo']:.0f}{corr})")
         if dos:
-            res = mira_exata.resultado_do_tiro(dos[0], r["alvo_id"])
+            junto = dict(dos[0], bombas=[b for d in dos for b in d["bombas"]], alvos=[a for d in dos for a in d.get("alvos", [])])
+            res = mira_exata.resultado_do_tiro(junto, r["alvo_id"])
+            res["projeteis"] = len(junto["bombas"])
             ex = res["explodiu"]
-            self.log(f"   [rede] RESULTADO: {'ACERTOU' if res['acertou'] else 'errou'} (dano do tiro {res['dano']}"
+            self.log(f"   [rede] RESULTADO: {'ACERTOU' if res['acertou'] else 'errou'} ({res.get('projeteis', 1)} projetil(eis); dano do tiro {res['dano']}"
                      f"{', do pet ' + str(res['dano_pet']) if res.get('dano_pet') else ''})"
                      f"{f', explodiu em ({ex[0]}, {ex[1]})' if ex else ''}; alvo em ({r['alvo'][0]}, {r['alvo'][1]}), "
                      f"previsto x={r['plano']['queda_x']:.0f}{' (teleguiado)' if res['teleguiado'] else ''}")
