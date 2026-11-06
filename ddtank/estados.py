@@ -22,8 +22,10 @@ TOLERANCIA = 8   # px de folga ao procurar o recorte perto da posicao esperada
 PRIORIDADE = ["CLIQUE_JOGO", "POPUP_AVISO", "POPUP_CARTA", "POPUP_SOZINHO", "POPUP_SOZINHO2", "POPUP_SOZINHO3", "TAREFA", "CARTAS", "CARTAS_P", "CONFIG_SEL", "CONFIG_VAZIA",
               "CONFIG",          # janela de configuracao generica: vale quando a arte da instancia marcada e desconhecida
               "PRONTA_FANTASMA", "PRONTA_PROFUNDEZAS", "PRONTA_MINHOCAO", "SALA_VAZIA",
+              "SALA_PVP",        # sala de PVP (Combate Livre): antes da sala generica
               "SALA",            # sala generica (painel da direita): vale quando a arte da instancia e desconhecida
-              "CENTRAL", "MAPA", "BATALHA"]
+              "SALAO_PVP",       # saguao do PVP (Salao de jogos): 1 clique na porta
+              "CENTRAL", "CIDADE", "MAPA", "BATALHA"]
 
 
 def normalizar(img):

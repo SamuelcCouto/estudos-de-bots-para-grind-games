@@ -408,6 +408,17 @@ shutil.copytree(N.config.PASTA_TEMPLATES, MODELOS_TESTE,
 PASTA_TEMPLATES_REAL = N.config.PASTA_TEMPLATES
 N.config.PASTA_TEMPLATES = MODELOS_TESTE
 
+# telas de PVP/cidade (06/11): o bot sai do PVP pela porta (2 cliques) e entra na Central da cidade
+import cv2 as _cv2
+import estados as _E
+_det = _E.Detector()
+for _arq, _esperada in (("tela_sala_pvp.png", "SALA_PVP"), ("tela_salao_pvp.png", "SALAO_PVP"), ("tela_cidade.png", "CIDADE")):
+    _img = _cv2.imread(os.path.join(os.path.dirname(os.path.abspath(__file__)), "frames", _arq))
+    _a = _det.detectar(_E.normalizar(_img))
+    assert _a and _a[0] == _esperada, (_arq, _a)
+assert N.CLIQUE_SIMPLES["SALA_PVP"] == N.SALA_PORTA and N.CLIQUE_SIMPLES["SALAO_PVP"] == N.SALA_PORTA and N.CLIQUE_SIMPLES["CIDADE"] == N.MAPA_CENTRAL
+print("sala de PVP -> porta -> saguao -> porta -> cidade -> Central: telas reconhecidas e cliques OK")
+
 # pergunta da rota ao abrir
 respostas = iter(["k", "s"])
 assert N.perguntar_rota(entrada=lambda _p: next(respostas), saida=lambda *_a: None) == "S"

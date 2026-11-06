@@ -1278,7 +1278,7 @@ class Laco:
             por_baixo = next((e for e in achadas if e != "CLIQUE_JOGO"), None)
             self.io.clicar_ref(*FOCO_PONTO_NEUTRO.get(por_baixo, FOCO_PONTO_PADRAO))
             self.dormir(1.0)
-        elif estado == "SALA" and self.clicar_inicio:
+        elif estado in ("SALA", "SALA_PVP") and self.clicar_inicio:
             if sala_livre(f):
                 self.buscando_desde = None
                 if agora - self.ultimo_inicio >= INTERVALO_INICIO:

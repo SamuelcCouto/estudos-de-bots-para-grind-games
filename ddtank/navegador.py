@@ -56,7 +56,7 @@ POPUP_SOZINHO_SIM = (575, 402)
 POPUP_CARTA_SIM = (566, 391)
 POPUP_AVISO_SIM = (644, 394)
 SALA_ICONE_TAREFAS = (806, 533)
-SALA_PORTA = (949, 522)
+SALA_PORTA = (950, 535)            # porta do canto inferior direito (06/11: 1 clique = sala de PVP -> saguao; outro = saguao -> cidade)
 TAREFA_FECHAR = (881, 190)
 TAREFA_BOTAO = (760, 513)
 ESPERA_CONFIRMAR_TELA = 0.3   # s entre as 2 leituras que confirmam uma tela (era 0,45: ~1 s a menos por instancia)
@@ -155,6 +155,9 @@ PASTA_APRENDIDOS = os.path.join(config.PASTA, "dados", "modelos_aprendidos")   #
 
 CLIQUE_SIMPLES = {                      # tela -> onde clicar para avancar
     "MAPA": MAPA_CENTRAL,
+    "CIDADE": MAPA_CENTRAL,             # cidade (mapa novo, 06/11): a Central e o salao de instancias
+    "SALA_PVP": SALA_PORTA,             # sala de PVP (Combate Livre): a porta leva ao saguao do PVP
+    "SALAO_PVP": SALA_PORTA,            # saguao do PVP (Salao de jogos): a porta leva a cidade
     "POPUP_SOZINHO": POPUP_SOZINHO_SIM,
     # 29/10: o Pericao pede confirmacao com outro texto ("A instancia apresenta mais desafios...", botao Concordar) e
     # o jogo avisa "O Chefao Global vai comecar em alguns minutos!" (botao sim) POR CIMA: o bot ficou 55 min parado
@@ -839,7 +842,7 @@ class Navegador:
                 return False
         if pendente:
             if estado in ("POPUP_SOZINHO", "POPUP_SOZINHO2", "POPUP_SOZINHO3", "POPUP_AVISO") or (self.chefe_modo == "horarios" and estado not in (
-                    "SALA_VAZIA", "SALA", "CONFIG_VAZIA", "CONFIG_SEL", "CONFIG", "CENTRAL", "MAPA")
+                    "SALA_VAZIA", "SALA", "CONFIG_VAZIA", "CONFIG_SEL", "CONFIG", "CENTRAL", "MAPA", "CIDADE")
                     and not estado.startswith("PRONTA_")):
                 return False              # no meio de outra coisa (tarefas, comecando a luta): troca na proxima tela
             self.no_chefe = True
@@ -1636,7 +1639,7 @@ class Navegador:
                 return
             agora = self.agora()
             self.fora_da_batalha_desde = self.fora_da_batalha_desde or agora
-            tela_final_clara = bool(achadas and achadas[0] in ("SALA", "SALA_VAZIA", "CENTRAL", "MAPA"))
+            tela_final_clara = bool(achadas and achadas[0] in ("SALA", "SALA_VAZIA", "CENTRAL", "MAPA", "CIDADE"))
             espera_saida = 3.0 if tela_final_clara else 12.0
             if agora - self.fora_da_batalha_desde < espera_saida and not cartas_apos_luta:
                 self.dormir(0.15)
@@ -1689,7 +1692,7 @@ class Navegador:
         parado = agora - self.perdido_desde
         self.vigiar("tela desconhecida", self.perdido_desde)
         # parou numa tela de cidade que a rota nao usa (Sala de Casamento, Leilao...): volta pela porta da barra de baixo
-        if (parado >= 6 and self.ultimo_conhecido in ("MAPA", "CENTRAL", "CLIQUE_JOGO") and not self.em_batalha
+        if (parado >= 6 and self.ultimo_conhecido in ("MAPA", "CIDADE", "CENTRAL", "CLIQUE_JOGO") and not self.em_batalha
                 and agora - self.ultima_recuperacao >= 8 and self.recuperacoes < 4):
             self.ultima_recuperacao = agora
             self.recuperacoes += 1

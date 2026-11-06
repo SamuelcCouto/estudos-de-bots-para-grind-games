@@ -310,6 +310,51 @@
      "y": 296
     }
    ]
+  },
+  "SALA_PVP": {
+   "limiar": 0.6,
+   "patches": [
+    {
+     "arquivo": "SALA_PVP_0.png",
+     "x": 598,
+     "y": 342
+    },
+    {
+     "arquivo": "SALA_PVP_1.png",
+     "x": 663,
+     "y": 430
+    }
+   ]
+  },
+  "SALAO_PVP": {
+   "limiar": 0.6,
+   "patches": [
+    {
+     "arquivo": "SALAO_PVP_0.png",
+     "x": 470,
+     "y": 168
+    },
+    {
+     "arquivo": "SALAO_PVP_1.png",
+     "x": 316,
+     "y": 180
+    }
+   ]
+  },
+  "CIDADE": {
+   "limiar": 0.6,
+   "patches": [
+    {
+     "arquivo": "CIDADE_0.png",
+     "x": 640,
+     "y": 190
+    },
+    {
+     "arquivo": "CIDADE_1.png",
+     "x": 520,
+     "y": 196
+    }
+   ]
   }
  }
 }
