@@ -965,38 +965,36 @@ class Atirador:
         return True
 
     def aplicar_itens(self, ordem=None):
+        """Aperta os itens na ordem. Depois de um item os slots ficam TODOS cinza durante a animacao (~1 s): espera isso passar (antes o
+        laco saia na hora e so o 1o item entrava: 06/11 `itens: [3]` em quase todo turno, sem os buffs 4 = sem dano). Slot cinza com os
+        outros acesos = sem stamina para ESTE item (o 3 e caro): pula e tenta o proximo (o 4 e barato)."""
         if ordem is not None and not ordem:
             return []
         usados = {}
         apertados = []
-        t_ultimo = 0.0
         for item in (ordem or self.ordem):
             if usados.get(item, 0) >= LIMITE_POR_TURNO.get(item, 99):
                 continue
-            f = self.ver()
-            if f is None:
-                break
-            if not self.lei.minha_vez(f):
-                break
-            ativos = self.lei.itens(f)
-            if not any(ativos):
-                break
-            if not ativos[item - 1] and apertados:
-                # logo depois de um item os slots ficam cinza durante a animacao (o 3 leva ~1 s): espera ate 1,0 s (5 leituras de 0,2 s)
-                for _ in range(5):
-                    self.dormir(0.2)
-                    g = self.ver()
-                    if g is None:
-                        break
-                    ativos = self.lei.itens(g)
-                    if ativos[item - 1]:
-                        break
-            if not ativos[item - 1]:
-                if apertados:                            # apagado mesmo depois de esperar: acabou a stamina
+            ativos = None
+            for tentativa in range(7):
+                f = self.ver()
+                if f is None or not self.lei.minha_vez(f):
+                    ativos = None
                     break
-                continue
+                ativos = self.lei.itens(f)
+                if ativos[item - 1]:
+                    break
+                if apertados and not any(ativos) and tentativa < 6:
+                    self.dormir(0.2)                     # animacao do item anterior: tudo cinza, espera
+                    continue
+                break
+            if ativos is None:
+                break                                    # a vez acabou
+            if not ativos[item - 1]:
+                if not any(ativos):
+                    break                                # tudo cinza mesmo depois de esperar: acabou a stamina
+                continue                                 # so este item esta cinza: tenta o proximo
             self.io.tecla(str(item), 0.08)
-            t_ultimo = self.agora()
             usados[item] = usados.get(item, 0) + 1
             apertados.append(item)
             self.dormir(0.12)

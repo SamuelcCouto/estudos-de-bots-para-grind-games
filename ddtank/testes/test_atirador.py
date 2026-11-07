@@ -128,6 +128,26 @@ assert w.itens_apertados.count(2) == 1 and w.itens_apertados[:3] == [2, 3, 4], w
 assert w.itens_apertados.count(4) >= 2
 print("itens com 480 de stamina:", w.itens_apertados)
 
+# ------------------------------------------------------------ 2b) animacao do item (tudo cinza ~1 s) e o 3 caro: o 4 entra (06/11: so [3] entrava)
+class MundoAnim(Mundo):
+    anim_ate = 0.0
+    def tecla(self, nome, dur=0.05):
+        antes = len(self.itens_apertados)
+        Mundo.tecla(self, nome, dur)
+        if len(self.itens_apertados) > antes:
+            self.anim_ate = self.t + 1.0
+    def capturar(self):
+        f = Mundo.capturar(self)
+        if self.t < self.anim_ate:
+            f = dict(f, itens=[False] * 8)
+        return f
+
+import estrategias as _E
+w = MundoAnim(stamina=200); at, mem, logs, arq = novo(w)
+rodar(at, w)
+assert w.itens_apertados[:2] == [2, 4], f"esperava 2 (110), pular o 3 (sem stamina) e apertar o 4 (85) apesar da animacao: {w.itens_apertados}"
+print("animacao do item + 3 sem stamina: pula o 3 e o 4 entra:", w.itens_apertados)
+
 # ------------------------------------------------------------ 3) setas nao chegam no modo 'top': troca de modo
 w = Mundo(setas_funcionam_em=("filha",)); at, mem, logs, arq = novo(w); rodar(at, w)
 assert w.modo == "filha" and abs(w.angulo - 31) <= 3.5, (w.modo, w.angulo)
