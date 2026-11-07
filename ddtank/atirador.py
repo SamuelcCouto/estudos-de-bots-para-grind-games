@@ -310,6 +310,9 @@ class Atirador:
         rinfo = self.info_rede(inst, f)
         if rinfo:
             rinfo = self.posicionar_pela_rede(rinfo)      # so anda se o elite bloqueia; nada de minimapa/memoria de ponto de tiro
+            if rinfo and azul and boss and not self.pve.planejar(rinfo, self.mem.prever(inst, azul, boss)["angulo"]):
+                self.log("   [rede] nenhuma mira acerta o boss daqui: uso o metodo antigo (minimapa + memoria)")
+                rinfo = None                              # e o posicionamento antigo (espelho / ponto de tiro) roda normalmente
         if rinfo:
             pass
         elif (azul and boss and alvo_x is not None and boss[0] < azul[0] - 8 and not self.sombra
@@ -373,11 +376,13 @@ class Atirador:
         if hasattr(self.io, "preparar_teclas"):
             self.io.preparar_teclas()            # o Chromium so entrega teclado a pagina em foco
         est = estrategias.estrategia(inst)
-        if est.get("olhar_lado"):
+        if plano_rede:
+            self.virar_para(plano_rede["direcao"])    # a fisica exata assume o boneco virado para o lado do plano (o `olhar_lado` antigo era da mira traseira)
+        elif est.get("olhar_lado"):
             self.virar_para(est["olhar_lado"])        # mira "traseira": de frente para um lado e atirando para o outro
         elif azul and boss and abs(boss[0] - azul[0]) >= 1.5:
             self.virar_para(1 if boss[0] > azul[0] else -1)
-        self._ctx_limite = (plano_rede["eu"], plano_rede["inclinacao"]) if plano_rede else None
+        self._ctx_limite = (plano_rede["eu"], plano_rede["inclinacao"], plano_rede["direcao"]) if plano_rede else None
         ok_ang = self.ajustar_angulo(pred["angulo"], est.get("tolerancia_angulo", TOLERANCIA_ANGULO), est.get("passada_angulo", 0.0))
         t_ang = self.agora() - inicio
         if self.reg:
@@ -524,8 +529,8 @@ class Atirador:
             return None
         self.pve.boss_y = estrategias.estrategia(inst).get("boss_y")
         info = self.pve.info()
-        if not info or info["eu"][0] > info["boss"][0] - 200:
-            return None                           # lado direito / sem boss: o metodo antigo (minimapa + memoria)
+        if not info or abs(info["eu"][0] - info["boss"][0]) < 200:
+            return None                           # sem boss / boneco colado nele: o metodo antigo (minimapa + memoria)
         info["vento_rede"] = info["vento"]
         info["vento_fonte"] = "rede"
         if f is not None:
@@ -910,7 +915,7 @@ class Atirador:
                  f"terreno; a seta contraria funciona): atirando deste angulo.")
         ctx = getattr(self, "_ctx_limite", None)
         if self.pve and ctx:
-            arma = self.pve.mira.limite(tecla == "cima", final, ctx[0], 1, ctx[1])      # o planejador passa a respeitar (06/11: 6 s perdidos por turno)
+            arma = self.pve.mira.limite(tecla == "cima", final, ctx[0], ctx[2], ctx[1])      # o planejador passa a respeitar (06/11: 6 s perdidos por turno)
             self.log(f"   [rede] limite do ponteiro aprendido: {final:.0f} graus aqui" + (f" (arma {arma:.0f})" if arma is not None else ""))
         return True
 

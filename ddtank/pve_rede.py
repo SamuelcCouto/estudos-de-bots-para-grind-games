@@ -24,6 +24,7 @@ JANELA_FORCA = 12                       # varre a forca de f0-12% a f0+12% (pass
 MIN_JANELA = 3                          # janela menor que 3 pontos de forca = tiro arriscado demais (ainda assim e usado se for o melhor)
 X_MAX_TIRO = 460.0                      # de x~516 quase nenhum angulo chega no centro do boss (so de raspao, 2-9% por tiro): fica ate ~460
 X_MIN_TIRO = 150.0                      # parede da esquerda
+FAIXA_DIREITA = (1000.0, 1450.0)        # boneco que nasce do lado direito do boss: onde da para ficar (virado para a esquerda)
 
 
 def _caixa(pos, c):
@@ -37,6 +38,7 @@ class MiraPve:
         self.mira = mira_exata.MiraExata(log=log)
         self.boss_y = None          # y real do boss: a rede da y=297 ate o 1o START_MOVE e depois 320 (o bicho cai); a caixa de acerto usa o real
         self._ter = None            # (mapa, n buracos, terreno)
+        self._plano = None          # (chave, plano): o mesmo plano pedido duas vezes no turno nao e simulado de novo
         self._partida = None
 
     # ----------------------------------------------------------------------------------------------------------- estado
@@ -55,7 +57,8 @@ class MiraPve:
             return None
         boss = max(mons, key=lambda m: m["vida_max"])
         elites = [(m["x"], m["y"]) for m in mons if m is not boss and m["vida_max"] < boss["vida_max"] / 2 and m["y"] >= ELITE_ALTURA_MIN]
-        return dict(eu=(eu["x"], eu["y"]), eu_id=eu_id, boss=(boss["x"], max(boss["y"], self.boss_y or 0)), boss_vida=boss.get("vida"), elites=elites,
+        by = max(boss["y"], self.boss_y or 0)
+        return dict(eu=(eu["x"], eu["y"]), eu_id=eu_id, boss=(boss["x"], by), direcao=1 if boss["x"] >= eu["x"] else -1, boss_vida=boss.get("vida"), elites=elites,
                     vento=float(est.get("vento") or 0.0), mapa=est["mapa"], buracos=est.get("buracos") or [], est=est)
 
     def terreno(self, info):
@@ -89,16 +92,28 @@ class MiraPve:
         if el is None:
             return None
         folga = ELITE_BLOQUEIA_PX + 20
-        opcoes = [x for x in (el[0] - folga, el[0] + folga) if X_MIN_TIRO <= x <= X_MAX_TIRO]
+        lo, hi = (X_MIN_TIRO, X_MAX_TIRO) if info.get("direcao", 1) > 0 else FAIXA_DIREITA
+        opcoes = [x for x in (el[0] - folga, el[0] + folga) if lo <= x <= hi]
         if not opcoes:
             return None
         return min(opcoes, key=lambda x: abs(x - info["eu"][0]))
 
     # ----------------------------------------------------------------------------------------------------------- plano
-    def planejar(self, info, angulo_base, tolerancia_graus=3, direcao=1):
+    def planejar(self, info, angulo_base, tolerancia_graus=3, direcao=None):
         """Melhor (ponteiro, forca %) de onde o boneco esta: entre os ponteiros angulo_base +- tolerancia (mexer pouco no ponteiro: cada
         grau custa tempo da vez), o de MAIOR janela de forca que acerta o boss (com o chao e o elite no caminho). A forca vai para o
         meio da janela. None = nenhum jeito de acertar (mira pela memoria)."""
+        eu, boss = info["eu"], info["boss"]
+        direcao = direcao or info.get("direcao", 1)
+        chave = (tuple(eu), tuple(boss), info["vento"], direcao, round(angulo_base), tolerancia_graus, len(info["buracos"]),
+                 tuple(sorted(info["elites"])), tuple(self.mira.arma))
+        if self._plano and self._plano[0] == chave:
+            return self._plano[1]
+        plano = self._planejar(info, angulo_base, tolerancia_graus, direcao)
+        self._plano = (chave, plano)
+        return plano
+
+    def _planejar(self, info, angulo_base, tolerancia_graus, direcao):
         eu, boss = info["eu"], info["boss"]
         ter = self.terreno(info)
         if ter is None:
@@ -112,7 +127,7 @@ class MiraPve:
         melhor = None
         for mira in range(int(max(lo, round(angulo_base) - tolerancia_graus)), int(min(hi, round(angulo_base) + tolerancia_graus)) + 1):
             ang = FX.angulo_envio(mira, direcao, corr)
-            f0 = FX.forca_para_alvo(saida[0], saida[1], boss[0] - 40.0, ya, ang, info["vento"], mapa=mapa)
+            f0 = FX.forca_para_alvo(saida[0], saida[1], boss[0] - 40.0 * direcao, ya, ang, info["vento"], mapa=mapa)
             if f0 is None:
                 continue
             p0 = f0 / FX.FORCA_MAX * 100.0
@@ -143,10 +158,10 @@ class MiraPve:
                               direcao=direcao, vento=info["vento"], eu=eu, boss=boss)
         return melhor
 
-    def forca_para_mira(self, info, mira, direcao=1):
+    def forca_para_mira(self, info, mira, direcao=None):
         """Forca (centro da janela) quando o ponteiro parou em `mira` (um pouco diferente do pedido)."""
         p = self.planejar(info, mira, tolerancia_graus=0, direcao=direcao)
         return p["forca_pct"] if p else None
 
-    def aprender(self, info, mira_usada, tiro_cliente, direcao=1):
-        return self.mira.aprender(info["eu"], direcao, mira_usada, tiro_cliente)
+    def aprender(self, info, mira_usada, tiro_cliente, direcao=None):
+        return self.mira.aprender(info["eu"], direcao or info.get("direcao", 1), mira_usada, tiro_cliente)
