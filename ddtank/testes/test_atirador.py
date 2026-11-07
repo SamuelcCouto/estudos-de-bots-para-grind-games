@@ -552,10 +552,10 @@ print("tiro que nao saiu (vez acabou na carga) nao suja a memoria OK")
 
 # ------------------------------------------------------------ Ultima Luta fase 2, boneco nasce a DIREITA do boss verde: mira propria (gravacoes 01/11)
 import estrategias as E
-w = MundoComThread(); w.azul, w.boss = (78.0, 62.0), (52.0, 27.0)
+w = MundoComThread(); w.azul, w.boss = (82.0, 62.0), (52.0, 27.0)
 at, mem, logs, arq = novo(w, inst="ULTIMA_LUTA_F2")
 rodar(at, w, ate=7.5)
-assert any("[POSICAO]" in l and "x~83" in l for l in logs) and w.tiros, "1o turno do lado direito: anda ao ponto espelhado (x~83) e atira"
+assert any("[POSICAO]" in l and "x~76" in l for l in logs) and w.tiros, "1o turno do lado direito: anda ao ponto espelhado (x~76) e atira"
 assert at.pendente is None or at.pendente["inst"] == "ULTIMA_LUTA_F2", "do ponto espelhado usa a mira normal"
 w = MundoComThread(); w.azul, w.boss = (78.0, 62.0), (52.0, 27.0)
 at, mem, logs, arq = novo(w, inst="ULTIMA_LUTA_F2")

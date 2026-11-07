@@ -309,7 +309,7 @@ def pacotes(c, inicio, K):
 # ------------------------------------------------------------------------------------------------ comandos de jogo (codigo 91)
 GAME_CMD = 91
 SUB = {"MOVE": 1, "FIRE": 2, "TURN": 6, "MOVESTART": 9, "DIRECTION": 7, "WIND_PIC": 241, "START_GAME": 99, "GAME_OVER": 100,
-       "GAME_CREATE": 101, "GAME_LOAD": 103}
+       "GAME_CREATE": 101, "GAME_LOAD": 103, "ADD_LIVING": 64, "LIVING_MOVETO": 55}
 ACAO = {1: "PICK", 2: "BOMB", 3: "START_MOVE", 4: "FLY_OUT", 5: "KILL_PLAYER", 6: "TRANSLATE", 7: "FORZEN", 8: "CHANGE_SPEED",
         9: "UNFORZEN", 10: "DANER", 11: "CURE", 12: "GEM_DEFENSE", 13: "CHANGE_STATE", 14: "DO_ACTION", 15: "PLAYBUFFER",
         16: "LASER", 17: "BOMBED", 18: "PUP", 19: "AUP", 20: "PET"}
@@ -337,6 +337,20 @@ class Leitor:
         s = self.b[self.p + 2:self.p + 2 + n].decode("utf-8", "replace")
         self.p += 2 + n
         return s
+
+
+def living_novo(corpo):
+    """GameView.addliving (sub 64): boss/monstro/elite que entrou na luta: tipo, id, nome, modelo, animacao, posicao (px do mapa), vida
+    maxima e atual, direcao. (Os TURN so listam os jogadores: os bosses vem por aqui e se movem por START_MOVE nos tiros / LIVING_MOVETO.)"""
+    r = Leitor(corpo, 1)
+    tipo, ident = r.u8(), r.i32()
+    nome, modelo, anim = r.utf(), r.utf(), r.utf()
+    x, y = r.i32(), r.i32()
+    vida_max, vida, _x = r.i32(), r.i32(), r.i32()
+    direcao = r.u8()
+    if direcao > 127:
+        direcao -= 256
+    return dict(tipo=tipo, id=ident, nome=nome, modelo=modelo, anim=anim, x=x, y=y, vida_max=vida_max, vida=vida, direcao=direcao)
 
 
 def tiro_do_cliente(corpo):

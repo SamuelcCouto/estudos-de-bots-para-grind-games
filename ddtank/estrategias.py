@@ -56,8 +56,11 @@ ESTRATEGIAS = {
         "fugir_do_elite": True,
         "espelho_sempre": True,       # 02/11 (usuario): nada de atravessar nem de tentativa e erro - nasceu a direita, atira de la com a conta (fisica + vento)
         "atravessar": False,
+        "espelho_x": 76.0,            # 06/11 (rede): de x~76 (real ~1095) TODOS os tiros acertam o boss (id 9); o ponto espelhado x~83 (real ~1200) fica em cima do ELITE
+                                      # (Boxeador nasce em ~1225): a bala explode no proprio boneco e nao chega ao boss
+        "tempo_itens_max": 5.0,       # a vez do PVE dura 8 s (rede): itens (1,3 s) + carga (2,5 s) cabem ate ~5 s gastos
         "espelhar": True,             # nasceu a direita: atira do ponto espelhado (x~83) com a mira do lado esquerdo, sem atravessar o mapa       # ponto vermelho colado no azul (minimapa) = elite em cima: anda para o lado OPOSTO antes de atirar
-        "andar_se_sem_queda": True,   # boss de ELITE invocado com a hitbox em cima do boneco (o ponto some no minimapa): tiro sem queda -> anda
+        "andar_se_sem_queda": False,  # 06/11: a barra do boss quase nao mexe (1,6 milhao de vida + cura) e o bot achava que errava; pela rede quase todos os tiros acertam
         "angulo_min": 0.0,
         "combo": "3,3,4",             # gravacoes 01/11: o usuario usa o item 3 (+1 ataque) DUAS vezes por turno e os buffs 4 (nunca o 1/2 aqui)
         "tolerancia_angulo": 1.5,     # parabola alta: 3 graus decidem o acerto (pediu 74,5 e atirou a 71); 1,0 era menor que o menor toque (~1,4): ponteiro ia-e-voltava 5 s

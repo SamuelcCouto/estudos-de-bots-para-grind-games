@@ -12,6 +12,7 @@ Fluxo de cada turno (o botao PASS so aparece na SUA vez; dura ~8 s):
 
 Modo sombra (sombra=True): faz tudo menos apertar teclas; so registra o que faria.
 """
+import os
 import numpy as np
 
 import estrategias
@@ -23,6 +24,7 @@ from navegador import em_1280
 ORDEM_ITENS = [2, 3, 4, 4, 4, 4, 5, 6, 7, 8]
 LIMITE_POR_TURNO = {1: 2, 2: 1, 3: 2}
 TECLA_ESPACO = "espaco"
+BARRA_ATRASO = 3.0            # % que a barra lida fica atras da forca real (~0,1 s de atraso da captura; PVP 03/11)
 ESPERA_VEZ = 0.35             # s com o PASS visivel antes de agir (o jogo aceita teclas durante a faixa "Sua vez!")
 DURACAO_MAX_DA_VEZ = 30.0     # s DEPOIS do tiro: se o PASS nunca some, considera que comecou outro turno (o PASS fica na tela enquanto o tiro
                               # voa e o chefe joga: ~15 s. Com 14 s desde o INICIO da vez o bot "inventava" um turno na hora em que o PASS sumia:
@@ -58,11 +60,33 @@ TRAVESSIA_MAX_S = 5.5          # s andando no turno de travessia (a vez dura ~7 
 ESPERA_NUMEROS_DANO = 4.0     # s depois do tiro olhando os numeros de dano (Chefao Global): eles sobem ~1-3 s depois
 
 
+_OCR = []
+
+
+def angulo_exato(f):
+    """Angulo do mostrador: o NUMERO lido pelo OCR do Windows (exato; ocr_windows.py) e, sem ele, os digitos/ponteiro (leitura.angulo_preciso).
+    O ponteiro errava ate 4 graus e os digitos nao tinham 0, 3 e 8 (06/11)."""
+    p = L.angulo_preciso(f)
+    if os.name != "nt" or not isinstance(f, np.ndarray) or f.ndim != 3:
+        return p
+    if not _OCR:
+        try:
+            import ocr_windows
+            _OCR.append(ocr_windows.OcrAngulo())
+        except Exception:
+            _OCR.append(None)
+    if _OCR[0] is None:
+        return p
+    n = _OCR[0].angulo(f)
+    return float(n) if n is not None and abs(n - p) <= 6 else p
+
+
 class LeitorReal:
     """Transforma o quadro da janela (qualquer tamanho) nas leituras numericas."""
     def preparar(self, img): return em_1280(img)
     minha_vez = staticmethod(L.minha_vez)
-    angulo = staticmethod(L.angulo_preciso)       # digitos do mostrador (estaveis); sem leitura, o ponteiro
+    angulo = staticmethod(angulo_exato)           # numero do mostrador (OCR); sem leitura, digitos/ponteiro
+    forca_viva = staticmethod(L.forca_carga)      # so o enchimento laranja da carga ATUAL (a barra vermelha embaixo e o tiro anterior)
     mira = staticmethod(L.mira)                   # (angulo, lado): lado +1 virado para a direita, -1 para a esquerda
     forca = staticmethod(L.forca)
     pontos = staticmethod(L.pontos_minimapa)
@@ -279,7 +303,7 @@ class Atirador:
             # nasceu a DIREITA: o mapa e simetrico em volta do boss -> atira do ponto ESPELHADO (x~83) de frente para o boss, com a
             # mesma mira do lado esquerdo, em vez de atravessar o mapa (2 turnos perdidos). 2 tiros sem queda daqui -> volta a atravessar
             espelho = self.espelho_agora = True
-            alvo_esp = 2 * boss[0] - alvo_x
+            alvo_esp = estrategias.estrategia(inst).get("espelho_x") or 2 * boss[0] - alvo_x
             if abs(azul[0] - alvo_esp) > 3:
                 azul, boss, conf = self.ajustar_posicao(azul, boss, conf, alvo_esp)
         elif (azul and boss and alvo_x is not None and boss[0] > alvo_x + 10 and azul[0] > alvo_x + 3 and not self.sombra
@@ -357,7 +381,7 @@ class Atirador:
                 self.combo_luta = (nome_c, ordem_c)
             else:
                 self.combo_luta = (None, self.ordem)
-        sem_tempo = self.agora() - inicio > getattr(self, "tempo_itens_max", TEMPO_ITENS_MAX)
+        sem_tempo = self.agora() - inicio > getattr(self, "tempo_itens_max", estrategias.estrategia(inst).get("tempo_itens_max", TEMPO_ITENS_MAX))
         if sem_tempo:
             # a vez dura ~7 s: andar + mirar ja comeram o tempo; os itens fariam o tiro sair no fim do contador (ou nao sair)
             self.log(f"   (sem tempo para itens: {self.agora() - inicio:.1f}s gastos na vez; atiro direto)")
@@ -789,6 +813,7 @@ class Atirador:
             return []
         usados = {}
         apertados = []
+        t_ultimo = 0.0
         for item in (ordem or self.ordem):
             if usados.get(item, 0) >= LIMITE_POR_TURNO.get(item, 99):
                 continue
@@ -800,17 +825,22 @@ class Atirador:
             ativos = self.lei.itens(f)
             if not any(ativos):
                 break
-            for _ in range(3):                           # logo depois de um item o slot fica cinza um instante: confere de novo
-                if ativos[item - 1]:
-                    break
-                self.dormir(0.25)
-                g = self.ver()
-                if g is None:
-                    break
-                ativos = self.lei.itens(g)
+            if not ativos[item - 1] and apertados:
+                # logo depois de um item os slots ficam cinza durante a animacao (o 3 leva ~1 s): espera ate 1,0 s (5 leituras de 0,2 s)
+                for _ in range(5):
+                    self.dormir(0.2)
+                    g = self.ver()
+                    if g is None:
+                        break
+                    ativos = self.lei.itens(g)
+                    if ativos[item - 1]:
+                        break
             if not ativos[item - 1]:
+                if apertados:                            # apagado mesmo depois de esperar: acabou a stamina
+                    break
                 continue
             self.io.tecla(str(item), 0.08)
+            t_ultimo = self.agora()
             usados[item] = usados.get(item, 0) + 1
             apertados.append(item)
             self.dormir(0.12)
@@ -848,7 +878,8 @@ class Atirador:
           "tempo": solta pelo relogio (alvo / taxa), sem confiar na leitura da barra.
         Nos dois, solta se a vez acabar (2 leituras seguidas sem o PASS, para um piscar nao soltar cedo).
         Devolve (forca final lida, motivo, trace [(s, %)], tempo segurado)."""
-        quer = max(0.0, alvo - self.antecipacao)
+        viva = getattr(self.lei, "forca_viva", None)       # leitor da carga AO VIVO (enchimento laranja); sem ele, o metodo antigo
+        quer = max(0.0, alvo - (BARRA_ATRASO if viva else self.antecipacao))
         por_tempo = self.metodo_forca == "tempo"
         minimo = max(0.0, quer / self.taxa_forca - MARGEM_TEMPO_MINIMO)
         tempo_alvo = quer / self.taxa_forca
@@ -871,7 +902,7 @@ class Atirador:
                         break
                 else:
                     faltas = 0
-                v = self.lei.forca(f)
+                v = viva(f) if viva else self.lei.forca(f)
                 trace.append((round(dur, 2), round(v)))
                 if v <= 12:
                     visto_baixo = True
@@ -879,6 +910,16 @@ class Atirador:
                 if por_tempo:
                     if dur >= tempo_alvo:
                         motivo = "tempo_alvo"
+                        break
+                elif viva:
+                    # as leituras saem a cada ~0,25 s e a barra anda ~7% entre elas: preve quando chega no alvo e solta na hora (06/11: pedia 56%, saia 69-76%)
+                    pts = [(t, x) for t, x in trace if x >= 2]
+                    taxa = (pts[-1][1] - pts[0][1]) / (pts[-1][0] - pts[0][0]) if len(pts) >= 3 and pts[-1][0] > pts[0][0] else self.taxa_forca
+                    if v >= 2 and quer - v <= max(taxa, 5.0) * 0.3:
+                        falta = (quer - v) / max(taxa, 5.0)
+                        if falta > 0:
+                            self.dormir(falta)
+                        motivo = "alvo"
                         break
                 elif v >= quer and dur >= minimo and (visto_baixo or v - v_min >= 3 or dur >= 2 * minimo + 0.5):
                     motivo = "alvo"
@@ -899,7 +940,7 @@ class Atirador:
             peso = 0.5 if self.taxa_medida_antes else 1.0
             self.taxa_forca = float(np.clip((1 - peso) * self.taxa_forca + peso * taxa_medida, 8.0, 80.0))
             self.taxa_medida_antes = True
-        if final > 0:
+        if final > 0 and not viva:
             if motivo == "alvo":
                 self.antecipacao = float(np.clip(self.antecipacao + 0.7 * (final - alvo), 0.0, ANTECIPACAO_MAX))   # corrige o atraso
             elif motivo == "tempo_alvo" and segurou > 0.3 and not taxa_medida:
