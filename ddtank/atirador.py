@@ -17,6 +17,7 @@ import time
 import numpy as np
 
 import estrategias
+import vento as vento_mod
 import leitura as L
 from navegador import em_1280
 
@@ -306,7 +307,7 @@ class Atirador:
         alvo_x = estrategias.estrategia(inst).get("atravessar_para_x")
         espelho = self.espelho_agora = False
         self.resolver_carga()
-        rinfo = self.info_rede(inst)
+        rinfo = self.info_rede(inst, f)
         if rinfo:
             rinfo = self.posicionar_pela_rede(rinfo)      # so anda se o elite bloqueia; nada de minimapa/memoria de ponto de tiro
         if rinfo:
@@ -354,7 +355,7 @@ class Atirador:
             plano_rede = self.pve.planejar(rinfo, pred["angulo"])
             if plano_rede:
                 pred = dict(pred, angulo=float(plano_rede["mira"]), forca=float(plano_rede["forca_pct"]), origem="rede",
-                            detalhe=(f"fisica exata: eu ({rinfo['eu'][0]}, {rinfo['eu'][1]}), boss {rinfo['boss']}, vento {rinfo['vento']:+.1f}, "
+                            detalhe=(f"fisica exata: eu ({rinfo['eu'][0]}, {rinfo['eu'][1]}), boss {rinfo['boss']}, vento {rinfo['vento']:+.1f} ({rinfo['vento_fonte']}; rede {rinfo['vento_rede']:+.1f}), "
                                      f"{len(rinfo['elites'])} elite(s); janela de forca {plano_rede['janela_de']:.0f}-{plano_rede['janela_ate']:.0f}%"))
             else:
                 self.log("   [rede] nenhuma mira acerta o boss daqui (elite no caminho?): uso a memoria")
@@ -376,6 +377,7 @@ class Atirador:
             self.virar_para(est["olhar_lado"])        # mira "traseira": de frente para um lado e atirando para o outro
         elif azul and boss and abs(boss[0] - azul[0]) >= 1.5:
             self.virar_para(1 if boss[0] > azul[0] else -1)
+        self._ctx_limite = (plano_rede["eu"], plano_rede["inclinacao"]) if plano_rede else None
         ok_ang = self.ajustar_angulo(pred["angulo"], est.get("tolerancia_angulo", TOLERANCIA_ANGULO), est.get("passada_angulo", 0.0))
         t_ang = self.agora() - inicio
         if self.reg:
@@ -514,13 +516,32 @@ class Atirador:
         self.rede = rede
         self.pve = pve_rede.MiraPve(rede, log=self.log) if rede else None
 
-    def info_rede(self, inst):
-        """Estado exato da rede para a instancia (None se nao liga, o boneco nasceu do lado direito ou a rede nao entregou nada)."""
+    def info_rede(self, inst, f=None):
+        """Estado exato da rede para a instancia (None se nao liga, o boneco nasceu do lado direito ou a rede nao entregou nada).
+        O VENTO vem da TELA quando a leitura e confiavel: o pacote da vez chega da rede com segundos de atraso (a vez do PVE dura 8 s) e o
+        vento da vez anterior fazia a bala passar 600 px por cima do boss (06/11: mesma mira acertou e errou em turnos seguidos)."""
         if not (self.pve and estrategias.estrategia(inst).get("mira_rede")):
             return None
+        self.pve.boss_y = estrategias.estrategia(inst).get("boss_y")
         info = self.pve.info()
         if not info or info["eu"][0] > info["boss"][0] - 200:
             return None                           # lado direito / sem boss: o metodo antigo (minimapa + memoria)
+        info["vento_rede"] = info["vento"]
+        info["vento_fonte"] = "rede"
+        if f is not None:
+            votos = []
+            for i in range(3):
+                g = f if i == 0 else self.ver()
+                if g is not None:
+                    v, c = vento_mod.ler_vento(g)
+                    if v is not None and vento_mod.confiavel(c):
+                        votos.append(round(v, 1))
+                if i < 2:
+                    self.dormir(0.1)
+            if votos:
+                v = max(set(votos), key=votos.count)
+                if votos.count(v) >= 2:
+                    info["vento"], info["vento_fonte"] = v, "tela"
         return info
 
     def posicionar_pela_rede(self, info):
@@ -531,23 +552,31 @@ class Atirador:
             if destino is None:
                 return info
             x = info["eu"][0]
-            dur = float(np.clip((destino - x) / VELOCIDADE_ANDAR_PX, 0.2, 2.5))
-            self.log(f"   [ELITE] elite em x={self.pve.elite_perto(info)[0]:.0f} (boneco x={x:.0f}): andando {dur:.1f}s para a direita ate x~{destino:.0f}")
+            lado = "direita" if destino > x else "esquerda"
+            dur = float(np.clip(abs(destino - x) / VELOCIDADE_ANDAR_PX, 0.2, 2.5))
+            self.log(f"   [ELITE] elite em x={self.pve.elite_perto(info)[0]:.0f} (boneco x={x:.0f}): andando {dur:.1f}s para a {lado} ate x~{destino:.0f}")
             if hasattr(self.io, "preparar_teclas"):
                 self.io.preparar_teclas()
-            self.io.tecla("direita", dur)
-            # a rede chega em lotes, com ate ~2 s de atraso: espera a posicao MUDAR (senao anda de novo por engano e passa do ponto)
+            self.io.tecla(lado, dur)
+            # a rede chega em lotes, com ate varios s de atraso: espera a posicao MUDAR um pouco; se nao vier, usa a conta (andou dur s a
+            # ~VELOCIDADE_ANDAR_PX px/s) em vez de andar de novo por engano (06/11: 151 -> 278 -> 427)
             novo = None
-            for _ in range(16):
+            for _ in range(8):
                 self.dormir(0.2)
                 cand = self.pve.info()
                 if cand and abs(cand["eu"][0] - x) >= 0.4 * dur * VELOCIDADE_ANDAR_PX:
                     novo = cand
                     break
             if not novo:
-                self.log("   [ELITE] a rede nao mostrou o boneco andando: sigo sem andar de novo")
-                return info
+                est_x = x + (1 if destino > x else -1) * dur * VELOCIDADE_ANDAR_PX
+                self.log(f"   [ELITE] a rede ainda nao mostrou o boneco andando: uso a conta, x~{est_x:.0f}")
+                novo = dict(info, eu=(est_x, info["eu"][1]))
+                novo["elites"] = []                   # o elite andou tambem: a posicao dele na rede esta velha
+                return novo
             self.log(f"   [ELITE] boneco foi de x={x:.0f} para x={novo['eu'][0]:.0f}")
+            self.log(f"   [ELITE] boneco foi de x={x:.0f} para x={novo['eu'][0]:.0f}")
+            for k in ("vento", "vento_rede", "vento_fonte"):      # o vento foi lido da tela no inicio da vez
+                novo[k] = info[k]
             info = novo
         return info
 
@@ -879,6 +908,10 @@ class Atirador:
         final = self.lei.angulo(self.ver())
         self.log(f"   ! o angulo nao {'sobe' if tecla == 'cima' else 'desce'} alem de {final:.0f} graus (limite da arma neste "
                  f"terreno; a seta contraria funciona): atirando deste angulo.")
+        ctx = getattr(self, "_ctx_limite", None)
+        if self.pve and ctx:
+            arma = self.pve.mira.limite(tecla == "cima", final, ctx[0], 1, ctx[1])      # o planejador passa a respeitar (06/11: 6 s perdidos por turno)
+            self.log(f"   [rede] limite do ponteiro aprendido: {final:.0f} graus aqui" + (f" (arma {arma:.0f})" if arma is not None else ""))
         return True
 
     # ------------------------------------------------------------------ itens

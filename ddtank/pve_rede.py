@@ -22,7 +22,8 @@ ELITE_BLOQUEIA_PX = 80.0                # elite mais perto que isso (em x) do bo
 ELITE_ALTURA_MIN = 600                  # so conta como elite o que esta no chao (y grande); o boss fica na plataforma
 JANELA_FORCA = 12                       # varre a forca de f0-12% a f0+12% (passo 1%) para achar a janela que acerta
 MIN_JANELA = 3                          # janela menor que 3 pontos de forca = tiro arriscado demais (ainda assim e usado se for o melhor)
-X_MAX_TIRO = 700.0                      # nao anda para alem disso (o boss esta em ~769)
+X_MAX_TIRO = 460.0                      # de x~516 quase nenhum angulo chega no centro do boss (so de raspao, 2-9% por tiro): fica ate ~460
+X_MIN_TIRO = 150.0                      # parede da esquerda
 
 
 def _caixa(pos, c):
@@ -34,6 +35,7 @@ class MiraPve:
         self.rede = rede
         self.log = log
         self.mira = mira_exata.MiraExata(log=log)
+        self.boss_y = None          # y real do boss: a rede da y=297 ate o 1o START_MOVE e depois 320 (o bicho cai); a caixa de acerto usa o real
         self._ter = None            # (mapa, n buracos, terreno)
         self._partida = None
 
@@ -53,7 +55,7 @@ class MiraPve:
             return None
         boss = max(mons, key=lambda m: m["vida_max"])
         elites = [(m["x"], m["y"]) for m in mons if m is not boss and m["vida_max"] < boss["vida_max"] / 2 and m["y"] >= ELITE_ALTURA_MIN]
-        return dict(eu=(eu["x"], eu["y"]), eu_id=eu_id, boss=(boss["x"], boss["y"]), boss_vida=boss.get("vida"), elites=elites,
+        return dict(eu=(eu["x"], eu["y"]), eu_id=eu_id, boss=(boss["x"], max(boss["y"], self.boss_y or 0)), boss_vida=boss.get("vida"), elites=elites,
                     vento=float(est.get("vento") or 0.0), mapa=est["mapa"], buracos=est.get("buracos") or [], est=est)
 
     def terreno(self, info):
@@ -81,18 +83,19 @@ class MiraPve:
         return min(perto, key=lambda e: abs(e[0] - x)) if perto else None
 
     def ponto_livre(self, info):
-        """x para onde andar quando o elite esta em cima do boneco (None = nao precisa andar ou nao ha onde). Anda para a DIREITA do
-        elite (o boss esta a direita; a esquerda e a parede), ate ELITE_BLOQUEIA_PX+20 de distancia dele."""
+        """x para onde andar quando o elite esta em cima do boneco (None = nao precisa andar ou nao ha onde): ELITE_BLOQUEIA_PX+20 para
+        o lado do elite que fica DENTRO da faixa boa de tiro (X_MIN_TIRO..X_MAX_TIRO), o mais perto do boneco."""
         el = self.elite_perto(info)
         if el is None:
             return None
-        livre = el[0] + ELITE_BLOQUEIA_PX + 20
-        if livre > X_MAX_TIRO:
+        folga = ELITE_BLOQUEIA_PX + 20
+        opcoes = [x for x in (el[0] - folga, el[0] + folga) if X_MIN_TIRO <= x <= X_MAX_TIRO]
+        if not opcoes:
             return None
-        return livre
+        return min(opcoes, key=lambda x: abs(x - info["eu"][0]))
 
     # ----------------------------------------------------------------------------------------------------------- plano
-    def planejar(self, info, angulo_base, tolerancia_graus=2, direcao=1):
+    def planejar(self, info, angulo_base, tolerancia_graus=3, direcao=1):
         """Melhor (ponteiro, forca %) de onde o boneco esta: entre os ponteiros angulo_base +- tolerancia (mexer pouco no ponteiro: cada
         grau custa tempo da vez), o de MAIOR janela de forca que acerta o boss (com o chao e o elite no caminho). A forca vai para o
         meio da janela. None = nenhum jeito de acertar (mira pela memoria)."""
