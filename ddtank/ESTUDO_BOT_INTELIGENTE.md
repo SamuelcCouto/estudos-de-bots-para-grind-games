@@ -203,3 +203,17 @@ cliente. No PVP, o bot joga contra pessoas. A leitura passiva da rede e da tela 
 - Codigo do cliente mais util para o proximo passo: `cliente_extraido/fonte/scripts/` em `phy/`, `game/view/RouteComputer.as`,
   `game/view/GameView.as` (`__shoot`), `game/actions/ChangePlayerAction.as` (vez/vento), `road7th/comm/` (cifra),
   `ddt/manager/GameInSocketOut.as` (pacotes enviados), `ddt/data/socket/CrazyTankPackageType.as` (codigos).
+
+
+## 1.8 PVE pela rede (06/11) - Ultima Luta fase 2
+
+Lido nos pacotes (netlog) e confirmado ao vivo; codigo em `pve_rede.py` + ganchos em `atirador.py` (`info_rede`, `posicionar_pela_rede`, `resolver_carga`).
+
+- **Monstros**: `ADD_LIVING` (sub 64) traz id/nome/x/y/vida; `LIVING_MOVETO` (sub 55) = `x0,y0,x1,y1` (o bicho anda); `KILL_PLAYER` nas bombas = `(alvo, dano, ?, vida que sobrou)`; `START_MOVE` = nova posicao. Boss "Juiz Ladrao" id novo a cada vida, corpo real em **y=320** (a rede da 297 ate o 1o START_MOVE).
+- **Acerto**: explosoes de x 689-840 / y 204-317 acertam o boss. O dano vem do tipo de bala: tiro normal ~5-27 mil por projetil, o **especial (B/POW) 100-330 mil** (e 1,1 milhao no elite).
+- **Elite** ("Boxeador"): anda atras do boneco. A < ~25 px em x a bala **explode em cima de nos** (tiro perdido + boneco ferido); a >= ~100 px passa. `ELITE_BLOQUEIA_PX = 80`.
+- **Posicao do boneco**: o cliente manda `MOVESTART` (x,y) a cada ~0,5 s andando; o ultimo e onde parou. A rede chega em lotes com **atraso de varios segundos** (mais que a vez de 8 s): nao esperar a posicao/vento da vez pelo pacote - o vento vem da TELA (`vento.ler_vento`) e a posicao apos andar, por conta (110 px/s) se a rede atrasar.
+- **Forca**: a janela que acerta o boss tem ~8-10 pontos; soltar pelo **relogio errou ate 13 pontos** (41%, 60% por 54%) - a barra viva da +-2. `USAR_RELOGIO = False`. A forca REAL de cada tiro sai do pacote FIRE do cliente (`resolver_carga` le no turno seguinte).
+- **Ponteiro**: no terreno inclinado o ponteiro nao passa de um limite (ex.: 70 em x=150); aprender com `MiraExata.limite` (o bot perdia 5-6 s por turno tentando).
+- **Lado direito** (nasce em x>~1000, boss a esquerda): o `olhar_lado` antigo deixava o boneco virado para a direita e o plano (virado para o boss) nao valia; agora a fisica manda virar para o lado do plano. De x~1011 a fisica nao achou mira (cai no metodo antigo).
+- **x~516**: de la quase nenhum angulo chega ao centro do boss (so de raspao, 2-9%): ficar entre x~150 e ~460.
