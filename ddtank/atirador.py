@@ -122,6 +122,7 @@ class Atirador:
         self.metodo_forca = "barra"               # "barra" = solta olhando a barra; "tempo" = solta pelo relogio
         self.subforcas = 0
         self.antecipacao = ANTECIPACAO_INICIAL
+        self.atraso_vivo = BARRA_ATRASO            # aprende com o erro de cada tiro (06/11: na Ultima Luta o tiro saia 4-5% acima do pedido)
         self.vez_desde = None
         self.agiu = False
         self.pendente = None
@@ -498,7 +499,10 @@ class Atirador:
             if lado > 0 and azul[0] >= 24:
                 lado, dur = -1, 2.0                   # fugir para a direita levaria para debaixo do boss: passa pelo elite para a esquerda
             elif lado < 0 and azul[0] <= 16:
-                lado, dur = 1, 2.0                    # parede: passa pelo elite para a direita
+                # 06/11 (rede): de x~10-13 o tiro acerta o boss mesmo com o elite ao lado; passar para a direita levava a x~26, onde a mira
+                # erra (bomba cai 130 px antes). Fica na parede e atira.
+                self.log(f"   [ELITE] elite em x={el[0]:.0f} perto, mas o boneco ja esta na parede (x={azul[0]:.0f}): fico e atiro")
+                return azul, boss, conf
         elif (lado < 0 and azul[0] < 14) or (lado > 0 and azul[0] > 88):
             lado, dur = -lado, 2.0                    # parede: passa para o outro lado do elite
         nome = "direita" if lado > 0 else "esquerda"
@@ -879,7 +883,7 @@ class Atirador:
         Nos dois, solta se a vez acabar (2 leituras seguidas sem o PASS, para um piscar nao soltar cedo).
         Devolve (forca final lida, motivo, trace [(s, %)], tempo segurado)."""
         viva = getattr(self.lei, "forca_viva", None)       # leitor da carga AO VIVO (enchimento laranja); sem ele, o metodo antigo
-        quer = max(0.0, alvo - (BARRA_ATRASO if viva else self.antecipacao))
+        quer = max(0.0, alvo - (self.atraso_vivo if viva else self.antecipacao))
         por_tempo = self.metodo_forca == "tempo"
         minimo = max(0.0, quer / self.taxa_forca - MARGEM_TEMPO_MINIMO)
         tempo_alvo = quer / self.taxa_forca
@@ -940,6 +944,8 @@ class Atirador:
             peso = 0.5 if self.taxa_medida_antes else 1.0
             self.taxa_forca = float(np.clip((1 - peso) * self.taxa_forca + peso * taxa_medida, 8.0, 80.0))
             self.taxa_medida_antes = True
+        if final > 0 and viva and motivo == "alvo":
+            self.atraso_vivo = float(np.clip(self.atraso_vivo + 0.3 * (final - alvo), 1.5, 7.0))   # passou 4% -> solta 2,4% mais cedo no proximo
         if final > 0 and not viva:
             if motivo == "alvo":
                 self.antecipacao = float(np.clip(self.antecipacao + 0.7 * (final - alvo), 0.0, ANTECIPACAO_MAX))   # corrige o atraso

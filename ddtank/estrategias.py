@@ -65,7 +65,7 @@ ESTRATEGIAS = {
         "combo": "3,3,4",             # gravacoes 01/11: o usuario usa o item 3 (+1 ataque) DUAS vezes por turno e os buffs 4 (nunca o 1/2 aqui)
         "tolerancia_angulo": 1.5,     # parabola alta: 3 graus decidem o acerto (pediu 74,5 e atirou a 71); 1,0 era menor que o menor toque (~1,4): ponteiro ia-e-voltava 5 s
         "separar_lado": True,         # boss a ESQUERDA do boneco (nasceu em x~72-90) = outra mira: instancia ULTIMA_LUTA_F2_E (abaixo)
-        "atravessar_para_x": 21.0,    # ponto de tiro da fase 2: x~21 (74 graus/51%, acerta em sequencia); longe -> ATRAVESSA a arena andando (a mira do lado direito erra muito: 01/11)
+        "atravessar_para_x": 13.0,    # 06/11 (rede): ponto de tiro x~13 (69 graus/52%: todos os tiros acertaram; de x~18-26 a bala bate no elite ou cai curta). Antes: x~21 (74 graus/51%); longe -> ATRAVESSA a arena andando (a mira do lado direito erra muito: 01/11)
         "perks": True, "repor_perks": True,
         "pet_e": True,                # (andar desfaz o buff: aperta E de novo no proximo turno)
         "usar_pow": True, "pow_exige_buff": True,
