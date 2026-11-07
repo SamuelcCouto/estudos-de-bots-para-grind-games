@@ -54,6 +54,7 @@ ESTRATEGIAS = {
         "jogador_y_min": 50.0,        # o boneco fica no chao (y ~ 62): descarta cantos azuis da camera do minimapa
         "reposicionar": True,         # boss pequeno colado no boneco = tiro perdido: anda para a direita (o usuario fez 0.2-0.3 s)
         "fugir_do_elite": True,
+        "mira_rede": True,            # 06/11: mira EXATA pela rede (pve_rede.py): posicao do boneco/boss/elite, fisica e janela de forca; so do lado esquerdo
         "espelho_sempre": True,       # 02/11 (usuario): nada de atravessar nem de tentativa e erro - nasceu a direita, atira de la com a conta (fisica + vento)
         "atravessar": False,
         "espelho_x": 76.0,            # 06/11 (rede): de x~76 (real ~1095) TODOS os tiros acertam o boss (id 9); o ponto espelhado x~83 (real ~1200) fica em cima do ELITE

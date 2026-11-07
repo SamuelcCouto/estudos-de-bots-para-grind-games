@@ -1865,6 +1865,7 @@ def main():
     ap.add_argument("--fase", type=int, choices=(1, 2), default=1,
                     help="A Ultima Luta: fase em que o bot comeca (2 = ja dentro da batalha/sala da 2a fase)")
     ap.add_argument("--sem-tarefas", action="store_true")
+    ap.add_argument("--sem-rede", action="store_true", help="nao le a rede do jogo (mira so pela tela)")
     ap.add_argument("--uma-vez", action="store_true")
     ap.add_argument("--voltas", type=int, default=0, help="para depois de N voltas completas da rota (0 = sem limite)")
     ap.add_argument("--so-ver", action="store_true", help="so mostra a tela detectada (nao clica)")
@@ -1976,6 +1977,15 @@ def main():
         import memoria as memoria_mod
         nav.atirador = atirador_mod.Atirador(io, memoria_mod.Memoria(), lambda: nav.instancia_batalha, sombra=args.sombra, log=log,
                                              ordem_itens=ordem, reg=reg, metricas=metr, combos=combos)
+        if not args.sem_rede:
+            import rede_vivo
+            caminho_rede = rede_vivo.registro_do_jogo_aberto()
+            if caminho_rede:
+                rede = rede_vivo.LeitorAoVivo(fonte=lambda parar: rede_vivo.fonte_netlog(caminho_rede, parar), log=log).iniciar()
+                nav.atirador.ligar_rede(rede)
+                log(f"[rede] lendo a rede do jogo ({os.path.basename(caminho_rede)}): mira EXATA na fase 2 da Ultima Luta (posicao do boss e do elite)")
+            else:
+                log("[rede] o jogo NAO foi aberto com o registro de rede (ABRIR_JOGO.bat): fase 2 pela mira antiga (minimapa + memoria)")
     nav.idx = max(0, min(len(rota) - 1, args.comecar_em - 1))
     nav.fase = args.fase
     nav.arquivo_parar = ARQUIVO_PARAR

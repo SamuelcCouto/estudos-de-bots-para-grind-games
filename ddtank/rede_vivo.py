@@ -172,6 +172,7 @@ class Estado:
         self.mapa = None            # numero do mapa da partida (GAME_LOAD) -> terreno_jogo.Terreno.do_mapa
         self.buracos = []           # [(x, y, bala)] explosoes que cavaram o chao nesta partida (para o terreno ficar igual ao do jogo)
         self.direcao = {}           # id -> +1 olhando para a direita / -1 esquerda (DIRECTION e MOVESTART)
+        self.monstros = {}          # id -> dict(nome, x, y, vida, vida_max, vivo): boss e elites das instancias (ADD_LIVING + LIVING_MOVETO)
 
     def copia(self):
         with self.lock:
@@ -179,7 +180,7 @@ class Estado:
                         vivos={k: dict(v) for k, v in self.vivos.items()}, ultimo_tiro=self.ultimo_tiro,
                         meu_ultimo_tiro=self.meu_ultimo_tiro, minha_vez=self.vez is not None and self.vez == self.eu,
                         pacotes=dict(self.pacotes), chave_ok=dict(self.chave_ok), mapa=self.mapa, buracos=list(self.buracos),
-                        direcao=dict(self.direcao))
+                        direcao=dict(self.direcao), monstros={k: dict(v) for k, v in self.monstros.items()})
 
     def processar(self, lado, pacote, ao_mudar=None):
         cod, _cid, e1, _e2, corpo = pacote
@@ -196,22 +197,41 @@ class Estado:
                         self.eu = None
                     self.vivos = {}
                     self.mapa, self.buracos, self.direcao = None, [], {}
+                    self.monstros = {}
                     evento = ("partida", sub)
                 elif lado == "servidor" and sub == R.SUB["GAME_LOAD"]:
                     self.mapa = struct.unpack(">i", corpo[5:9])[0]   # GameManager.__beginLoad: tempo maximo, numero do mapa, ...
-                    self.buracos, self.direcao = [], {}
+                    self.buracos, self.direcao, self.monstros = [], {}, {}
                     evento = ("mapa", self.mapa)
                 elif lado == "servidor" and sub == R.SUB["TURN"]:
                     v = R.vez_do_servidor(corpo, e1)
                     self.vez, self.vez_t, self.turno, self.vento = v["quem"], time.time(), v["turno"], v["vento"]
                     self.vivos = {d["id"]: d for d in v["vivos"]}
                     evento = ("vez", v)
+                elif lado == "servidor" and sub == R.SUB["ADD_LIVING"]:
+                    m = R.living_novo(corpo)
+                    self.monstros[m["id"]] = dict(id=m["id"], nome=str(m["nome"]).strip(chr(0)), x=m["x"], y=m["y"], vida=m["vida"],
+                                                  vida_max=m["vida_max"], vivo=m["vida"] > 0, tipo=m["tipo"])
+                elif lado == "servidor" and sub == R.SUB["LIVING_MOVETO"] and len(corpo) >= 17:
+                    x1, y1 = struct.unpack(">ii", corpo[9:17])        # (x0, y0) -> (x1, y1): o bicho anda
+                    if e1 in self.monstros:
+                        self.monstros[e1]["x"], self.monstros[e1]["y"] = x1, y1
                 elif lado == "servidor" and sub == R.SUB["FIRE"]:
                     t = R.tiro_do_servidor(corpo, e1)
                     for b in t["bombas"]:
                         bomba = next((a for a in b["acoes"] if a["tipo"] == "BOMB"), None)
                         if bomba is not None and b["buraco"]:
                             self.buracos.append((bomba["p"][0], bomba["p"][1], b["bala"]))
+                    for b in t["bombas"]:
+                        for ac in b["acoes"]:
+                            m = self.monstros.get(ac["p"][0])
+                            if m is None:
+                                continue
+                            if ac["tipo"] == "KILL_PLAYER":          # (alvo, dano, ?, vida que sobrou)
+                                m["vida"] = ac["p"][3]
+                                m["vivo"] = ac["p"][3] > 0
+                            elif ac["tipo"] == "START_MOVE":         # (alvo, x, y, direcao)
+                                m["x"], m["y"] = ac["p"][1], ac["p"][2]
                     self.ultimo_tiro = t
                     self.tiros = (self.tiros + [(time.time(), t)])[-40:]
                     evento = ("tiro", t)

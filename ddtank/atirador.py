@@ -13,6 +13,7 @@ Fluxo de cada turno (o botao PASS so aparece na SUA vez; dura ~8 s):
 Modo sombra (sombra=True): faz tudo menos apertar teclas; so registra o que faria.
 """
 import os
+import time
 import numpy as np
 
 import estrategias
@@ -24,6 +25,7 @@ from navegador import em_1280
 ORDEM_ITENS = [2, 3, 4, 4, 4, 4, 5, 6, 7, 8]
 LIMITE_POR_TURNO = {1: 2, 2: 1, 3: 2}
 TECLA_ESPACO = "espaco"
+VELOCIDADE_ANDAR_PX = 110.0       # px/s do boneco andando (medido nos pacotes de movimento: ~60 px a cada 0,55 s)
 BARRA_ATRASO = 3.0            # % que a barra lida fica atras da forca real (~0,1 s de atraso da captura; PVP 03/11)
 ESPERA_VEZ = 0.35             # s com o PASS visivel antes de agir (o jogo aceita teclas durante a faixa "Sua vez!")
 DURACAO_MAX_DA_VEZ = 30.0     # s DEPOIS do tiro: se o PASS nunca some, considera que comecou outro turno (o PASS fica na tela enquanto o tiro
@@ -124,6 +126,11 @@ class Atirador:
         self.antecipacao = ANTECIPACAO_INICIAL
         self.atraso_vivo = BARRA_ATRASO            # aprende com o erro de cada tiro (06/11: na Ultima Luta o tiro saia 4-5% acima do pedido)
         self.vez_desde = None
+        self.rede = getattr(self, "rede", None)        # rede_vivo.LeitorAoVivo (mira EXATA no PVE) ou None
+        self.pve = None                                # pve_rede.MiraPve
+        self.rede_no_turno = False                     # este turno mira pela rede (soltar a forca pelo relogio calibrado)
+        self.carga_pendente = None                     # (t, segurou, info, ponteiro, forca pedida, janela) do ultimo tiro, a conferir na rede
+        self.amostras_carga = []                       # [(s segurando, forca REAL do pacote do tiro)]: calibra soltar pelo relogio
         self.agiu = False
         self.pendente = None
         self.turnos = 0
@@ -298,7 +305,13 @@ class Atirador:
                 azul, boss, conf = self.posicoes(g)
         alvo_x = estrategias.estrategia(inst).get("atravessar_para_x")
         espelho = self.espelho_agora = False
-        if (azul and boss and alvo_x is not None and boss[0] < azul[0] - 8 and not self.sombra
+        self.resolver_carga()
+        rinfo = self.info_rede(inst)
+        if rinfo:
+            rinfo = self.posicionar_pela_rede(rinfo)      # so anda se o elite bloqueia; nada de minimapa/memoria de ponto de tiro
+        if rinfo:
+            pass
+        elif (azul and boss and alvo_x is not None and boss[0] < azul[0] - 8 and not self.sombra
                 and (self.espelho_falhas < 2 or estrategias.estrategia(inst).get("espelho_sempre"))
                 and estrategias.estrategia(inst).get("espelhar")):
             # nasceu a DIREITA: o mapa e simetrico em volta do boss -> atira do ponto ESPELHADO (x~83) de frente para o boss, com a
@@ -317,7 +330,7 @@ class Atirador:
             self.log(f"   (boss a esquerda: uso a mira de {inst})")
         self.conferir_aviao(azul)
         x_antes = azul[0] if azul else None
-        if estrategias.estrategia(inst).get("fugir_do_elite") and azul and boss and not self.sombra:
+        if estrategias.estrategia(inst).get("fugir_do_elite") and azul and boss and not self.sombra and not rinfo:
             azul, boss, conf = self.fugir_do_elite(azul, boss, conf)
         if (estrategias.estrategia(inst).get("reposicionar") and azul and not self.sombra
                 and not estrategias.estrategia(inst).get("fugir_do_elite")):
@@ -336,6 +349,15 @@ class Atirador:
         if destino:
             return self.turno_aviao(f, inst, azul, boss, destino, hp0)
         pred = self.mem.prever(inst, azul, boss)
+        plano_rede = None
+        if rinfo:
+            plano_rede = self.pve.planejar(rinfo, pred["angulo"])
+            if plano_rede:
+                pred = dict(pred, angulo=float(plano_rede["mira"]), forca=float(plano_rede["forca_pct"]), origem="rede",
+                            detalhe=(f"fisica exata: eu ({rinfo['eu'][0]}, {rinfo['eu'][1]}), boss {rinfo['boss']}, vento {rinfo['vento']:+.1f}, "
+                                     f"{len(rinfo['elites'])} elite(s); janela de forca {plano_rede['janela_de']:.0f}-{plano_rede['janela_ate']:.0f}%"))
+            else:
+                self.log("   [rede] nenhuma mira acerta o boss daqui (elite no caminho?): uso a memoria")
         itens0 = self.lei.itens(f)
         self.log(f"[tiro {self.turnos}] {inst}: voce {azul and tuple(round(v) for v in azul)} (em {conf:.0%} das leituras), "
                  f"boss {boss and tuple(round(v) for v in boss)}"
@@ -394,13 +416,22 @@ class Atirador:
             fr.append(self.reg.frame(self.ver(), "apos_itens"))
         angulo_real = self.lei.angulo(self.ver())
         alvo_forca = pred["forca"]
-        if abs(angulo_real - pred["angulo"]) > 3:
+        if plano_rede and abs(angulo_real - pred["angulo"]) >= 1:
+            alt = self.pve.forca_para_mira(rinfo, int(round(angulo_real)))
+            if alt:
+                self.log(f"   angulo ficou em {angulo_real:.0f} (queria {pred['angulo']:.0f}): forca recalculada pela fisica {pred['forca']:.0f}% -> {alt:.0f}%")
+                alvo_forca = alt
+        elif abs(angulo_real - pred["angulo"]) > 3:
             alt = self.mem.forca_para(inst, azul, boss, angulo_real)
             if alt:
                 self.log(f"   angulo ficou em {angulo_real:.0f} (queria {pred['angulo']:.0f}): forca recalculada {pred['forca']:.0f}% -> {alt:.0f}%")
                 alvo_forca = alt
+        t_carga = time.time()
+        self.rede_no_turno = bool(plano_rede)
         forca_real, soltou, trace, segurou = self.carregar(alvo_forca)
         self.devolver_foco()
+        if plano_rede and soltou != "vez_acabou":
+            self.carga_pendente = (t_carga, segurou, rinfo, angulo_real, alvo_forca, (plano_rede["janela_de"], plano_rede["janela_ate"]))
         if soltou == "vez_acabou":
             # a vez acabou durante a carga: o tiro provavelmente NAO saiu (ou saiu fraco, fora do plano). Nao vira ataque nem erro
             # (sujava a memoria com "erros" de forca 0%)
@@ -475,6 +506,88 @@ class Atirador:
         self.devolver_foco()
         if self.reg:
             self.reg.evento("travessia", [self.reg.frame(self.ver(), "tiro_dado")], de=x0, ate=ultimo)
+
+    # ------------------------------------------------------------------ rede (mira exata no PVE, 06/11)
+    def ligar_rede(self, rede):
+        """Liga a leitura da rede ao atirador: as instancias com `mira_rede` (Ultima Luta fase 2) passam a mirar pela fisica exata."""
+        import pve_rede
+        self.rede = rede
+        self.pve = pve_rede.MiraPve(rede, log=self.log) if rede else None
+
+    def info_rede(self, inst):
+        """Estado exato da rede para a instancia (None se nao liga, o boneco nasceu do lado direito ou a rede nao entregou nada)."""
+        if not (self.pve and estrategias.estrategia(inst).get("mira_rede")):
+            return None
+        info = self.pve.info()
+        if not info or info["eu"][0] > info["boss"][0] - 200:
+            return None                           # lado direito / sem boss: o metodo antigo (minimapa + memoria)
+        return info
+
+    def posicionar_pela_rede(self, info):
+        """Elite a menos de ELITE_BLOQUEIA_PX do boneco (em x) = a bala explode em cima de nos (4 tiros perdidos, 06/11): anda para a
+        direita ate um ponto livre e le a posicao de novo. Sem elite perto, nao anda (menos turno gasto)."""
+        for _ in range(2):
+            destino = self.pve.ponto_livre(info)
+            if destino is None:
+                return info
+            x = info["eu"][0]
+            dur = float(np.clip((destino - x) / VELOCIDADE_ANDAR_PX, 0.2, 2.5))
+            self.log(f"   [ELITE] elite em x={self.pve.elite_perto(info)[0]:.0f} (boneco x={x:.0f}): andando {dur:.1f}s para a direita ate x~{destino:.0f}")
+            if hasattr(self.io, "preparar_teclas"):
+                self.io.preparar_teclas()
+            self.io.tecla("direita", dur)
+            # a rede chega em lotes, com ate ~2 s de atraso: espera a posicao MUDAR (senao anda de novo por engano e passa do ponto)
+            novo = None
+            for _ in range(16):
+                self.dormir(0.2)
+                cand = self.pve.info()
+                if cand and abs(cand["eu"][0] - x) >= 0.4 * dur * VELOCIDADE_ANDAR_PX:
+                    novo = cand
+                    break
+            if not novo:
+                self.log("   [ELITE] a rede nao mostrou o boneco andando: sigo sem andar de novo")
+                return info
+            self.log(f"   [ELITE] boneco foi de x={x:.0f} para x={novo['eu'][0]:.0f}")
+            info = novo
+        return info
+
+    def tempo_relogio(self, alvo):
+        """Quanto segurar o espaco para chegar em `alvo` % de forca, pelo RELOGIO, com a reta forca = a*s + b ajustada nos tiros anteriores
+        (a forca real vem do pacote do tiro, nao da leitura da barra). None se ainda nao ha tiros para calibrar."""
+        am = self.amostras_carga[-8:]
+        if len(am) < 3:
+            return None
+        s_, f_ = np.array([a[0] for a in am]), np.array([a[1] for a in am])
+        if np.ptp(s_) >= 0.25:
+            a, b = np.polyfit(s_, f_, 1)
+        else:
+            a, b = float(np.median(f_ / s_)), 0.0
+        if not 12.0 <= a <= 70.0:
+            return None
+        return float(np.clip((alvo - b) / a, 0.2, 4.5))
+
+    def resolver_carga(self):
+        """Pacote FIRE do cliente do tiro ANTERIOR (a rede chega em lotes, com segundos de atraso: por isso e lido no turno seguinte):
+        traz a forca e o angulo REAIS. Guarda (tempo segurando, forca) para soltar pelo relogio e aprende a correcao do ponteiro."""
+        pend = self.carga_pendente
+        if not (pend and self.rede):
+            return
+        t_ini, segurou, info, ponteiro, alvo_forca, janela = pend
+        meus = [t for (ti, t) in self.rede.estado.copia()["meus_tiros"] if ti >= t_ini]
+        if not meus:
+            if time.time() - t_ini > 90:
+                self.carga_pendente = None
+            return
+        self.carga_pendente = None
+        forca = meus[0]["forca"] / 20.0
+        if segurou > 0.3 and forca > 3:
+            self.amostras_carga = (self.amostras_carga + [(float(segurou), float(forca))])[-12:]
+        self.log(f"   [rede] tiro anterior: forca REAL {forca:.0f}% (queria {alvo_forca:.0f}%), angulo {-meus[0]['angulo']:.0f} (ponteiro {ponteiro:.0f}); "
+                 f"segurou {segurou:.2f}s; janela que acerta {janela[0]:.0f}-{janela[1]:.0f}% ({len(self.amostras_carga)} amostra(s) de carga)")
+        try:
+            self.pve.aprender(info, ponteiro, meus[0])
+        except Exception as e:                                  # aprender nao pode derrubar o turno
+            self.log(f"   [rede] (nao aprendi o ponteiro: {e})")
 
     def elite_perto(self, azul, boss):
         """Ponto vermelho (fora o boss da plataforma) colado no boneco no minimapa = boss de elite com a hitbox em cima de nos."""
@@ -889,6 +1002,7 @@ class Atirador:
         tempo_alvo = quer / self.taxa_forca
         # a barra pode encher bem mais devagar que o esperado (medido: 19%/s em vez de 38%/s): deixa ate ~2,2x o tempo
         limite = min(MAX_SEGURANDO, alvo / (0.45 * self.taxa_forca) + 0.5)
+        T_rel = self.tempo_relogio(alvo) if (self.pve and self.rede_no_turno) else None
         repetir_no_laco = self._segurar()
         rep = 1
         t0 = self.agora()
@@ -908,6 +1022,11 @@ class Atirador:
                     faltas = 0
                 v = viva(f) if viva else self.lei.forca(f)
                 trace.append((round(dur, 2), round(v)))
+                if T_rel is not None and T_rel - dur <= 0.3:          # solta pelo RELOGIO (calibrado com a forca real dos tiros anteriores)
+                    if T_rel - dur > 0:
+                        self.dormir(T_rel - dur)
+                    motivo = "relogio"
+                    break
                 if v <= 12:
                     visto_baixo = True
                 v_min = v if v_min is None else min(v_min, v)
