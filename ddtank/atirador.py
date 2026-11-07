@@ -55,6 +55,7 @@ GAP_NOVA_VEZ = 2.5            # s sem PASS para valer uma vez NOVA (o PASS pisca
 GAP_MIN_NOVA_VEZ = 0.6        # ... ou 0,6 s sem PASS se ja passaram MIN_APOS_TIRO_NOVA_VEZ desde o tiro (fase 1: o chefe joga rapido)
 MIN_APOS_TIRO_NOVA_VEZ = 4.0  # s: o "tiro fantasma" vinha ~2 s depois do tiro; uma vez de verdade, 8-10 s
 ANDAR_SEM_QUEDA_S = 1.2       # 0,3 s andava 1 px e o elite continuava em cima (01/11 15:30: dano "Perfurante" no boneco)
+DURACAO_VEZ_PVE = 8.0           # s de cada vez no PVE (campo tempo_turno do pacote)
 TEMPO_ITENS_MAX = 3.2        # s ja gastos na vez a partir dos quais os itens sao pulados (o tiro saia com o contador em 0-1)
 ESPERA_APOS_ANDAR = 0.5       # s depois de andar antes de mirar: logo apos o passo o jogo ignora as setas (mira levava 4-6 s)
 ELITE_DIST_X = 7.0            # px de minimapa: ponto vermelho tao perto do azul = elite em cima do boneco
@@ -403,6 +404,11 @@ class Atirador:
             if self.reg:
                 self.reg.evento("turno_pulado", fr, inst=inst, motivo="angulo", previsto=pred, tempo_s=round(t_ang, 2))
             return
+        if plano_rede and t_ang > 1.5 and abs(self.lei.angulo(self.ver()) - pred["angulo"]) >= 2:
+            lido = float(self.lei.angulo(self.ver()))
+            arma = self.pve.mira.limite(pred["angulo"] > lido, lido, plano_rede["eu"], plano_rede["direcao"], plano_rede["inclinacao"])
+            self.log(f"   [rede] o ponteiro nao chegou em {pred['angulo']:.0f} (parou em {lido:.0f} depois de {t_ang:.1f}s): limite aprendido"
+                     + (f" (arma {arma:.0f})" if arma is not None else " (so aqui)"))
         primeiro = self.ataques_na_luta == 0 and hp0 >= 95
         if self.combo_luta is None:
             self.inst_luta = inst
@@ -418,7 +424,8 @@ class Atirador:
             self.log(f"   (sem tempo para itens: {self.agora() - inicio:.1f}s gastos na vez; atiro direto)")
         especial = False if sem_tempo else self.preparar_extras(est)
         ordem_itens = [] if sem_tempo else ([i for i in self.combo_luta[1] if i != 2] if especial else self.combo_luta[1])   # depois do B nao se aperta o 2
-        apertados = self.aplicar_itens(ordem_itens)
+        prazo = inicio + DURACAO_VEZ_PVE - (1.0 + 0.03 * pred["forca"]) if self.pve else None      # so no PVE (vez de 8 s)
+        apertados = self.aplicar_itens(ordem_itens, ate=prazo) if prazo else self.aplicar_itens(ordem_itens)
         t_itens = self.agora() - inicio
         if self.reg:
             fr.append(self.reg.frame(self.ver(), "apos_itens"))
@@ -977,7 +984,7 @@ class Atirador:
         self.log("   [POW] medidor do especial cheio: apertei B")
         return True
 
-    def aplicar_itens(self, ordem=None):
+    def aplicar_itens(self, ordem=None, ate=None):
         """Aperta os itens na ordem. Depois de um item os slots ficam TODOS cinza durante a animacao (~1 s): espera isso passar (antes o
         laco saia na hora e so o 1o item entrava: 06/11 `itens: [3]` em quase todo turno, sem os buffs 4 = sem dano). Slot cinza com os
         outros acesos = sem stamina para ESTE item (o 3 e caro): pula e tenta o proximo (o 4 e barato)."""
@@ -988,6 +995,9 @@ class Atirador:
         for item in (ordem or self.ordem):
             if usados.get(item, 0) >= LIMITE_POR_TURNO.get(item, 99):
                 continue
+            if ate is not None and self.agora() > ate:
+                self.log(f"   (prazo dos itens: {self.agora() - ate:.1f}s alem do limite; paro para sobrar tempo da carga)")
+                break
             ativos = None
             for tentativa in range(7):
                 f = self.ver()
