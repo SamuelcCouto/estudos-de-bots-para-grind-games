@@ -75,8 +75,9 @@ at_extras = A.Atirador(io_extras, M.Memoria(arq_semente=None, arq_aprendizado=No
                        lambda: "ULTIMA_LUTA_F2", leitor=LeitorExtras(io_extras),
                        dormir=lambda _: None, log=lambda _: None)
 at_extras.ver = lambda: object()
-assert at_extras.preparar_extras(E.estrategia("ULTIMA_LUTA_F2"))
-assert io_extras.teclas == ["e", "b"]
+# 07/11 (usuario): fase 2 SEM o especial B (a arma faz o especial sair tridente) e sem perks: so o E do pet
+assert not at_extras.preparar_extras(E.estrategia("ULTIMA_LUTA_F2"))
+assert io_extras.teclas == ["e"], io_extras.teclas
 
 relogio = [0.0]
 met = Met.Metricas("Super Rota de Cupons", agora=lambda: relogio[0], salvar=False, log=lambda _: None)
