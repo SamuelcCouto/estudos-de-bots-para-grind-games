@@ -18,6 +18,8 @@ import terreno_jogo
 
 CAIXA_BOSS = (-84, -120, 81, 15)        # em volta da posicao do boss da rede (769, 320): explosoes de (689..840, 204..317) acertaram
 CAIXA_ELITE = (-35, -50, 35, 5)         # em volta do pe do elite
+ELITE_GATILHO_PX = 110.0                # o elite anda ~100 px por vez dele: a menos disso ele estara em cima de nos na proxima; desvia ja
+ELITE_FOLGA_PX = 150.0                  # ... para um ponto a essa distancia dele (antes 100: ele alcancava na vez seguinte)
 ELITE_BLOQUEIA_PX = 80.0                # elite mais perto que isso (em x) do boneco = tiro perdido (medido: bloqueou a 12-21, passou a >= 107)
 ELITE_ALTURA_MIN = 600                  # so conta como elite o que esta no chao (y grande); o boss fica na plataforma
 JANELA_FORCA = 12                       # varre a forca de f0-12% a f0+12% (passo 1%) para achar a janela que acerta
@@ -79,21 +81,24 @@ class MiraPve:
             self._partida = info["mapa"]
 
     # ----------------------------------------------------------------------------------------------------------- elite
-    def elite_perto(self, info, x=None):
-        """Elite mais proximo (em x) de `x` (padrao: o boneco) se estiver dentro de ELITE_BLOQUEIA_PX; senao None."""
+    def elite_perto(self, info, x=None, raio=ELITE_BLOQUEIA_PX):
+        """Elite mais proximo (em x) de `x` (padrao: o boneco) se estiver dentro de `raio` (padrao: o que bloqueia a bala); senao None."""
         x = info["eu"][0] if x is None else x
-        perto = [e for e in info["elites"] if abs(e[0] - x) < ELITE_BLOQUEIA_PX]
+        perto = [e for e in info["elites"] if abs(e[0] - x) < raio]
         return min(perto, key=lambda e: abs(e[0] - x)) if perto else None
 
     def ponto_livre(self, info):
         """x para onde andar quando o elite esta em cima do boneco (None = nao precisa andar ou nao ha onde): ELITE_BLOQUEIA_PX+20 para
         o lado do elite que fica DENTRO da faixa boa de tiro (X_MIN_TIRO..X_MAX_TIRO), o mais perto do boneco."""
-        el = self.elite_perto(info)
+        el = self.elite_perto(info, raio=ELITE_GATILHO_PX)
         if el is None:
             return None
-        folga = ELITE_BLOQUEIA_PX + 20
         lo, hi = (X_MIN_TIRO, X_MAX_TIRO) if info.get("direcao", 1) > 0 else FAIXA_DIREITA
-        opcoes = [x for x in (el[0] - folga, el[0] + folga) if lo <= x <= hi]
+        opcoes = []
+        for folga in (ELITE_FOLGA_PX, ELITE_BLOQUEIA_PX + 20):          # primeiro a folga grande; so se nao couber na faixa, a minima
+            opcoes = [x for x in (el[0] - folga, el[0] + folga) if lo <= x <= hi]
+            if opcoes:
+                break
         if not opcoes:
             return None
         return min(opcoes, key=lambda x: abs(x - info["eu"][0]))

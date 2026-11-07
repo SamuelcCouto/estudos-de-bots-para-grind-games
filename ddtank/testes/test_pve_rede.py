@@ -42,7 +42,7 @@ print("elite a menos de 80 px bloqueia, a 130 px nao OK")
 
 # ---- ponto livre: para a direita do elite, ate elite + 100
 mp = pve_rede.MiraPve(FalsaRede(estado(elites=[(190, 838)])))
-assert mp.ponto_livre(mp.info()) == 190 + pve_rede.ELITE_BLOQUEIA_PX + 20
+assert mp.ponto_livre(mp.info()) == 190 + pve_rede.ELITE_FOLGA_PX          # 190 - 150 = 40 fica na parede: so a direita
 mp = pve_rede.MiraPve(FalsaRede(estado(elites=[(316, 838)])))
 assert mp.ponto_livre(mp.info()) is None, "elite longe: nao anda"
 print("ponto livre: anda so quando o elite bloqueia OK")
@@ -52,10 +52,10 @@ est = estado(eu=(1162, 837), elites=[(1162, 838)])
 mp = pve_rede.MiraPve(FalsaRede(est))
 i = mp.info()
 assert i["direcao"] == -1, i["direcao"]
-assert mp.ponto_livre(i) == 1262, mp.ponto_livre(i)           # 1062 fica fora da faixa viavel
+assert mp.ponto_livre(i) == 1312, mp.ponto_livre(i)           # 1012 fica fora da faixa viavel
 est = estado(eu=(1300, 837), elites=[(1300, 838)])
 mp = pve_rede.MiraPve(FalsaRede(est))
-assert mp.ponto_livre(mp.info()) == 1200, "do outro lado do elite (1200) tambem vale"
+assert mp.ponto_livre(mp.info()) == 1150, "do outro lado do elite tambem vale (1150 e 1450 a 150 px; vale o 1o)"
 print("lado direito: ponto livre dentro da faixa com mira OK")
 
 # ---- elite morto nao conta

@@ -45,7 +45,7 @@ ESTRATEGIAS = {
     "ULTIMA_LUTA_F1": {               # fase 1: boss pequeno ("Boxeador", ao lado do boneco) que morre e renasce com 50%: 2 turnos
         "angulo_min": 0.0,            # mira baixa (12-20 graus, forca 15-20%); o boss pode nascer do outro lado (boneco vira)
         "combo": "2,3,4",
-        "repor_perks": True,          # os perks Z/X/C sao comprados na sala ANTES desta fase (o usuario compra 3x); so se usam na fase 2
+        "repor_perks": False,         # 07/11 (usuario): esquecer os perks (antes comprava Z/X/C na sala)
     },
     "ULTIMA_LUTA_F2": {               # fase 2: so o boss VERDE ("Juiz Ladrao") na plataforma (minimapa ~ (51, 27)); renasce com 50% e tem
                                       # armadura forte (muitos turnos). O boss pequeno da fase 1 volta para atrapalhar.
@@ -68,9 +68,10 @@ ESTRATEGIAS = {
         "tolerancia_angulo": 1.5,     # parabola alta: 3 graus decidem o acerto (pediu 74,5 e atirou a 71); 1,0 era menor que o menor toque (~1,4): ponteiro ia-e-voltava 5 s
         "separar_lado": True,         # boss a ESQUERDA do boneco (nasceu em x~72-90) = outra mira: instancia ULTIMA_LUTA_F2_E (abaixo)
         "atravessar_para_x": 13.0,    # 06/11 (rede): ponto de tiro x~13 (69 graus/52%: todos os tiros acertaram; de x~18-26 a bala bate no elite ou cai curta). Antes: x~21 (74 graus/51%); longe -> ATRAVESSA a arena andando (a mira do lado direito erra muito: 01/11)
-        "perks": True, "repor_perks": True,
+        "perks": False, "repor_perks": False,   # 07/11 (usuario): sem perks
         "pet_e": True,                # (andar desfaz o buff: aperta E de novo no proximo turno)
-        "usar_pow": True, "pow_exige_buff": True,
+        "usar_pow": False,            # 07/11 (usuario): sem o especial B - com esta arma o especial sai TRIDENTE (como o item 2): tiro espalhado; o certo e 3,3 + os 4
+                                      # (disparo linear com o dano concentrado = o maximo de acertos)
         "acerto_incerto": True,       # armadura: tiros com 0-1% de dano sao normais e nao viram "erro"
         "erro_apos_sem_queda": 2,     # 2 tiros seguidos sem tirar vida = a mira esta errada (nascimentos fora de x~13-17 repetiam 25x o mesmo tiro)
     },
