@@ -34,15 +34,15 @@ i = mp.info()
 assert i["boss"] == (769, 320) and i["elites"] == [(316, 838)] and i["eu"] == (185, 819), i
 print("info: boss, elite e boneco lidos da rede OK")
 
-# ---- elite perto: so a < 45 px em x (bloqueou a 12-21 px, passou a >= 107; tiro quase vertical)
-for x_el, perto in ((190, True), (205, True), (260, False), (316, False), (100, False)):
+# ---- elite bloqueando: u = (x_elite - x_boneco) * direcao entre -55 e +115 (bloqueou com +18, -12, -21, +80; passou com +107, +138, -180)
+for x_el, perto in ((190, True), (205, True), (260, True), (316, False), (100, False)):
     mp = pve_rede.MiraPve(FalsaRede(estado(elites=[(x_el, 838)])))
-    assert (mp.elite_perto(mp.info()) is not None) == perto, (x_el, perto)
-print("elite a menos de 45 px bloqueia, a 75 px nao OK")
+    assert (mp.elite_bloqueando(mp.info()) is not None) == perto, (x_el, perto)
+print("elite bloqueia na faixa u -55..+115 do cano, fora dela nao OK")
 
 # ---- ponto livre: para a direita do elite, ate elite + 100
 mp = pve_rede.MiraPve(FalsaRede(estado(elites=[(190, 838)])))
-assert mp.ponto_livre(mp.info()) == 190 + pve_rede.ELITE_FOLGA_PX          # 190 - 150 = 40 fica na parede: so a direita
+assert mp.ponto_livre(mp.info()) == 190 + 65, mp.ponto_livre(mp.info())    # 190 - 135 = 55 fica na parede: so o elite ficar para tras (u = -65)
 mp = pve_rede.MiraPve(FalsaRede(estado(elites=[(316, 838)])))
 assert mp.ponto_livre(mp.info()) is None, "elite longe: nao anda"
 print("ponto livre: anda so quando o elite bloqueia OK")
@@ -52,10 +52,10 @@ est = estado(eu=(1162, 837), elites=[(1162, 838)])
 mp = pve_rede.MiraPve(FalsaRede(est))
 i = mp.info()
 assert i["direcao"] == -1, i["direcao"]
-assert mp.ponto_livre(i) == 1242, mp.ponto_livre(i)           # 1082 fica fora da faixa viavel (>= 1090)
+assert mp.ponto_livre(i) == 1097, mp.ponto_livre(i)           # elite para tras (u = -65) ou 135 na frente (1297): o mais perto, dentro da faixa >= 1090
 est = estado(eu=(1300, 837), elites=[(1300, 838)])
 mp = pve_rede.MiraPve(FalsaRede(est))
-assert mp.ponto_livre(mp.info()) == 1220, "do outro lado do elite tambem vale (1220 e 1380 a 80 px; vale o 1o)"
+assert mp.ponto_livre(mp.info()) == 1235, "elite em 1300: para tras em 1235 (65 px) ou 1435 na frente; vale o mais perto"
 print("lado direito: ponto livre dentro da faixa com mira OK")
 
 # ---- elite morto nao conta
@@ -112,7 +112,7 @@ info = a.pve.info()
 info.update(vento=0.0, vento_rede=0.0, vento_fonte="tela")
 novo = a.posicionar_pela_rede(info)
 assert len(a.io.teclas) == 1 and a.io.teclas[0][0] == "direita", a.io.teclas       # 261 + 150 = 411: para a direita
-assert abs(novo["eu"][0] - 261) < 20 and novo["elites"] == [], novo["eu"]
+assert abs(novo["eu"][0] - 246) < 20 and novo["elites"] == [], novo["eu"]       # elite em 181: 181 + 65 = 246
 a = atirador_falso(estado(eu=(564, 839), elites=[]))
 info = a.pve.info(); info.update(vento=0.0, vento_rede=0.0, vento_fonte="tela")
 novo = a.posicionar_pela_rede(info)

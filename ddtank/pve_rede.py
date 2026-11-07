@@ -17,10 +17,15 @@ import mira_exata
 import terreno_jogo
 
 CAIXA_BOSS = (-84, -120, 81, 15)        # em volta da posicao do boss da rede (769, 320): explosoes de (689..840, 204..317) acertaram
-CAIXA_ELITE = (-35, -50, 35, 5)         # em volta do pe do elite
-ELITE_GATILHO_PX = 55.0                 # o elite anda ~100 px por vez dele: a menos disso ele estara em cima de nos na proxima; desvia ja
-ELITE_FOLGA_PX = 80.0                   # ... para um ponto a essa distancia dele (antes 100: ele alcancava na vez seguinte)
-ELITE_BLOQUEIA_PX = 45.0                # elite mais perto que isso (em x) do boneco = tiro perdido (medido: bloqueou a 12-21, passou a >= 107)
+CAIXA_ELITE = (-70, -50, 70, 5)         # em volta do pe do elite (06/11: a bala sai do cano a 51 px dele e explode: meia largura >= 55-70 px)
+# O elite bloqueia a bala conforme onde fica em relacao ao CANO, na direcao do tiro: u = (x_elite - x_boneco) * direcao (+ = na frente do boneco).
+# Medido (06/11): bloqueou com u = +18, -12, -21 (esquerda, atirando para a direita) e com u = +80 (direita, cano a 51 px do elite); passou com
+# u = +107, +138, -180. O cano fica a 30 px do boneco na direcao do tiro e o elite tem meia largura ~70 px: bloqueia de u ~ -40 ate u ~ +100.
+ELITE_U_ATRAS = -40.0
+ELITE_U_FRENTE = 100.0
+ELITE_U_MARGEM = 15.0                   # gatilho: um pouco antes dos limites (o elite anda ~100 px por vez dele)
+ELITE_U_LIVRE_FRENTE = 135.0            # destino: elite bem na frente (alem de +100) ...
+ELITE_U_LIVRE_ATRAS = -65.0             # ... ou ja para tras do boneco (alem de -40)
 ELITE_ALTURA_MIN = 600                  # so conta como elite o que esta no chao (y grande); o boss fica na plataforma
 JANELA_FORCA = 12                       # varre a forca de f0-12% a f0+12% (passo 1%) para achar a janela que acerta
 MIN_JANELA = 3                          # janela menor que 3 pontos de forca = tiro arriscado demais (ainda assim e usado se for o melhor)
@@ -81,30 +86,38 @@ class MiraPve:
             self._partida = info["mapa"]
 
     # ----------------------------------------------------------------------------------------------------------- elite
-    def elite_perto(self, info, x=None, raio=ELITE_BLOQUEIA_PX):
-        """Elite mais proximo (em x) de `x` (padrao: o boneco) se estiver dentro de `raio` (padrao: o que bloqueia a bala); senao None."""
+    def elite_perto(self, info, x=None, raio=1e9):
+        """Elite mais proximo (em x) de `x` (padrao: o boneco) dentro de `raio`; None se nao houver."""
         x = info["eu"][0] if x is None else x
         perto = [e for e in info["elites"] if abs(e[0] - x) < raio]
         return min(perto, key=lambda e: abs(e[0] - x)) if perto else None
 
+    def u_elite(self, info, e, x=None):
+        x = info["eu"][0] if x is None else x
+        return (e[0] - x) * info.get("direcao", 1)
+
+    def elite_bloqueando(self, info, x=None, margem=ELITE_U_MARGEM):
+        """Elite que bloqueia (ou vai bloquear na vez dele) o tiro de `x`: u entre ELITE_U_ATRAS-margem e ELITE_U_FRENTE+margem."""
+        perto = [e for e in info["elites"] if ELITE_U_ATRAS - margem < self.u_elite(info, e, x) < ELITE_U_FRENTE + margem]
+        return min(perto, key=lambda e: abs(self.u_elite(info, e, x))) if perto else None
+
     def ponto_livre(self, info):
-        """x para onde andar quando o elite esta em cima do boneco (None = nao precisa andar ou nao ha onde): ELITE_BLOQUEIA_PX+20 para
-        o lado do elite que fica DENTRO da faixa boa de tiro (X_MIN_TIRO..X_MAX_TIRO), o mais perto do boneco."""
+        """x para onde andar (None = nao precisa). Com o elite bloqueando: o ponto DENTRO da faixa com mira mais perto do boneco em que ele
+        fica bem na frente (u >= +135) ou ja para tras (u <= -65). Sem elite, mas fora da faixa com mira: volta para dentro dela."""
         lo, hi = (X_MIN_TIRO, X_MAX_TIRO) if info.get("direcao", 1) > 0 else FAIXA_DIREITA
         x = info["eu"][0]
-        el = self.elite_perto(info, raio=ELITE_GATILHO_PX)
+        d = info.get("direcao", 1)
+        el = self.elite_bloqueando(info)
         if el is None:
             if x > hi + 40 or x < lo - 40:                       # fora da faixa com mira (passou do ponto numa fuga): volta para dentro dela
                 return float(min(max(x, lo + 30), hi - 30))
             return None
-        opcoes = []
-        for folga in (ELITE_FOLGA_PX, ELITE_BLOQUEIA_PX + 20):          # primeiro a folga grande; so se nao couber na faixa, a minima
-            opcoes = [x for x in (el[0] - folga, el[0] + folga) if lo <= x <= hi]
-            if opcoes:
-                break
+        # u = (el - x) * d  ->  x = el - u / d
+        opcoes = [el[0] - ELITE_U_LIVRE_FRENTE * d, el[0] - ELITE_U_LIVRE_ATRAS * d]
+        opcoes = [o for o in opcoes if lo <= o <= hi]
         if not opcoes:
             return None
-        return min(opcoes, key=lambda x: abs(x - info["eu"][0]))
+        return min(opcoes, key=lambda o: abs(o - x))
 
     # ----------------------------------------------------------------------------------------------------------- plano
     def planejar(self, info, angulo_base, tolerancia_graus=3, direcao=None):
