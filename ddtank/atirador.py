@@ -55,7 +55,7 @@ GAP_NOVA_VEZ = 2.5            # s sem PASS para valer uma vez NOVA (o PASS pisca
 GAP_MIN_NOVA_VEZ = 0.6        # ... ou 0,6 s sem PASS se ja passaram MIN_APOS_TIRO_NOVA_VEZ desde o tiro (fase 1: o chefe joga rapido)
 MIN_APOS_TIRO_NOVA_VEZ = 4.0  # s: o "tiro fantasma" vinha ~2 s depois do tiro; uma vez de verdade, 8-10 s
 ANDAR_SEM_QUEDA_S = 1.2       # 0,3 s andava 1 px e o elite continuava em cima (01/11 15:30: dano "Perfurante" no boneco)
-DURACAO_VEZ_PVE = 8.0           # s de cada vez no PVE (campo tempo_turno do pacote)
+DURACAO_VEZ_PVE = 7.2           # s uteis de cada vez no PVE: o servidor da 8 s (campo tempo_turno) mas comeca antes de o bot ver o PASS (~0,8 s)
 TEMPO_ITENS_MAX = 3.2        # s ja gastos na vez a partir dos quais os itens sao pulados (o tiro saia com o contador em 0-1)
 ESPERA_APOS_ANDAR = 0.5       # s depois de andar antes de mirar: logo apos o passo o jogo ignora as setas (mira levava 4-6 s)
 ELITE_DIST_X = 7.0            # px de minimapa: ponto vermelho tao perto do azul = elite em cima do boneco
@@ -424,7 +424,7 @@ class Atirador:
             self.log(f"   (sem tempo para itens: {self.agora() - inicio:.1f}s gastos na vez; atiro direto)")
         especial = False if sem_tempo else self.preparar_extras(est)
         ordem_itens = [] if sem_tempo else ([i for i in self.combo_luta[1] if i != 2] if especial else self.combo_luta[1])   # depois do B nao se aperta o 2
-        prazo = inicio + DURACAO_VEZ_PVE - (1.0 + 0.03 * pred["forca"]) if self.pve else None      # so no PVE (vez de 8 s)
+        prazo = inicio + DURACAO_VEZ_PVE - (1.2 + 0.03 * pred["forca"]) if self.pve else None      # so no PVE (vez de 8 s)
         apertados = self.aplicar_itens(ordem_itens, ate=prazo) if prazo else self.aplicar_itens(ordem_itens)
         t_itens = self.agora() - inicio
         if self.reg:
