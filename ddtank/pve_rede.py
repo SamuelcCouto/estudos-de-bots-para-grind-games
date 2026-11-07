@@ -24,7 +24,7 @@ JANELA_FORCA = 12                       # varre a forca de f0-12% a f0+12% (pass
 MIN_JANELA = 3                          # janela menor que 3 pontos de forca = tiro arriscado demais (ainda assim e usado se for o melhor)
 X_MAX_TIRO = 460.0                      # de x~516 quase nenhum angulo chega no centro do boss (so de raspao, 2-9% por tiro): fica ate ~460
 X_MIN_TIRO = 150.0                      # parede da esquerda
-FAIXA_DIREITA = (1000.0, 1450.0)        # boneco que nasce do lado direito do boss: onde da para ficar (virado para a esquerda)
+FAIXA_DIREITA = (1090.0, 1450.0)        # lado direito (virado para a esquerda): so ha mira de x>=1080 (offline 06/11: x=1000-1040 nao tem; o bot ficou em 1062 e perdeu a vez)
 
 
 def _caixa(pos, c):

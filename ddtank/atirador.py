@@ -888,7 +888,8 @@ class Atirador:
             if erro_ant is not None and erro * erro_ant < 0 and abs(erro) <= passada:
                 return True        # passou do alvo por menos que o menor toque da seta: mais um toque so faria ir-e-voltar (bug do Pericao)
             erro_ant = erro
-            dur = float(np.clip(abs(erro) / self.taxa_angulo * 0.85, 0.05, 0.6))
+            teto = 1.6 if abs(erro) > 14 else 0.6            # erro grande (lado direito: ~60 graus): um toque longo e depois afina (passos de 0,6 s custavam ~1 s cada)
+            dur = float(np.clip(abs(erro) / self.taxa_angulo * 0.85, 0.05, teto))
             tecla = "cima" if erro > 0 else "baixo"
             self.io.tecla(tecla, dur)
             self.dormir(0.1)

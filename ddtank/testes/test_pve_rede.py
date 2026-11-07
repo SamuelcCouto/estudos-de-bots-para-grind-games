@@ -47,6 +47,17 @@ mp = pve_rede.MiraPve(FalsaRede(estado(elites=[(316, 838)])))
 assert mp.ponto_livre(mp.info()) is None, "elite longe: nao anda"
 print("ponto livre: anda so quando o elite bloqueia OK")
 
+# ---- lado direito: boss a esquerda; ponto livre so em x >= 1090 (de 1062 nao ha mira)
+est = estado(eu=(1162, 837), elites=[(1162, 838)])
+mp = pve_rede.MiraPve(FalsaRede(est))
+i = mp.info()
+assert i["direcao"] == -1, i["direcao"]
+assert mp.ponto_livre(i) == 1262, mp.ponto_livre(i)           # 1062 fica fora da faixa viavel
+est = estado(eu=(1300, 837), elites=[(1300, 838)])
+mp = pve_rede.MiraPve(FalsaRede(est))
+assert mp.ponto_livre(mp.info()) == 1200, "do outro lado do elite (1200) tambem vale"
+print("lado direito: ponto livre dentro da faixa com mira OK")
+
 # ---- elite morto nao conta
 est = estado(elites=[(190, 838)])
 est.monstros[200]["vivo"] = False
