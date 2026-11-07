@@ -26,6 +26,7 @@ from navegador import em_1280
 ORDEM_ITENS = [2, 3, 4, 4, 4, 4, 5, 6, 7, 8]
 LIMITE_POR_TURNO = {1: 2, 2: 1, 3: 2}
 TECLA_ESPACO = "espaco"
+USAR_RELOGIO = False             # 06/11 (rede): soltar pelo relogio errou ate 13 pontos de forca (41%, 60% por 54%); pela barra o erro fica em +-2
 VELOCIDADE_ANDAR_PX = 110.0       # px/s do boneco andando (medido nos pacotes de movimento: ~60 px a cada 0,55 s)
 BARRA_ATRASO = 3.0            # % que a barra lida fica atras da forca real (~0,1 s de atraso da captura; PVP 03/11)
 ESPERA_VEZ = 0.35             # s com o PASS visivel antes de agir (o jogo aceita teclas durante a faixa "Sua vez!")
@@ -1040,7 +1041,7 @@ class Atirador:
         tempo_alvo = quer / self.taxa_forca
         # a barra pode encher bem mais devagar que o esperado (medido: 19%/s em vez de 38%/s): deixa ate ~2,2x o tempo
         limite = min(MAX_SEGURANDO, alvo / (0.45 * self.taxa_forca) + 0.5)
-        T_rel = self.tempo_relogio(alvo) if (self.pve and self.rede_no_turno) else None
+        T_rel = self.tempo_relogio(alvo) if (USAR_RELOGIO and self.pve and self.rede_no_turno) else None
         repetir_no_laco = self._segurar()
         rep = 1
         t0 = self.agora()
