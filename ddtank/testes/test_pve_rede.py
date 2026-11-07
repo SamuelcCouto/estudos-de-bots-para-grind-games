@@ -34,11 +34,11 @@ i = mp.info()
 assert i["boss"] == (769, 320) and i["elites"] == [(316, 838)] and i["eu"] == (185, 819), i
 print("info: boss, elite e boneco lidos da rede OK")
 
-# ---- elite perto: so a < 80 px em x (bloqueou a 12-21 px, passou a >= 107)
-for x_el, perto in ((190, True), (205, True), (260, True), (316, False), (100, False)):
+# ---- elite perto: so a < 45 px em x (bloqueou a 12-21 px, passou a >= 107; tiro quase vertical)
+for x_el, perto in ((190, True), (205, True), (260, False), (316, False), (100, False)):
     mp = pve_rede.MiraPve(FalsaRede(estado(elites=[(x_el, 838)])))
     assert (mp.elite_perto(mp.info()) is not None) == perto, (x_el, perto)
-print("elite a menos de 80 px bloqueia, a 130 px nao OK")
+print("elite a menos de 45 px bloqueia, a 75 px nao OK")
 
 # ---- ponto livre: para a direita do elite, ate elite + 100
 mp = pve_rede.MiraPve(FalsaRede(estado(elites=[(190, 838)])))
@@ -52,10 +52,10 @@ est = estado(eu=(1162, 837), elites=[(1162, 838)])
 mp = pve_rede.MiraPve(FalsaRede(est))
 i = mp.info()
 assert i["direcao"] == -1, i["direcao"]
-assert mp.ponto_livre(i) == 1312, mp.ponto_livre(i)           # 1012 fica fora da faixa viavel
+assert mp.ponto_livre(i) == 1242, mp.ponto_livre(i)           # 1082 fica fora da faixa viavel (>= 1090)
 est = estado(eu=(1300, 837), elites=[(1300, 838)])
 mp = pve_rede.MiraPve(FalsaRede(est))
-assert mp.ponto_livre(mp.info()) == 1150, "do outro lado do elite tambem vale (1150 e 1450 a 150 px; vale o 1o)"
+assert mp.ponto_livre(mp.info()) == 1220, "do outro lado do elite tambem vale (1220 e 1380 a 80 px; vale o 1o)"
 print("lado direito: ponto livre dentro da faixa com mira OK")
 
 # ---- elite morto nao conta
@@ -95,3 +95,29 @@ mp = pve_rede.MiraPve(FalsaRede(estado()))
 mp._ter = ((11688, 0), None)
 assert mp.planejar(mp.info(), 70) is None
 print("sem terreno: sem plano (usa a memoria) OK")
+
+# ---- posicionar_pela_rede executa de verdade (elite perto e fora da faixa): 1 caminhada, posicao por conta
+class IOFalso:
+    def __init__(self): self.teclas = []
+    def tecla(self, nome, dur=0.05): self.teclas.append((nome, round(dur, 2)))
+    def preparar_teclas(self): pass
+
+def atirador_falso(est):
+    a = atirador.Atirador(IOFalso(), None, lambda: "ULTIMA_LUTA_F2", dormir=lambda s: None, log=lambda s: None)
+    a.ligar_rede(FalsaRede(est))
+    return a
+
+a = atirador_falso(estado(eu=(171, 839), elites=[(181, 838)]))
+info = a.pve.info()
+info.update(vento=0.0, vento_rede=0.0, vento_fonte="tela")
+novo = a.posicionar_pela_rede(info)
+assert len(a.io.teclas) == 1 and a.io.teclas[0][0] == "direita", a.io.teclas       # 261 + 150 = 411: para a direita
+assert abs(novo["eu"][0] - 261) < 20 and novo["elites"] == [], novo["eu"]
+a = atirador_falso(estado(eu=(564, 839), elites=[]))
+info = a.pve.info(); info.update(vento=0.0, vento_rede=0.0, vento_fonte="tela")
+novo = a.posicionar_pela_rede(info)
+assert a.io.teclas and a.io.teclas[0][0] == "esquerda" and novo["eu"][0] < 470, (a.io.teclas, novo["eu"])    # fora da faixa: volta
+a = atirador_falso(estado(eu=(300, 839), elites=[(700, 838)]))
+info = a.pve.info(); info.update(vento=0.0, vento_rede=0.0, vento_fonte="tela")
+assert a.posicionar_pela_rede(info) is info and not a.io.teclas, "elite longe e na faixa: nao anda"
+print("posicionamento: 1 caminhada por conta, volta para a faixa e nao anda sem precisar OK")

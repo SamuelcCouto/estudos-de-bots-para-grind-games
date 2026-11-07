@@ -571,40 +571,29 @@ class Atirador:
         return self.pve.planejar(info, fallback_angulo)
 
     def posicionar_pela_rede(self, info):
-        """Elite a menos de ELITE_BLOQUEIA_PX do boneco (em x) = a bala explode em cima de nos (4 tiros perdidos, 06/11): anda para a
-        direita ate um ponto livre e le a posicao de novo. Sem elite perto, nao anda (menos turno gasto)."""
-        for _ in range(2):
-            destino = self.pve.ponto_livre(info)
-            if destino is None:
-                return info
-            x = info["eu"][0]
-            lado = "direita" if destino > x else "esquerda"
-            dur = float(np.clip(abs(destino - x) / VELOCIDADE_ANDAR_PX, 0.2, 2.5))
-            self.log(f"   [ELITE] elite em x={self.pve.elite_perto(info)[0]:.0f} (boneco x={x:.0f}): andando {dur:.1f}s para a {lado} ate x~{destino:.0f}")
-            if hasattr(self.io, "preparar_teclas"):
-                self.io.preparar_teclas()
-            self.io.tecla(lado, dur)
-            # a rede chega em lotes, com ate varios s de atraso: espera a posicao MUDAR um pouco; se nao vier, usa a conta (andou dur s a
-            # ~VELOCIDADE_ANDAR_PX px/s) em vez de andar de novo por engano (06/11: 151 -> 278 -> 427)
-            novo = None
-            for _ in range(8):
-                self.dormir(0.2)
-                cand = self.pve.info()
-                if cand and abs(cand["eu"][0] - x) >= 0.4 * dur * VELOCIDADE_ANDAR_PX:
-                    novo = cand
-                    break
-            if not novo:
-                est_x = x + (1 if destino > x else -1) * dur * VELOCIDADE_ANDAR_PX
-                self.log(f"   [ELITE] a rede ainda nao mostrou o boneco andando: uso a conta, x~{est_x:.0f}")
-                novo = dict(info, eu=(est_x, info["eu"][1]))
-                novo["elites"] = []                   # o elite andou tambem: a posicao dele na rede esta velha
-                return novo
-            self.log(f"   [ELITE] boneco foi de x={x:.0f} para x={novo['eu'][0]:.0f}")
-            self.log(f"   [ELITE] boneco foi de x={x:.0f} para x={novo['eu'][0]:.0f}")
-            for k in ("vento", "vento_rede", "vento_fonte"):      # o vento foi lido da tela no inicio da vez
-                novo[k] = info[k]
-            info = novo
-        return info
+        """Anda ate um ponto bom quando o elite esta perto (a menos de ELITE_GATILHO_PX: a bala explodiria em cima de nos) ou quando o boneco
+        esta fora da faixa que tem mira. UMA caminhada por vez, sem esperar a rede: ela chega com segundos de atraso e esperar custava 2-3 s
+        dos 8 s da vez (e o bot andava de novo achando que nao tinha andado: 151 -> 278 -> 427). A posicao nova e a CONTA (110 px/s,
+        medido: 150 -> 396 em 2,2 s para 411 pedido); a real chega pela rede no turno seguinte."""
+        destino = self.pve.ponto_livre(info)
+        if destino is None:
+            return info
+        x, y = info["eu"]
+        lado = "direita" if destino > x else "esquerda"
+        dur = float(np.clip(abs(destino - x) / VELOCIDADE_ANDAR_PX, 0.2, 2.5))
+        el = self.pve.elite_perto(info, raio=1e9)
+        if el:
+            self.log(f"   [ELITE] elite em x={el[0]:.0f} (boneco x={x:.0f}): andando {dur:.1f}s para a {lado} ate x~{destino:.0f}")
+        else:
+            self.log(f"   [POSICAO] boneco em x={x:.0f} fora da faixa com mira: andando {dur:.1f}s para a {lado} ate x~{destino:.0f}")
+        if hasattr(self.io, "preparar_teclas"):
+            self.io.preparar_teclas()
+        self.io.tecla(lado, dur)
+        self.dormir(0.3)
+        est_x = x + (1 if destino > x else -1) * dur * VELOCIDADE_ANDAR_PX
+        novo = dict(info, eu=(est_x, y))
+        novo["elites"] = []                           # o elite tambem andou: a posicao dele na rede esta velha
+        return novo
 
     def tempo_relogio(self, alvo):
         """Quanto segurar o espaco para chegar em `alvo` % de forca, pelo RELOGIO, com a reta forca = a*s + b ajustada nos tiros anteriores
@@ -1014,6 +1003,7 @@ class Atirador:
                 break
             if ativos is None:
                 break                                    # a vez acabou
+            self.log(f"   [item {item}] acesos: {[i + 1 for i, a_ in enumerate(ativos) if a_]} -> {'aperto' if ativos[item - 1] else 'sem stamina/estoque'}")
             if not ativos[item - 1]:
                 if not any(ativos):
                     break                                # tudo cinza mesmo depois de esperar: acabou a stamina
