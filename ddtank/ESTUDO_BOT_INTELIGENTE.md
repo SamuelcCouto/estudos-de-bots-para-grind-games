@@ -217,3 +217,12 @@ Lido nos pacotes (netlog) e confirmado ao vivo; codigo em `pve_rede.py` + gancho
 - **Ponteiro**: no terreno inclinado o ponteiro nao passa de um limite (ex.: 70 em x=150); aprender com `MiraExata.limite` (o bot perdia 5-6 s por turno tentando).
 - **Lado direito** (nasce em x>~1000, boss a esquerda): o `olhar_lado` antigo deixava o boneco virado para a direita e o plano (virado para o boss) nao valia; agora a fisica manda virar para o lado do plano. De x~1011 a fisica nao achou mira (cai no metodo antigo).
 - **x~516**: de la quase nenhum angulo chega ao centro do boss (so de raspao, 2-9%): ficar entre x~150 e ~460.
+
+### 1.9 Ultima Luta - o que mais pesou (06-07/11)
+- **Itens**: depois de um item os slots ficam TODOS cinza ~1 s (animacao); o laco antigo saia nessa hora e so o 1o item entrava (`itens: [3]` = sem dano). Agora espera a animacao e, se um slot esta cinza com os outros acesos, PULA para o proximo. A **stamina acumula** (turno sem itens deixa a sobra para o seguinte: ja saiu `[3,3,4,4,4,4]` depois de turnos perdidos); no turno normal cabe ~`[3,5,8]` (3 = ~110, 5 = ~80, 8 = ~50). Item 3 so 1x por turno com a stamina normal.
+- **Fase 1**: 4 turnos / 1,7 min -> 2 turnos / ~35 s so por causa dos itens.
+- **Elite** bloqueia a bala conforme a posicao do CANO: u = (x_elite - x_boneco) x direcao do tiro, de -40 a +100 (meia largura ~70 px; o cano fica a 30 px do boneco). Antes o 1o projetil explodia no pe do boneco (47 mil de dano por turno: 7 turnos = boneco morto = DERROTA com o boss em 30%). Desvio: ir para u >= +135 ou u <= -65, dentro da faixa com mira (esquerda 150-460, direita 1090-1450).
+- **Tempo da vez**: o servidor da 8 s mas comeca antes de o bot ver o PASS: contar 7,2 s uteis; prazo por item (reserva 1,2 s + 0,03 x forca para a carga); passo do angulo de ate 1,6 s quando o erro e grande; limite do ponteiro aprendido quando o ajuste fica curto.
+- **Posicao apos andar**: a rede chega com segundos de atraso: usar a CONTA (110 px/s), 1 caminhada por turno.
+- **Dano**: dominado por criticos (x3,2) e buffs; sem ponto otimo claro de explosao no boss. Nesta arma o especial B sai tridente (3 balas espalhadas, so 1 acerta): fase 2 sem B e sem perks (decisao do usuario, 07/11).
+- Medidas (sem B, sem perks): volta completa 5min15 e 6min07, fase 2 em 12-13 turnos (~4,5 min, ~21 s por ciclo de turno), 0 derrotas, 0 turnos perdidos.
