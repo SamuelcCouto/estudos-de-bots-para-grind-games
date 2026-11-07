@@ -311,7 +311,7 @@ class Atirador:
         rinfo = self.info_rede(inst, f)
         if rinfo:
             rinfo = self.posicionar_pela_rede(rinfo)      # so anda se o elite bloqueia; nada de minimapa/memoria de ponto de tiro
-            if rinfo and azul and boss and not self.pve.planejar(rinfo, self.mem.prever(inst, azul, boss)["angulo"]):
+            if rinfo and azul and boss and not self.plano_pela_rede(rinfo, self.mem.prever(inst, azul, boss)["angulo"]):
                 self.log("   [rede] nenhuma mira acerta o boss daqui: uso o metodo antigo (minimapa + memoria)")
                 rinfo = None                              # e o posicionamento antigo (espelho / ponto de tiro) roda normalmente
         if rinfo:
@@ -356,7 +356,7 @@ class Atirador:
         pred = self.mem.prever(inst, azul, boss)
         plano_rede = None
         if rinfo:
-            plano_rede = self.pve.planejar(rinfo, pred["angulo"])
+            plano_rede = self.plano_pela_rede(rinfo, pred["angulo"])
             if plano_rede:
                 pred = dict(pred, angulo=float(plano_rede["mira"]), forca=float(plano_rede["forca_pct"]), origem="rede",
                             detalhe=(f"fisica exata: eu ({rinfo['eu'][0]}, {rinfo['eu'][1]}), boss {rinfo['boss']}, vento {rinfo['vento']:+.1f} ({rinfo['vento_fonte']}; rede {rinfo['vento_rede']:+.1f}), "
@@ -549,6 +549,19 @@ class Atirador:
                 if votos.count(v) >= 2:
                     info["vento"], info["vento_fonte"] = v, "tela"
         return info
+
+    def plano_pela_rede(self, info, fallback_angulo):
+        """Plano exato mexendo o MINIMO no ponteiro: primeiro em volta de onde ele ESTA (cada grau custa ~0,2 s da vez de 8 s; 06/11: 73 -> 77
+        gastou 7 s e o tiro saiu sem itens), depois em volta do angulo da memoria."""
+        try:
+            atual = float(self.lei.angulo(self.ver()))
+        except Exception:
+            atual = None
+        if atual is not None and 5 < atual < 89:
+            plano = self.pve.planejar(info, atual, tolerancia_graus=4)
+            if plano:
+                return plano
+        return self.pve.planejar(info, fallback_angulo)
 
     def posicionar_pela_rede(self, info):
         """Elite a menos de ELITE_BLOQUEIA_PX do boneco (em x) = a bala explode em cima de nos (4 tiros perdidos, 06/11): anda para a
